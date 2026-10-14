@@ -1,8 +1,8 @@
-# FTP_XL build. Needs a recent cc65 (built from git; the 2.19 release is too
+# EFTP_XL build. Needs a recent cc65 (built from git; the 2.19 release is too
 # old for fujinet-lib) on the PATH.
 
 CL65       ?= cl65
-PROGRAM    := bin/FTPXL.XEX
+PROGRAM    := bin/EFTPXL.XEX
 SRCS       := src/main.c
 
 # Load address. Above SpartaDOS 3.x / DOS 2.5 MEMLO with room to spare;

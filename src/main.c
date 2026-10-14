@@ -1,5 +1,5 @@
 /*
- * FTP_XL - file transfer for 8-bit Ataris over FujiNet
+ * EFTP_XL - file transfer for 8-bit Ataris over FujiNet
  *
  * Step 1: smoke test. Shows the FujiNet adapter info, asks for a server,
  * and lists a remote directory over SFTP or FTP.
@@ -14,7 +14,7 @@
 #include <fujinet-fuji.h>
 #include <fujinet-network.h>
 
-#define VERSION     "0.1"
+#define VERSION     "0.2"
 
 #define MODE_DIR    6       /* aux1: open as directory */
 #define DIR_LONG    0x80    /* aux2: long names with sizes, '/' after dirs */
@@ -184,7 +184,7 @@ int main(void)
     char c;
 
     printf("\x7D");     /* clear screen */
-    printf("FTP_XL %s - FujiNet smoke test\n", VERSION);
+    printf("EFTP_XL %s - FujiNet smoke test\n", VERSION);
     printf("MEMLO $%04X\n\n", MEMLO);
 
     show_adapter();

@@ -47,9 +47,9 @@ the firmware (they report success without doing anything). Use SFTP for those.
 
 ## Running on the Atari
 
-1. Get `bin/FTPXL.XEX` onto a disk the Atari can read, e.g. an ATR on the
+1. Get `bin/EFTPXL.XEX` onto a disk the Atari can read, e.g. an ATR on the
    FujiNet SD card or a TNFS share.
-2. Load it: `L` from the DOS 2.5 menu, or type `FTPXL` at the SpartaDOS prompt.
+2. Load it: `L` from the DOS 2.5 menu, or type `EFTPXL` at the SpartaDOS prompt.
 3. At the prompts, pick `S` (SFTP) or `F` (FTP), then enter the host (IP
    address of the Mac), port (blank = default), username, password and path.
 
@@ -80,7 +80,7 @@ cd EFTP_XL
 make
 ```
 
-The output is `bin/FTPXL.XEX`. `START_ADDR` changes the load address, for
+The output is `bin/EFTPXL.XEX`. `START_ADDR` changes the load address, for
 example `make START_ADDR=0x2800`.
 
 [fujinet-lib](https://github.com/FujiNetWIFI/fujinet-lib) is included as a
@@ -97,5 +97,5 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See [COPYING](COPYING).
 
 Copyright (C) 2026 Erez Yaary.
 
-`bin/FTPXL.XEX` is linked with fujinet-lib (GPL-3.0), so the built
+`bin/EFTPXL.XEX` is linked with fujinet-lib (GPL-3.0), so the built
 program as a whole is distributed under the GPL version 3.
