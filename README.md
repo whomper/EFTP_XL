@@ -1,4 +1,4 @@
-# FTP_XL
+# EFTP_XL
 
 File transfer for 8-bit Atari computers (400/800/XL/XE) over
 [FujiNet](https://fujinet.online), written in C with cc65. Connects to a
@@ -75,8 +75,8 @@ You need a recent [cc65](https://github.com/cc65/cc65) built from git (the
 git clone https://github.com/cc65/cc65 && make -C cc65
 export PATH="$PWD/cc65/bin:$PATH"
 
-git clone --recurse-submodules https://github.com/whomper/ftp_xl
-cd ftp_xl
+git clone --recurse-submodules https://github.com/whomper/EFTP_XL
+cd EFTP_XL
 make
 ```
 
@@ -88,7 +88,7 @@ submodule (GPL-3.0).
 
 ## Licence
 
-FTP_XL is free software: you can redistribute it and/or modify it under
+EFTP_XL is free software: you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free
 Software Foundation, either version 2 of the License, or (at your option)
 any later version. It is distributed in the hope that it will be useful,
