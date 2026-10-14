@@ -85,3 +85,17 @@ example `make START_ADDR=0x2800`.
 
 [fujinet-lib](https://github.com/FujiNetWIFI/fujinet-lib) is included as a
 submodule (GPL-3.0).
+
+## Licence
+
+FTP_XL is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free
+Software Foundation, either version 2 of the License, or (at your option)
+any later version. It is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See [COPYING](COPYING).
+
+Copyright (C) 2026 Erez Yaary.
+
+`bin/FTPXL.XEX` is linked with fujinet-lib (GPL-3.0), so the built
+program as a whole is distributed under the GPL version 3.
