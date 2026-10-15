@@ -27,6 +27,8 @@ extern char ftp_msg[FTP_MSG_LEN];
 int ftp_connect(const char *host, const char *port);
 int ftp_login(const char *user, const char *pass);
 int ftp_cwd(const char *path);
+/* The server's current folder, from PWD, into buf. */
+int ftp_pwd(char *buf, unsigned char len);
 
 /* List the current directory, calling show() for each line received. */
 int ftp_list(void (*show)(char *line));

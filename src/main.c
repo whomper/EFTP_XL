@@ -2,21 +2,30 @@
  * EFTP_XL - file transfer for 8-bit Ataris over FujiNet
  * Copyright (C) 2026 AERA | Erez Yaary. GPL-2.0-or-later, see COPYING.
  *
- * Step 1: shows the FujiNet adapter info, logs in to an FTP server and
- * lists a remote directory. The FTP client is our own (ftp.c), over
- * FujiNet TCP connections.
+ * The main screen, after EFTP on the ST: the Atari on the left, the
+ * server on the right, the transfers below, the keys at the bottom;
+ * in EDOS's font and colours.
+ *
+ *   0  title bar                         13  ...
+ *   1  info line                    (o)  16  -------+-------
+ *   2  -------------+------------        17  details of the cursor's file
+ *   3  D1:>GAMES>   | /pub/atari         18  --- Transfers -------
+ *   4  2 dirs 5 files| 2 dirs 5 files    19-21 transfers
+ *   5-15 the files   | the files         22  ---------------
+ *                                        23  keys
  */
 
-#include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
-#include <conio.h>
-#include <atari.h>
+#include <string.h>
+#include <ctype.h>
 
-#include <fujinet-fuji.h>
-#include <fujinet-network.h>
-
+#include "screen.h"
+#include "pane.h"
+#include "local.h"
+#include "remote.h"
 #include "ftp.h"
+#include "sites.h"
+#include "ui.h"
 
 /* the last release; a release build (RELEASE=1) shows it as it is,
    any other "0.2-dev" */
@@ -27,177 +36,591 @@
 #define APP_VERSION VERSION "-dev"
 #endif
 
-#define MAX_INPUT   100     /* largest field below */
-#define NAME_WIDTH  26      /* listing: name, then size, in 38 columns */
+#define DIV         19          /* the line between the panes */
+#define HEAD_ROW    3
+#define COUNT_ROW   4
+#define LIST_ROW    5
+#define VIS         11          /* files shown in a pane */
+#define DETAIL_ROW  17
+#define XFER_ROW    18
+#define KEYS_ROW    23
 
-#define MEMLO       (*(unsigned int *)0x02E7)
+#define MAX_LOCAL   64
+#define MAX_REMOTE  64
 
-static char host[64];
-static char port[8];
-static char user[32];
-static char pass[32];
-static char path[MAX_INPUT];
-static AdapterConfig ac;
+#define LOCAL       0
+#define REMOTE      1
 
-/* Read a line from the keyboard into s (max-1 chars). mask echoes '*'.
-   Returns the length, or -1 if ESC was pressed. */
-static int input(char *s, unsigned char max, unsigned char mask)
+static entry_t local_ent[MAX_LOCAL], remote_ent[MAX_REMOTE];
+static char local_pool[1024], remote_pool[2048];
+static pane_t pane[2];
+static unsigned char active;
+static unsigned char connected;
+static signed char site = -1;
+
+static char msg[64];
+static char tmp[PATH_LEN];
+static char pass[24];
+
+static const unsigned char col0[2] = { SCR_L, DIV + 1 };
+static const unsigned char width[2] = { DIV - SCR_L, SCR_R - DIV };
+
+/* -- drawing */
+
+void ui_info(const char *s)
 {
-    unsigned char len = 0;
-    char c;
-
-    for (;;) {
-        c = cgetc();
-        if (c == CH_ENTER) {
-            s[len] = '\0';
-            putchar('\n');
-            return len;
-        }
-        if (c == CH_ESC) {
-            s[0] = '\0';
-            putchar('\n');
-            return -1;
-        }
-        if (c == CH_DEL) {
-            if (len) {
-                --len;
-                putchar(CH_DEL);
-            }
-            continue;
-        }
-        if (c < 0x20 || c > 0x7A || len == max - 1)
-            continue;
-        s[len++] = c;
-        putchar(mask ? '*' : c);
-    }
+    scr_putw(1, SCR_L, s, SCR_W - 1, 0);
+    scr_ch(1, SCR_R, connected ? CH_DOT : ' ', 0);
 }
 
-/* Prompt with an optional default shown in brackets. */
-static int ask(const char *prompt, char *s, unsigned char max,
-               const char *def, unsigned char mask)
+static void draw_title(void)
 {
-    static char tmp[MAX_INPUT];
-    int n;
-
-    if (def && *def)
-        printf("%s [%s]: ", prompt, def);
-    else
-        printf("%s: ", prompt);
-    n = input(tmp, max, mask);
-    if (n > 0)
-        strcpy(s, tmp);
-    else if (n == 0)
-        strcpy(s, def ? def : "");
-    return n;
+    scr_fill(0, SCR_L, ' ', SCR_W, 1);
+    scr_put(0, SCR_L + 1, "EFTP_XL " APP_VERSION, 1);
+    scr_put(0, SCR_R - 13, "(C) AERA 2026", 1);
 }
 
-static void show_adapter(void)
+static void draw_keys(void)
 {
-    if (!fuji_get_adapter_config(&ac)) {
-        printf("FujiNet not responding!\n");
+    unsigned char c;
+
+    scr_clear(KEYS_ROW, KEYS_ROW);
+    c = scr_key(KEYS_ROW, SCR_L, "^K", "Sites");
+    c = scr_key(KEYS_ROW, c, "^T", "Send");
+    c = scr_key(KEYS_ROW, c, "TAB", "Pane");
+    scr_key(KEYS_ROW, c, "HELP", "Keys");
+}
+
+static void draw_frame(void)
+{
+    unsigned char r;
+
+    scr_clear(2, 22);
+    scr_rule(2);
+    scr_ch(2, DIV, CH_TT, 0);
+    for (r = HEAD_ROW; r < LIST_ROW + VIS; ++r)
+        scr_ch(r, DIV, CH_VLINE, 0);
+    scr_rule(16);
+    scr_ch(16, DIV, CH_BT, 0);
+    scr_rule(XFER_ROW);
+    scr_put(XFER_ROW, SCR_L + 1, " Transfers ", 0);
+    scr_rule(22);
+    scr_put(19, SCR_L, "Nothing yet. Sending files comes", 0);
+    scr_put(20, SCR_L, "in the next version.", 0);
+}
+
+/* Fit s into w columns: the end of it if it's too long, after "..." */
+static void put_tail(unsigned char row, unsigned char col, const char *s,
+                     unsigned char w, unsigned char inv)
+{
+    unsigned char n = strlen(s);
+
+    if (n <= w) {
+        scr_putw(row, col, s, w, inv);
         return;
     }
-    ac.fn_version[sizeof(ac.fn_version) - 1] = '\0';
-    printf("FujiNet %s\n", ac.fn_version);
-    printf("IP %u.%u.%u.%u  SSID %s\n",
-           ac.localIP[0], ac.localIP[1], ac.localIP[2], ac.localIP[3],
-           ac.ssid);
+    scr_ch(row, col, CH_MORE, inv);
+    scr_putw(row, col + 1, s + n - (w - 1), w - 1, inv);
 }
 
-/* Skip one whitespace-separated field; NULL at the end of the line. */
-static char *next_field(char *p)
+static void draw_entry(unsigned char side, unsigned char i)
 {
-    while (*p && *p != ' ')
-        ++p;
-    while (*p == ' ')
-        ++p;
-    return *p ? p : NULL;
+    pane_t *p = &pane[side];
+    unsigned char row = LIST_ROW + i - p->top;
+    unsigned char c = col0[side], w = width[side], nw = w - 6, n, icon;
+    unsigned char cur = side == active && i == p->cur;
+    entry_t *e;
+    char size[6];
+
+    if (i >= p->count) {
+        scr_fill(row, c, ' ', w, 0);
+        return;
+    }
+    e = &p->ent[i];
+    icon = (e->flags & E_UP) ? CH_UP : (e->flags & E_MARK) ? CH_MARK
+         : (e->flags & E_DIR) ? CH_FOLDER : CH_FILE;
+    scr_ch(row, c, icon, cur);
+    n = strlen(e->name);
+    if (n > nw) {
+        scr_putw(row, c + 1, e->name, nw - 1, cur);
+        scr_ch(row, c + nw, CH_MORE, cur);
+    } else
+        scr_putw(row, c + 1, e->name, nw, cur);
+    size[0] = '\0';
+    if (!(e->flags & (E_DIR | E_UP)))
+        fmt_size(e->size, size);
+    n = strlen(size);
+    scr_fill(row, c + 1 + nw, ' ', 5 - n, cur);
+    scr_putw(row, c + 6 + nw - n, size, n, cur);
 }
 
-/* Show one LIST line. Unix format ("drwxr-xr-x 2 u g 4096 Oct 15 15:20
-   NAME") becomes name and size; anything else is shown as it is. */
-static void show_entry(char *line)
+static void draw_list(unsigned char side)
 {
-    char *p = line, *size = NULL, *end;
+    pane_t *p = &pane[side];
     unsigned char i;
 
-    for (i = 0; i < 8 && p; ++i) {
-        p = next_field(p);
-        if (i == 3)
-            size = p;
-    }
-    if (!p || !size || (line[0] != 'd' && line[0] != '-' && line[0] != 'l')) {
-        printf("%.38s\n", line);
+    for (i = p->top; i < p->top + VIS; ++i)
+        draw_entry(side, i);
+}
+
+static void draw_details(void)
+{
+    pane_t *p = &pane[active];
+    entry_t *e;
+    unsigned char i, n = 0, c;
+    unsigned long total = 0;
+    char size[6];
+
+    scr_clear(DETAIL_ROW, DETAIL_ROW);
+    for (i = 0; i < p->count; ++i)
+        if (p->ent[i].flags & E_MARK) {
+            ++n;
+            total += p->ent[i].size;
+        }
+    if (n) {
+        utoa(n, msg, 10);
+        strcat(msg, " marked, ");
+        fmt_size(total, size);
+        strcat(msg, size);
+        scr_put(DETAIL_ROW, SCR_L, msg, 0);
         return;
     }
-    end = strchr(size, ' ');
-    if (end)
-        *end = '\0';
-    printf("%-*.*s %10s\n", NAME_WIDTH, NAME_WIDTH, p,
-           line[0] == 'd' ? "<DIR>" : size);
+    if (!p->count)
+        return;
+    e = &p->ent[p->cur];
+    if (e->flags & E_UP) {
+        scr_put(DETAIL_ROW, SCR_L, "The folder above", 0);
+        return;
+    }
+    scr_putw(DETAIL_ROW, SCR_L, e->name, 22, 0);
+    c = SCR_L + (strlen(e->name) < 22 ? strlen(e->name) : 22) + 1;
+    if (e->flags & E_DIR)
+        c = scr_put(DETAIL_ROW, c, "folder", 0) + 1;
+    else {
+        fmt_size(e->size, size);
+        c = scr_put(DETAIL_ROW, c, size, 0) + 1;
+    }
+    if (c + strlen(e->date) <= SCR_R + 1)
+        scr_put(DETAIL_ROW, c, e->date, 0);
 }
 
-/* Report a failed step: our own error, or the server's reply. */
+static void draw_pane(unsigned char side)
+{
+    pane_t *p = &pane[side];
+    unsigned char c = col0[side], w = width[side], r;
+
+    if (side == REMOTE && !connected) {
+        scr_putw(HEAD_ROW, c, "Server", w, 0);
+        for (r = COUNT_ROW; r < LIST_ROW + VIS; ++r)
+            scr_fill(r, c, ' ', w, 0);
+        scr_put(LIST_ROW + 2, c + 1, "Not connected.", 0);
+        scr_put(LIST_ROW + 4, c + 1, "Press ^K to pick", 0);
+        scr_put(LIST_ROW + 5, c + 1, "a site, or to add", 0);
+        scr_put(LIST_ROW + 6, c + 1, "one with ^N.", 0);
+        return;
+    }
+    put_tail(HEAD_ROW, c, p->path, w, side == active);
+    utoa(p->dirs, msg, 10);
+    strcat(msg, p->dirs == 1 ? " dir " : " dirs ");
+    utoa(p->files, msg + strlen(msg), 10);
+    strcat(msg, p->files == 1 ? " file" : " files");
+    if (p->full)
+        strcat(msg, "+");
+    scr_putw(COUNT_ROW, c, msg, w, 0);
+    draw_list(side);
+}
+
+static void draw_all(void)
+{
+    draw_title();
+    ui_info(connected ? sites[site].name : "Not connected");
+    draw_frame();
+    draw_pane(LOCAL);
+    draw_pane(REMOTE);
+    draw_details();
+    draw_keys();
+}
+
+/* -- reading the panes */
+
 static void report(const char *what, int r)
 {
+    strcpy(msg, what);
+    strcat(msg, ": ");
     if (r == FTP_ERR_TIMEOUT)
-        printf("%s: timed out\n", what);
+        strcat(msg, "no answer");
     else if (r == FTP_ERR_CLOSED)
-        printf("%s: connection closed\n", what);
+        strcat(msg, "connection closed");
     else
-        printf("%s failed:\n%.38s\n", what, ftp_msg);
+        strncat(msg, ftp_msg, sizeof(msg) - strlen(msg) - 1);
+    ui_info(msg);
+    if (r == FTP_ERR_CLOSED || r == FTP_ERR_TIMEOUT)
+        connected = 0;
 }
 
-static void session(void)
+static void read_local(void)
+{
+    unsigned char st;
+
+    ui_info("Reading the disk...");
+    st = local_read(&pane[LOCAL]);
+    if (st >= 128) {
+        strcpy(msg, pane[LOCAL].path);
+        strcat(msg, " error ");
+        utoa(st, msg + strlen(msg), 10);
+        ui_info(msg);
+    } else
+        ui_info(connected ? sites[site].name : "Not connected");
+}
+
+static void read_remote(void)
 {
     int r;
 
-    printf("Connecting to %s...\n", host);
-    if ((r = ftp_connect(host, port)) != 0) {
+    ui_info("Reading the server's folder...");
+    r = remote_read(&pane[REMOTE]);
+    if (r)
+        report("List", r);
+    else
+        ui_info(sites[site].name);
+}
+
+/* Put the cursor on the entry called name, if it's there. */
+static void find(pane_t *p, const char *name)
+{
+    unsigned char i;
+
+    for (i = 0; i < p->count; ++i)
+        if (!strcmp(p->ent[i].name, name)) {
+            p->cur = i;
+            p->top = i >= VIS ? i - VIS / 2 : 0;
+            return;
+        }
+}
+
+/* -- connecting */
+
+static void disconnect(void)
+{
+    if (connected)
+        ftp_quit();
+    connected = 0;
+    pane_clear(&pane[REMOTE]);
+    active = LOCAL;
+}
+
+static void connect(unsigned char i)
+{
+    site_t *s = &sites[i];
+    int r;
+
+    disconnect();
+    site = i;
+    draw_all();
+    strcpy(pass, s->pass);
+    if (!pass[0]) {
+        strcpy(msg, "Password for ");
+        strcat(msg, s->name);
+        strcat(msg, ":");
+        ui_info(msg);
+        if (scr_edit(1, SCR_L + strlen(msg) + 1, SCR_R - SCR_L - strlen(msg)
+                     - 1, pass, sizeof(pass), 1) == K_ESC) {
+            ui_info("Not connected");
+            return;
+        }
+    }
+    strcpy(msg, "Connecting to ");
+    strcat(msg, s->name);
+    strcat(msg, "...");
+    ui_info(msg);
+    if ((r = ftp_connect(s->host, s->port)) != 0) {
         report("Connect", r);
         ftp_quit();
         return;
     }
-    if ((r = ftp_login(user, pass)) != 0) {
+    r = ftp_login(s->user, pass);
+    memset(pass, 0, sizeof(pass));
+    if (r) {
         report("Login", r);
         ftp_quit();
         return;
     }
-    if ((r = ftp_cwd(path)) != 0) {
-        report("Change directory", r);
-        ftp_quit();
+    connected = 1;
+    if (s->rdir[0] && (r = ftp_cwd(s->rdir)) != 0)
+        report("Folder", r);
+    if (s->ldir[0]) {
+        strcpy(pane[LOCAL].path, s->ldir);
+        read_local();
+    }
+    read_remote();
+    active = connected ? REMOTE : LOCAL;
+}
+
+/* -- moving about */
+
+static void move_to(unsigned char i)
+{
+    pane_t *p = &pane[active];
+    unsigned char old = p->cur, top = p->top;
+
+    if (!p->count)
+        return;
+    if (i >= p->count)
+        i = p->count - 1;
+    p->cur = i;
+    if (i < p->top)
+        p->top = i;
+    else if (i >= p->top + VIS)
+        p->top = i - VIS + 1;
+    if (p->top != top)
+        draw_list(active);
+    else {
+        draw_entry(active, old);
+        draw_entry(active, i);
+    }
+    draw_details();
+}
+
+static void go_up(void)
+{
+    pane_t *p = &pane[active];
+    char *s;
+    int r;
+
+    if (active == LOCAL) {
+        /* remember the folder we're leaving: "D1:>A>B>" -> "B" */
+        strcpy(tmp, p->path);
+        tmp[strlen(tmp) - 1] = '\0';
+        s = strrchr(tmp, '>');
+        if (!local_up(p))
+            return;
+        read_local();
+    } else {
+        s = strrchr(p->path, '/');
+        strcpy(tmp, s ? s : "/");
+        s = tmp;
+        if ((r = ftp_cwd("..")) != 0) {
+            report("Folder", r);
+            return;
+        }
+        read_remote();
+    }
+    if (s)
+        find(p, s + 1);
+    draw_pane(active);
+    draw_details();
+}
+
+static void open_entry(void)
+{
+    pane_t *p = &pane[active];
+    entry_t *e;
+    int r;
+
+    if (!p->count)
+        return;
+    e = &p->ent[p->cur];
+    if (e->flags & E_UP) {
+        go_up();
         return;
     }
-    printf("%s\n", path);
-    if ((r = ftp_list(show_entry)) != 0)
-        report("List", r);
-    ftp_quit();
+    if (!(e->flags & E_DIR)) {
+        ui_info("Sending files comes next version.");
+        return;
+    }
+    strcpy(tmp, e->name);
+    if (active == LOCAL) {
+        local_into(p, tmp);
+        read_local();
+    } else {
+        if ((r = ftp_cwd(tmp)) != 0) {
+            report("Folder", r);
+            return;
+        }
+        read_remote();
+    }
+    draw_pane(active);
+    draw_details();
+}
+
+static void mark(unsigned char all)
+{
+    pane_t *p = &pane[active];
+    unsigned char i, any = 0;
+
+    if (!p->count)
+        return;
+    if (!all) {
+        if (!(p->ent[p->cur].flags & E_UP))
+            p->ent[p->cur].flags ^= E_MARK;
+        draw_entry(active, p->cur);
+        move_to(p->cur + 1);
+        return;
+    }
+    for (i = 0; i < p->count; ++i)
+        if (!(p->ent[i].flags & (E_UP | E_DIR | E_MARK)))
+            any = 1;
+    for (i = 0; i < p->count; ++i)
+        if (!(p->ent[i].flags & (E_UP | E_DIR))) {
+            if (any)
+                p->ent[i].flags |= E_MARK;
+            else
+                p->ent[i].flags &= ~E_MARK;
+        }
+    draw_list(active);
+    draw_details();
+}
+
+/* A letter jumps to the next name starting with it. */
+static void jump(unsigned char k)
+{
+    pane_t *p = &pane[active];
+    unsigned char i, n = p->count;
+
+    k = toupper(k);
+    for (i = 1; i <= n; ++i)
+        if (toupper(p->ent[(p->cur + i) % n].name[0]) == k) {
+            move_to((p->cur + i) % n);
+            return;
+        }
+}
+
+static void help(void)
+{
+    static const char *const keys[] = {
+        "^K ^D", "sites / disconnect",
+        "RETURN", "open folder, send file",
+        "SPACE", "mark file and move on",
+        "^A", "mark all",
+        "^T", "send what is marked",
+        "BKSP", "folder up",
+        "TAB", "other pane",
+        "^N ^E", "new folder / rename",
+        "DEL", "delete",
+        "^R", "read lists again",
+        "1-8", "drive D1:-D8:",
+        "ESC", "stop transfer",
+        "^Q", "quit to DOS",
+    };
+    unsigned char i;
+
+    scr_box(3, 22, "Keys");
+    for (i = 0; i < sizeof(keys) / sizeof(keys[0]); i += 2) {
+        scr_put(4 + i / 2, SCR_L + 2, keys[i], 1);
+        scr_put(4 + i / 2, SCR_L + 10, keys[i + 1], 0);
+    }
+    scr_put(18, SCR_L + 2, "The same keys as EFTP on the ST.", 0);
+    scr_put(19, SCR_L + 2, "^N ^E ^T DEL: next version.", 0);
+    scr_put(21, SCR_L + 2, "Any key", 1);
+    scr_put(21, SCR_L + 10, "back", 0);
+    key_get();
+    draw_all();
+}
+
+/* -- start */
+
+static void init(void)
+{
+    pane[LOCAL].ent = local_ent;
+    pane[LOCAL].max = MAX_LOCAL;
+    pane[LOCAL].pool = local_pool;
+    pane[LOCAL].pool_size = sizeof(local_pool);
+    strcpy(pane[LOCAL].path, "D1:");
+    pane[REMOTE].ent = remote_ent;
+    pane[REMOTE].max = MAX_REMOTE;
+    pane[REMOTE].pool = remote_pool;
+    pane[REMOTE].pool_size = sizeof(remote_pool);
 }
 
 int main(void)
 {
-    printf("\x7D");     /* clear screen */
-    printf("EFTP_XL %s\n", APP_VERSION);
-    printf("MEMLO $%04X\n\n", MEMLO);
+    unsigned char k;
+    signed char s;
+    pane_t *p;
 
-    show_adapter();
+    init();
+    scr_init();
+    draw_all();
+    sites_load();
+    read_local();
+    draw_pane(LOCAL);
+    draw_details();
 
     for (;;) {
-        printf("\nESC at any prompt quits.\n");
-        if (ask("Host", host, sizeof(host), host, 0) < 0
-            || ask("Port", port, sizeof(port), port[0] ? port : "21", 0) < 0
-            || ask("Username", user, sizeof(user), user, 0) < 0
-            || ask("Password", pass, sizeof(pass), NULL, 1) < 0
-            || ask("Path", path, sizeof(path), path[0] ? path : "/", 0) < 0)
+        p = &pane[active];
+        k = key_get();
+        switch (k) {
+        case K_UP: case '-':
+            if (p->cur)
+                move_to(p->cur - 1);
             break;
-
-        if (!*host) {
-            printf("Need a host.\n");
-            continue;
+        case K_DOWN: case '=':
+            move_to(p->cur + 1);
+            break;
+        case K_LEFT: case '+':
+            move_to(p->cur > VIS ? p->cur - VIS : 0);
+            break;
+        case K_RIGHT: case '*':
+            move_to(p->cur + VIS);
+            break;
+        case K_TAB:
+            if (!connected) {
+                ui_info("Not connected: ^K picks a site");
+                break;
+            }
+            active ^= 1;
+            draw_pane(LOCAL);
+            draw_pane(REMOTE);
+            draw_details();
+            break;
+        case K_RETURN:
+            open_entry();
+            break;
+        case K_BKSP:
+            go_up();
+            break;
+        case ' ':
+            mark(0);
+            break;
+        case CTRL('A'):
+            mark(1);
+            break;
+        case CTRL('K'):
+            s = sites_screen();
+            draw_all();
+            if (s >= 0)
+                connect(s);
+            draw_all();
+            break;
+        case CTRL('D'):
+            disconnect();
+            draw_all();
+            break;
+        case CTRL('R'):
+            read_local();
+            if (connected)
+                read_remote();
+            draw_all();
+            break;
+        case K_HELP: case '?':
+            help();
+            break;
+        case CTRL('Q'):
+            disconnect();
+            scr_done();
+            return EXIT_SUCCESS;
+        case CTRL('T'): case CTRL('N'): case CTRL('E'): case K_DEL:
+        case K_DEL2:
+            ui_info("That comes in the next version.");
+            break;
+        default:
+            if (k >= '1' && k <= '8' && active == LOCAL) {
+                local_drive(&pane[LOCAL], k - '0');
+                read_local();
+                draw_pane(LOCAL);
+                draw_details();
+            } else if (isalpha(k))
+                jump(k);
         }
-        session();
-        memset(pass, 0, sizeof(pass));
     }
-
-    return EXIT_SUCCESS;
 }

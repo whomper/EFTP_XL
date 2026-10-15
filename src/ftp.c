@@ -183,6 +183,24 @@ int ftp_cwd(const char *path)
     return r == 250 ? 0 : r;
 }
 
+int ftp_pwd(char *buf, unsigned char len)
+{
+    int r = send_cmd("PWD", NULL);
+    char *a, *b;
+
+    if (r != 257)
+        return r;
+    /* 257 "/pub/atari" is the current directory */
+    a = strchr(ftp_msg, '"');
+    b = a ? strchr(a + 1, '"') : NULL;
+    if (!b)
+        return FTP_ERR_REPLY;
+    *b = '\0';
+    strncpy(buf, a + 1, len - 1);
+    buf[len - 1] = '\0';
+    return 0;
+}
+
 /* Ask for passive mode; return the data port as text in port. */
 static int passive(char *port)
 {

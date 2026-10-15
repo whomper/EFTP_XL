@@ -10,7 +10,8 @@
 
 CL65       ?= cl65
 PROGRAM    := bin/EFTPXL.XEX
-SRCS       := src/main.c src/ftp.c
+SRCS       := src/main.c src/screen.c src/pane.c src/local.c src/remote.c \
+              src/sites.c src/ftp.c src/cio.s src/font.s
 
 # Load address. Above SpartaDOS 3.x / DOS 2.5 MEMLO with room to spare;
 # lower it to gain RAM once MEMLO on your setup is known.
@@ -19,8 +20,8 @@ START_ADDR ?= 0x3000
 FNLIB_DIR  := fujinet-lib
 FNLIB      := $(FNLIB_DIR)/r2r/atari/fujinet.atari.lib
 
-CFLAGS     := -t atari -O -W error -I $(FNLIB_DIR)/include $(if $(RELEASE),-D RELEASE)
-LDFLAGS    := --start-addr $(START_ADDR)
+CFLAGS     := -t atari -O -W error -I $(FNLIB_DIR)/include --bin-include-dir fonts $(if $(RELEASE),-D RELEASE)
+LDFLAGS    := --start-addr $(START_ADDR) -C src/eftpxl.cfg
 
 # whether the last build was a release, so that changing RELEASE rebuilds
 RELFLAG    := bin/release.flag
@@ -29,7 +30,7 @@ RELFLAG    := bin/release.flag
 
 all: $(PROGRAM)
 
-$(PROGRAM): $(SRCS) $(FNLIB) $(RELFLAG)
+$(PROGRAM): $(SRCS) src/*.h src/eftpxl.cfg fonts/EFTPXL.FNT $(FNLIB) $(RELFLAG)
 	mkdir -p bin
 	$(CL65) $(CFLAGS) $(LDFLAGS) -o $@ $(SRCS) $(FNLIB)
 

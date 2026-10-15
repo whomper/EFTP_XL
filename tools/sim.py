@@ -6,22 +6,27 @@ stood in for, the way EDOS's tools/sim.py tests EDOS:
 
 - The XEX is loaded segment by segment as DOS does, running INITAD
   chunks (cc65's memory check) and then RUNAD.
-- CIO on IOCB 0 (E:) is the screen: output is collected as text.
-- The OS keyboard handler (KEYBDV get) takes keys from a script.
+- The keyboard: keys come from a script, through CH and the OS
+  keyboard handler as cgetc reads them; "\\h" is the HELP key.
+- The screen is read from screen memory (SAVMSC), and drawn as the
+  Atari shows it, in the program's own character set and colours.
+- CIO: E: output is collected; D1:..D4: are folders on this machine,
+  with directories listed the way SpartaDOS 3 (or DOS 2.5) lists them.
 - SIO is a FujiNet: device $70 answers Get Adapter Config, devices
   $71.. ($71 = N1:, $72 = N2:) open real TCP connections for
   N:TCP:// specs and answer Open, Status, Read, Write and Close.
 
-So the program's own FTP client talks to a real server through the
-same SIO calls it makes on an Atari.
+    sim.py [--d1 DIR] [--dos sparta|dos2] [--shots PREFIX] [--sio-log] KEYS
 
-    sim.py [--xex bin/EFTPXL.XEX] [--memlo 0x1F00] [--sio-log] KEYS
-
-KEYS is what to type; "\\n" is RETURN, "\\e" is ESC. For example
-    sim.py '127.0.0.1\\n21\\nATARI\\nSECRET\\n/\\n\\e'
-prints the screen output, ATASCII turned into text.
+KEYS is what to type: "\\n" RETURN, "\\e" ESC, "\\t" TAB, "\\b" BACKSPACE,
+"\\u" "\\d" up and down, "\\h" HELP, "^X" Ctrl+X, and "\\s" takes a
+snapshot of the screen (printed, and PREFIX-N.png with --shots). The run
+ends when the program waits for a key and the script has none left.
 """
 import argparse
+import colorsys
+import datetime
+import fnmatch
 import os
 import socket
 import sys
@@ -37,13 +42,21 @@ DCB = 0x300
 IOCB = 0x340
 INITAD, RUNAD = 0x2E2, 0x2E0
 MEMTOP, MEMLO = 0x2E5, 0x2E7
+COLOR1, COLOR2, COLOR4 = 0x2C5, 0x2C6, 0x2C8
+HELPFG, CHBAS, CH = 0x2DC, 0x2F4, 0x2FC
 KEYBDV = 0xE420
 SIOV, CIOV = 0xE459, 0xE456
 KEY_TRAP = 0xE700           # KEYBDV's get-byte routine points here
 RETURN_TRAP = 0xFFF0        # fake return address ending a call
+SCREEN = 0xBC40
 
-EOL, ESC = 0x9B, 0x1B
+EOL = 0x9B
 STEPS_PER_TICK = 10000      # RTCLOK advances every this many instructions
+HELP, SHOT = 'help', 'shot'
+
+
+class Stop(Exception):
+    pass
 
 
 class FujiNet:
@@ -162,20 +175,125 @@ class FujiNet:
         return 1
 
 
+class Disks:
+    """D1:..D4: as folders on this machine, through CIO."""
+
+    def __init__(self, drives, dos='sparta'):
+        self.drives = drives            # {1: '/path', ...}
+        self.dos = dos
+        self.open = {}                  # iocb -> dict(data, pos, write, path)
+
+    def _resolve(self, spec):
+        dev, _, rest = spec.partition(':')
+        n = int(dev[1:]) if len(dev) > 1 else 1
+        if n not in self.drives:
+            return None, None
+        parts = [p for p in rest.replace('\\', '>').split('>') if p]
+        name = parts.pop() if parts and not rest.endswith('>') else ''
+        return os.path.join(self.drives[n], *parts), name
+
+    def _listing(self, folder, pattern):
+        names = sorted(os.listdir(folder))
+        lines = []
+        sparta = self.dos == 'sparta'
+        if sparta:
+            lines += ['Volume:    EFTPTEST', 'Directory: ' +
+                      (os.path.basename(folder).upper() or 'MAIN'), '']
+        for n in names:
+            full = os.path.join(folder, n)
+            base, _, ext = n.upper().partition('.')
+            if not fnmatch.fnmatch(n.upper(), pattern.upper().replace('*.*', '*')):
+                continue
+            t = datetime.datetime.fromtimestamp(os.path.getmtime(full))
+            when = t.strftime('%d-%m-%y %H:%M')
+            if os.path.isdir(full):
+                if sparta:
+                    lines.append(f'{base[:8]:<8}     <DIR>  {when}')
+                continue
+            size = os.path.getsize(full)
+            if sparta:
+                lines.append(f'{base[:8]:<8} {ext[:3]:<3} {size:>7} {when}')
+            else:
+                lines.append(f'  {base[:8]:<8}{ext[:3]:<3} {(size + 124) // 125:03d}')
+        lines.append(' 1234 FREE SECTORS' if sparta else '609 FREE SECTORS')
+        return ''.join(l + '\x9b' for l in lines).encode('latin-1')
+
+    def cio(self, sim, x):
+        m = sim.mem
+        cmd = m[IOCB + x + 2]
+        buf = m[IOCB + x + 4] | m[IOCB + x + 5] << 8
+        n = m[IOCB + x + 8] | m[IOCB + x + 9] << 8
+        aux1 = m[IOCB + x + 10]
+        f = self.open.get(x)
+        if cmd == 3:                                        # OPEN
+            spec = bytes(m[buf:buf + n]).split(b'\x9b')[0].decode('latin-1')
+            folder, name = self._resolve(spec)
+            if folder is None:
+                return 130                                  # no such device
+            if aux1 == 6:
+                if not os.path.isdir(folder):
+                    return 150
+                self.open[x] = dict(data=self._listing(folder, name or '*.*'), pos=0,
+                                    write=False)
+                return 1
+            path = os.path.join(folder, name)
+            if aux1 & 8:
+                self.open[x] = dict(data=bytearray(), pos=0, write=True, path=path)
+                return 1
+            if not os.path.isfile(path):
+                return 170
+            self.open[x] = dict(data=open(path, 'rb').read(), pos=0, write=False)
+            return 1
+        if cmd == 12:                                       # CLOSE
+            if f and f['write']:
+                open(f['path'], 'wb').write(f['data'])
+            self.open.pop(x, None)
+            return 1
+        if not f:
+            return 133                                      # not open
+        if cmd in (5, 7):                                   # GET RECORD / CHARS
+            d, p = f['data'], f['pos']
+            if p >= len(d):
+                sim.poke_word(IOCB + x + 8, 0)
+                return 136
+            end = len(d) if cmd == 7 else (d.find(b'\x9b', p) + 1 or len(d))
+            end = min(end, p + n)
+            sim.poke(buf, d[p:end])
+            sim.poke_word(IOCB + x + 8, end - p)
+            f['pos'] = end
+            return 1
+        if cmd in (9, 11):                                  # PUT RECORD / CHARS
+            d = bytes(m[buf:buf + n])
+            if cmd == 9 and b'\x9b' in d:
+                d = d[:d.index(b'\x9b') + 1]
+            f['data'] += d
+            return 1
+        return 146                                          # not implemented
+
+
 class Sim:
-    def __init__(self, xex, keys=b'', memlo=0x1F00, fujinet=None):
+    def __init__(self, xex, keys, memlo=0x1F00, fujinet=None, disks=None,
+                 shots=None):
         self.mem = bytearray(0x10000)
         self.mpu = MPU(memory=self.mem)
-        self.keys = bytearray(keys)
+        self.keys = list(keys)
         self.fujinet = fujinet or FujiNet()
-        self.screen = bytearray()
+        self.disks = disks or Disks({})
+        self.shots = shots
+        self.nshot = 0
+        self.eout = bytearray()
         self.steps = 0
+        self.polls = 0
 
         self.poke(RAMTOP, [0xC0])
-        self.poke(SAVMSC, [0x40, 0xBC])
+        self.poke_word(SAVMSC, SCREEN)
         self.poke_word(MEMTOP, 0xBC1F)
         self.poke_word(MEMLO, memlo)
         self.poke_word(KEYBDV + 4, KEY_TRAP - 1)
+        self.poke(COLOR1, [0xCA])
+        self.poke(COLOR2, [0x94])
+        self.poke(CHBAS, [0xE0])
+        self.poke(CH, [0xFF])
         self.xex = open(xex, 'rb').read()
 
     def poke(self, addr, data):
@@ -204,21 +322,23 @@ class Sim:
 
     def _cio(self):
         x = self.mpu.x
-        cmd = self.mem[IOCB + x + 2]
-        if cmd == 0x0B and x == 0:                      # put to E:
-            n = self.word(IOCB + x + 8)
-            if n == 0:
-                self.screen.append(self.mpu.a)
-            else:
-                a = self.word(IOCB + x + 4)
-                self.screen += self.mem[a:a + n]
-                self.poke_word(IOCB + x + 8, n)
-        return 1
+        if x == 0:
+            if self.mem[IOCB + 2] == 0x0B:                  # put to E:
+                n = self.word(IOCB + 8)
+                if n == 0:
+                    self.eout.append(self.mpu.a)
+                else:
+                    a = self.word(IOCB + 4)
+                    self.eout += self.mem[a:a + n]
+            return 1
+        st = self.disks.cio(self, x)
+        self.mem[IOCB + x + 3] = st
+        return st
 
     def _key(self):
-        if not self.keys:
-            raise RuntimeError('program waits for a key; the script has none left')
-        return self.keys.pop(0)
+        k = self.keys.pop(0)
+        self.mem[CH] = 0xFF
+        return k
 
     def _trap(self):
         pc = self.mpu.pc
@@ -233,77 +353,161 @@ class Sim:
         else:
             raise RuntimeError(f'unhandled OS call at ${pc:04X}')
 
+    def _keyboard(self):
+        """Called when the program looks at CH (kbhit)."""
+        while self.keys and self.keys[0] == SHOT:
+            self.keys.pop(0)
+            self.snapshot()
+        if self.keys and self.keys[0] == HELP:
+            if not self.mem[HELPFG]:
+                self.keys.pop(0)
+                self.mem[HELPFG] = 0x11
+            return
+        if self.keys:
+            self.mem[CH] = 0x0C if self.mem[CH] == 0xFF else self.mem[CH]
+            self.polls = 0
+            return
+        self.polls += 1
+        if self.polls > 200:
+            raise Stop()
+
     # -- running
-    def call(self, addr, max_steps=200_000_000):
-        mpu = self.mpu
+    def call(self, addr, max_steps=500_000_000):
+        mpu, m = self.mpu, self.mem
         mpu.sp = 0xFF
         ret = RETURN_TRAP - 1
-        mpu.memory[0x1FF], mpu.memory[0x1FE] = ret >> 8, ret & 255
+        m[0x1FF], m[0x1FE] = ret >> 8, ret & 255
         mpu.sp = 0xFD
         mpu.pc = addr
         for _ in range(max_steps):
-            if mpu.pc == RETURN_TRAP:
+            pc = mpu.pc
+            if pc == RETURN_TRAP:
                 return
-            if mpu.pc >= 0xC000:
+            if pc >= 0xC000:
                 self._trap()
                 continue
+            if m[pc] == 0xAE and m[pc + 1] == 0xFC and m[pc + 2] == 0x02:
+                self._keyboard()                            # LDX CH
             mpu.step()
             self.steps += 1
             if self.steps % STEPS_PER_TICK == 0:
-                t = (self.mem[RTCLOK] << 16 | self.mem[RTCLOK + 1] << 8
-                     | self.mem[RTCLOK + 2]) + 1
+                t = (m[RTCLOK] << 16 | m[RTCLOK + 1] << 8 | m[RTCLOK + 2]) + 1
                 self.poke(RTCLOK, [(t >> 16) & 255, (t >> 8) & 255, t & 255])
         raise RuntimeError(f'no return from ${addr:04X} (pc=${mpu.pc:04X})')
 
     def run(self):
-        """Load the XEX as DOS does, then run it."""
+        """Load the XEX as DOS does, then run it until the keys run out."""
         d, i = self.xex, 0
         self.poke_word(RUNAD, 0)
-        while i < len(d):
-            if d[i:i + 2] == b'\xff\xff':
-                i += 2
-            start, end = d[i] | d[i + 1] << 8, d[i + 2] | d[i + 3] << 8
-            i += 4
-            self.poke_word(INITAD, 0)
-            self.poke(start, d[i:i + end - start + 1])
-            i += end - start + 1
-            if self.word(INITAD):
-                self.call(self.word(INITAD))
-        self.call(self.word(RUNAD))
+        try:
+            while i < len(d):
+                if d[i:i + 2] == b'\xff\xff':
+                    i += 2
+                start, end = d[i] | d[i + 1] << 8, d[i + 2] | d[i + 3] << 8
+                i += 4
+                self.poke_word(INITAD, 0)
+                self.poke(start, d[i:i + end - start + 1])
+                i += end - start + 1
+                if self.word(INITAD):
+                    self.call(self.word(INITAD))
+            self.call(self.word(RUNAD))
+        except Stop:
+            pass
 
-    def text(self):
-        out = []
-        for b in self.screen:
-            if b == EOL:
-                out.append('\n')
-            elif b == 0x7D:
-                out.append('[CLEAR]\n')
-            elif b == 0x7E:
-                if out and out[-1] != '\n':
-                    out.pop()
-            elif 0x20 <= b < 0x7B:
-                out.append(chr(b))
-        return ''.join(out)
+    # -- the screen
+    def screen_text(self):
+        base = self.word(SAVMSC)
+        rows = []
+        for r in range(24):
+            row = ''
+            for c in range(40):
+                ch = self.mem[base + r * 40 + c] & 0x7F
+                a = ch + 0x20 if ch < 0x40 else ch - 0x40 if ch < 0x60 else ch
+                row += chr(a) if 0x20 <= a < 0x7B else {
+                    0x12: '-', 0x7C: '|', 0x11: '+', 0x05: '+', 0x1A: '+',
+                    0x03: '+', 0x01: '+', 0x04: '+', 0x17: '+', 0x18: '+',
+                    0x14: '*', 0x60: '#', 0x1C: '^', 0x1D: 'v', 0x00: '[',
+                    0x10: '.', 0x06: '~', 0x7B: ':'}.get(a, '?')
+            rows.append(row.rstrip())
+        return '\n'.join(rows)
+
+    def screen_png(self, path, scale=3):
+        from PIL import Image
+        font = self.mem[self.mem[CHBAS] << 8:(self.mem[CHBAS] << 8) + 1024]
+        bg_c = self.mem[COLOR2]
+        bg = atari_rgb(bg_c)
+        fg = atari_rgb((bg_c & 0xF0) | (self.mem[COLOR1] & 0x0F))
+        border = atari_rgb(self.mem[COLOR4])
+        bx, by = 16, 12
+        w, h = 40 * 8 + 2 * bx, 24 * 8 + 2 * by
+        img = Image.new('RGB', (w, h), border)
+        px = img.load()
+        base = self.word(SAVMSC)
+        for r in range(24):
+            for c in range(40):
+                ch = self.mem[base + r * 40 + c]
+                for y in range(8):
+                    bits = font[(ch & 0x7F) * 8 + y]
+                    for x in range(8):
+                        on = bool(bits & (0x80 >> x)) ^ bool(ch & 0x80)
+                        px[bx + c * 8 + x, by + r * 8 + y] = fg if on else bg
+        img.resize((w * scale, h * scale), Image.NEAREST).save(path)
+
+    def snapshot(self):
+        self.nshot += 1
+        print(f'--- screen {self.nshot} ---')
+        print(self.screen_text())
+        if self.shots:
+            self.screen_png(f'{self.shots}-{self.nshot}.png')
 
 
-def keys_from(arg):
-    return arg.replace('\\n', '\x9b').replace('\\e', '\x1b').encode('latin-1')
+def atari_rgb(colour):
+    """approximate NTSC palette entry (as EDOS's tools/screenshot.py)"""
+    hue, lum = colour >> 4, (colour & 0x0F) / 15
+    if hue == 0:
+        v = int(lum * 255)
+        return (v, v, v)
+    angle = (45 - (hue - 1) * 24) % 360
+    r, g, b = colorsys.hls_to_rgb(angle / 360, 0.10 + lum * 0.75, 0.70)
+    return (int(r * 255), int(g * 255), int(b * 255))
+
+
+def parse_keys(s):
+    out, i = [], 0
+    named = {'n': 0x9B, 'e': 0x1B, 't': 0x7F, 'b': 0x7E, 'u': 0x1C,
+             'd': 0x1D, 'l': 0x1E, 'r': 0x1F, 'x': 0x9C}
+    while i < len(s):
+        c = s[i]
+        if c == '\\' and i + 1 < len(s):
+            k = s[i + 1]
+            out.append(HELP if k == 'h' else SHOT if k == 's' else named.get(k, ord(k)))
+            i += 2
+        elif c == '^' and i + 1 < len(s):
+            out.append(ord(s[i + 1].upper()) & 0x1F)
+            i += 2
+        else:
+            out.append(ord(c))
+            i += 1
+    return out
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    ap.add_argument('keys', help='keys to type ("\\n" RETURN, "\\e" ESC)')
+    ap.add_argument('keys', help='keys to type (see above)')
     ap.add_argument('--xex', default=os.path.join(ROOT, 'bin', 'EFTPXL.XEX'))
     ap.add_argument('--memlo', type=lambda v: int(v, 0), default=0x1F00)
+    ap.add_argument('--d1', help='folder for D1:')
+    ap.add_argument('--d2', help='folder for D2:')
+    ap.add_argument('--dos', choices=('sparta', 'dos2'), default='sparta')
+    ap.add_argument('--shots', help='PNG file prefix for snapshots')
     ap.add_argument('--sio-log', action='store_true', help='log SIO calls')
     args = ap.parse_args()
 
-    sim = Sim(args.xex, keys_from(args.keys), args.memlo,
-              FujiNet(log=args.sio_log))
-    try:
-        sim.run()
-    finally:
-        print(sim.text())
+    drives = {n: d for n, d in ((1, args.d1), (2, args.d2)) if d}
+    sim = Sim(args.xex, parse_keys(args.keys), args.memlo,
+              FujiNet(log=args.sio_log), Disks(drives, args.dos), args.shots)
+    sim.run()
+    sim.snapshot()
 
 
 if __name__ == '__main__':

@@ -17,14 +17,19 @@ with no conversion.
 
 ## Status
 
-**Step 1.** Logs in to an FTP server and lists a remote directory.
-Transfers come next.
+**Step 2.** The full-screen program: the Atari and the server side by
+side, after EFTP on the ST, in EDOS's font and colours. Transfers come
+next.
+
+![EFTP_XL connected to a server](docs/design/eftpxl-1-main.png)
 
 - [x] Log in and list a remote directory
+- [x] Two panes: browse folders on the Atari (D1:-D8:, SpartaDOS
+      folders) and on the server
+- [x] Sites, saved in `EFTPXL.CFG`
 - [ ] Download a file to `Dn:`
 - [ ] Upload a file from `Dn:`
-- [ ] Two-pane browser UI, saved settings
-- [ ] Delete / rename / mkdir
+- [ ] Delete / rename / new folder
 
 ## The server
 
@@ -46,21 +51,50 @@ FTP is unencrypted, so only use it on your home network.
 1. Get `EFTPXL.XEX` from the
    [latest release](https://github.com/whomper/EFTP_XL/releases) onto a disk
    the Atari can read, e.g. an ATR on the FujiNet SD card or a TNFS share.
-2. Load it: `L` from the DOS 2.5 menu, or type `EFTPXL` at the SpartaDOS prompt.
-3. Enter the host (the server's IP address or name), port (21 unless your
-   server uses another), username, password and path.
+2. Turn BASIC off (hold OPTION while booting DOS 2.5): the program needs
+   the 48K that leaves free. With BASIC on, the loader says there is not
+   enough memory.
+3. Load it: `L` from the DOS 2.5 menu, or type `EFTPXL` at the SpartaDOS
+   prompt.
+4. Press ^K for the sites, ^N to add one: a name, the server (IP address
+   or name), port (21 unless your server uses another), user and
+   password, the folder on the server to start in, and the folder on the
+   Atari (e.g. `D1:>DOWNLOAD>`). RETURN on a site connects.
+
+The screen, after EFTP: the Atari on the left, the server on the right,
+the folder you are in above each, and the pane with the keyboard has its
+header in inverse. Under the panes is the full name, size and date of the
+file under the cursor, then the transfers.
+
+| Key            | Does                                    |
+|----------------|-----------------------------------------|
+| ^K / ^D        | the sites (connect) / disconnect        |
+| RETURN         | open the folder                         |
+| BACKSPACE      | the folder up                           |
+| TAB            | the other pane                          |
+| ↑ ↓ (or - =)   | move; ← → (or + \*) a page              |
+| A-Z            | the next name starting with the letter  |
+| SPACE / ^A     | mark the file and move on / mark all    |
+| 1-8            | drive D1:-D8: (in the Atari pane)       |
+| ^R             | read both lists again                   |
+| HELP (or ?)    | the keys                                |
+| ^Q             | quit to DOS                             |
+
+The keys are EFTP's. ^T (send), ^N (new folder), ^E (rename) and DEL
+come with the transfers.
 
 Notes:
 
+- `EFTPXL.CFG` is on the drive (and SpartaDOS folder) you run EFTP_XL
+  from, one line per site. A password saved there is plain text: leave it
+  blank and EFTP_XL asks for it each time you connect.
 - Usernames, passwords and paths are case-sensitive. The Atari keyboard
   starts in uppercase; press **CAPS** to switch to lowercase.
-- A blank username logs in as `anonymous`.
-- On an error the program shows the server's own reply, for example
+- A blank user logs in as `anonymous`.
+- On an error the info line shows the server's own reply, for example
   `530 Login incorrect`.
-- **ESC** at any prompt quits.
-- The startup screen shows `MEMLO`. The program loads at `$3000`. If DOS's
-  MEMLO is higher, the loader stops with an error. Let me know your value and
-  we'll adjust.
+- The program loads at `$3000`. If DOS's MEMLO is higher, the loader
+  stops with an error. Let me know your value and we'll adjust.
 
 ## Building
 
@@ -83,17 +117,21 @@ they are never committed.
 **Testing without an Atari.** `tools/sim.py` runs the real
 `bin/EFTPXL.XEX` on an emulated 6502 ([py65](https://github.com/mnaberez/py65)),
 the way EDOS is tested. It stands in for the OS calls the program makes:
-the screen (CIO on E:), the keyboard (typed from a script), and SIO as a
+the screen (read from screen memory), the keyboard (typed from a
+script), the disks (D1:, D2: are folders here, through CIO) and SIO as a
 FujiNet whose `N1:`/`N2:` TCP connections are real sockets. So the
 program's FTP client talks to a real server:
 
 ```sh
-pip install py65
-tools/sim.py --sio-log '192.168.1.20\n21\nATARI\nSECRET\n/\n\e'
+pip install py65 pillow
+tools/sim.py --d1 disk --shots shot '^K^NTest\n192.168.1.20\n21\nATARI\nSECRET\n/\n\n\n\n\s'
 ```
 
-The keys are what you would type (`\n` is RETURN, `\e` is ESC); it prints
-the screen as text, and `--sio-log` shows every FTP command sent.
+The keys are what you would type (`\n` RETURN, `\e` ESC, `\t` TAB, `\b`
+BACKSPACE, `\u` `\d` up and down, `\h` HELP, `^K` Ctrl+K), and `\s` takes
+a snapshot: the screen as text, and `shot-N.png` as the Atari shows it.
+`--dos dos2` lists D1: as DOS 2.5 does (SpartaDOS 3 otherwise), and
+`--sio-log` shows every FTP command sent.
 
 **Versions and releases.** `VERSION` in `src/main.c` holds the last
 release, and a release build (`make RELEASE=1`) shows it at startup; any
