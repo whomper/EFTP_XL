@@ -47,6 +47,8 @@ HELPFG, CHBAS, CH = 0x2DC, 0x2F4, 0x2FC
 KEYBDV = 0xE420
 SIOV, CIOV = 0xE459, 0xE456
 KEY_TRAP = 0xE700           # KEYBDV's get-byte routine points here
+DOS_TRAP = 0xE710           # DOSVEC: back to DOS ends the run
+DOSVEC = 0x0A
 RETURN_TRAP = 0xFFF0        # fake return address ending a call
 SCREEN = 0xBC40
 
@@ -320,6 +322,8 @@ class Sim:
         self.poke_word(MEMTOP, 0xBC1F)
         self.poke_word(MEMLO, memlo)
         self.poke_word(KEYBDV + 4, KEY_TRAP - 1)
+        self.poke_word(DOSVEC, DOS_TRAP)
+        self.to_dos = False
         self.poke(COLOR1, [0xCA])
         self.poke(COLOR2, [0x94])
         self.poke(CHBAS, [0xE0])
@@ -380,6 +384,9 @@ class Sim:
             self._rts(y=self._cio())
         elif pc == KEY_TRAP:
             self._rts(a=self._key(), y=1)
+        elif pc == DOS_TRAP:
+            self.to_dos = True
+            raise Stop()
         else:
             raise RuntimeError(f'unhandled OS call at ${pc:04X}')
 
@@ -545,7 +552,13 @@ def main():
     sim = Sim(args.xex, parse_keys(args.keys), args.memlo,
               FujiNet(log=args.sio_log), Disks(drives, args.dos), args.shots)
     sim.run()
-    sim.snapshot()
+    if sim.eout:
+        print('--- E: ---')
+        print(bytes(sim.eout).replace(b'\x9b', b'\n').decode('latin-1'))
+    if sim.to_dos:
+        print('--- back to DOS ---')
+    else:
+        sim.snapshot()
 
 
 if __name__ == '__main__':

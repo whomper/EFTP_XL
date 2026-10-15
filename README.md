@@ -129,9 +129,11 @@ Notes:
 - A blank user logs in as `anonymous`.
 - On an error the info line shows the server's own reply, for example
   `530 Login incorrect`.
-- The program loads at `$2800`. If DOS's MEMLO is higher, the loader
-  says "Program would load below MEMLO"; let me know your value and
-  we'll adjust.
+- The program loads at `$2000`, above DOS 2.5's and SpartaDOS 3's MEMLO
+  (EDOS loads at `$1E00`). Start it from DOS, not with EDOS's Load
+  Binary: it would load over EDOS while EDOS is still loading it. If a
+  DOS's MEMLO is higher, the loader says "Program would load below
+  MEMLO" and goes back to DOS.
 
 ## Building
 
