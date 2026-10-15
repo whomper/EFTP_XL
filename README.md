@@ -80,6 +80,21 @@ The output is `bin/EFTPXL.XEX`. `START_ADDR` changes the load address, for
 example `make START_ADDR=0x2800`. `bin/` and `dist/` are what make builds;
 they are never committed.
 
+**Testing without an Atari.** `tools/sim.py` runs the real
+`bin/EFTPXL.XEX` on an emulated 6502 ([py65](https://github.com/mnaberez/py65)),
+the way EDOS is tested. It stands in for the OS calls the program makes:
+the screen (CIO on E:), the keyboard (typed from a script), and SIO as a
+FujiNet whose `N1:`/`N2:` TCP connections are real sockets. So the
+program's FTP client talks to a real server:
+
+```sh
+pip install py65
+tools/sim.py --sio-log '192.168.1.20\n21\nATARI\nSECRET\n/\n\e'
+```
+
+The keys are what you would type (`\n` is RETURN, `\e` is ESC); it prints
+the screen as text, and `--sio-log` shows every FTP command sent.
+
 **Versions and releases.** `VERSION` in `src/main.c` holds the last
 release, and a release build (`make RELEASE=1`) shows it at startup; any
 other build shows `0.2-dev`. To release: raise `VERSION`, commit and push,
