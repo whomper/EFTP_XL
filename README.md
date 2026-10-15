@@ -95,7 +95,7 @@ any later version. It is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See [COPYING](COPYING).
 
-Copyright (C) 2026 Erez Yaary.
+Copyright (C) 2026 AERA | Erez Yaary.
 
 `bin/EFTPXL.XEX` is linked with fujinet-lib (GPL-3.0), so the built
 program as a whole is distributed under the GPL version 3.
