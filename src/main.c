@@ -162,6 +162,16 @@ static unsigned char build_url(void)
     return 1;
 }
 
+/* Print the URL being opened, with the password masked. */
+static void show_url(void)
+{
+    printf("Opening N1:%s://", proto);
+    if (*user)
+        printf("%s%s@", user, *pass ? ":****" : "");
+    printf("%s%s%s%s%s\n", host, *port ? ":" : "", port,
+           path[0] == '/' ? "" : "/", path);
+}
+
 static void list_dir(void)
 {
     int16_t n;
@@ -171,6 +181,9 @@ static void list_dir(void)
     if (network_open(url, MODE_DIR, DIR_LONG) != FN_ERR_OK) {
         network_status(url, &bw, &conn, &err);
         printf("Open failed: %u %s\n", err, errtext(err));
+        if (err == 144)
+            printf("Check username/password (case\n"
+                   "matters) and that the server is up.\n");
         network_close(url);
         return;
     }
@@ -223,8 +236,7 @@ int main(void)
         if (!build_url())
             continue;
 
-        printf("Listing %s://%s%s%s ...\n", proto, host,
-               path[0] == '/' ? "" : "/", path);
+        show_url();
         list_dir();
         memset(pass, 0, sizeof(pass));
         memset(url, 0, sizeof(url));

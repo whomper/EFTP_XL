@@ -31,15 +31,20 @@ example `/Users/yourname/AtariShare/`.
 
 ### FTP
 
-macOS no longer includes an FTP server. A quick one for testing:
+macOS no longer includes an FTP server. Use `tools/eftp-server.py` from this
+repo. It's a small [pyftpdlib](https://github.com/giampaolo/pyftpdlib) server
+that also accepts FujiNet's directory request (`LIST /path/*`), which plain
+pyftpdlib rejects with "550 No such file or directory".
 
 ```sh
-pip3 install pyftpdlib
-mkdir -p ~/AtariShare
-python3 -m pyftpdlib -p 2121 -w -d ~/AtariShare -u atari -P somepassword
+python3 -m venv ~/eftp-venv
+~/eftp-venv/bin/pip install pyftpdlib
+~/eftp-venv/bin/python tools/eftp-server.py --dir ~/AtariShare --user ATARI --password SECRET
 ```
 
-Then use port `2121`, user `atari`, and path `/`.
+On the Atari, pick `F`, enter the Mac's IP address, port `2121`, the same
+username and password, and path `/`. An uppercase username and password
+are easiest, since the Atari keyboard starts in uppercase.
 
 FTP is unencrypted, so only use it on your home network. FujiNet's FTP support
 can list, download and upload, but rename/delete/mkdir are not implemented in
@@ -56,8 +61,10 @@ the firmware (they report success without doing anything). Use SFTP for those.
 
 Notes:
 
-- Usernames, passwords and paths are case-sensitive. Press **CAPS** to switch
-  to lowercase.
+- Usernames, passwords and paths are case-sensitive. The Atari keyboard
+  starts in uppercase; press **CAPS** to switch to lowercase. A wrong-case
+  login shows as error 144.
+- The program shows the exact URL it opens, with the password masked.
 - The username and password can't contain `@`, `:` or `/` (FujiNet URL
   limitation).
 - SFTP needs a recent FujiNet firmware. The program shows the firmware
