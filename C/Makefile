@@ -21,25 +21,16 @@ START_ADDR ?= 0x2000
 FNLIB_DIR  := fujinet-lib
 FNLIB      := $(FNLIB_DIR)/r2r/atari/fujinet.atari.lib
 
-CFLAGS     := -t atari -O -W error -I $(FNLIB_DIR)/include --bin-include-dir ../fonts $(if $(RELEASE),-D RELEASE)
+CFLAGS     := -t atari -O -W error -I $(FNLIB_DIR)/include --bin-include-dir ../fonts
 LDFLAGS    := --start-addr $(START_ADDR) -C src/eftpxl.cfg
 
-# whether the last build was a release, so that changing RELEASE rebuilds
-RELFLAG    := bin/release.flag
-
-.PHONY: all dist clean distclean FORCE
+.PHONY: all dist clean distclean
 
 all: $(PROGRAM)
 
-$(PROGRAM): Makefile $(SRCS) src/*.h src/eftpxl.cfg ../fonts/EFTPXL.FNT $(FNLIB) $(RELFLAG)
+$(PROGRAM): Makefile $(SRCS) src/*.h src/eftpxl.cfg ../fonts/EFTPXL.FNT $(FNLIB)
 	mkdir -p bin
 	$(CL65) $(CFLAGS) $(LDFLAGS) -o $@ $(SRCS) $(FNLIB)
-
-$(RELFLAG): FORCE
-	@mkdir -p bin
-	@echo "$(RELEASE)" > $@.new
-	@if cmp -s $@.new $@; then rm $@.new; else mv $@.new $@; fi
-FORCE:
 
 dist: all
 	rm -rf dist

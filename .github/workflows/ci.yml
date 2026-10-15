@@ -31,11 +31,7 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/venv"
           "$RUNNER_TEMP/venv/bin/pip" install -q py65 pyftpdlib
           make test PYTHON="$RUNNER_TEMP/venv/bin/python"
-      - name: The build changed no tracked file
+      - name: The build changed no tracked file (and CI publishes nothing)
         run: |
           git status --porcelain
           test -z "$(git status --porcelain)"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: eftpxl-dev
-          path: bin/EFTPXL.XEX

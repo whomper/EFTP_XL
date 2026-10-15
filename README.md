@@ -211,8 +211,8 @@ sites, both panes, downloads and uploads (binary and text), the replace
 question, ESC, new folder, rename and delete on both sides, DOS 2.5.
 
 **Versions and releases.** `VERSION` in `ASM/EFTPXL.ASM` holds the last
-release, and a release build (`make RELEASE=1`) shows it at startup; any
-other build shows `0.2-dev`. To release: raise `VERSION`, commit and push,
+release, and every build shows it at startup (there is no `-dev`
+label). Only releases leave the build machine. To release: raise `VERSION`, commit and push,
 then run the Release workflow (Actions > Release > Run workflow, on main)
 with what is new: [`.github/workflows/release.yml`](.github/workflows/release.yml)
 builds ATasm (at a fixed commit) and the program, tags the commit `vX.Y`

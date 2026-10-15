@@ -54,10 +54,9 @@ NOROOM   .BYTE "EFTP_XL: not enough memory",EOL
          *=  LOAD
          .INCLUDE #D:FONT.M65
 ;
-; the last release; a release build drops the "-dev"
+; the last release, which every build shows
 ;
-VERSION  .BYTE "EFTP_XL 0.2"
-DEVTAG   .BYTE "-dev",0
+VERSION  .BYTE "EFTP_XL 0.3",0
 ;
          .INCLUDE #D:UI.M65
          .INCLUDE #D:CMDS.M65

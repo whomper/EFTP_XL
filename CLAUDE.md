@@ -2,11 +2,18 @@
 
 - **Releases carry the program.** `bin/` and `dist/` are build output,
   never committed. `VERSION` in `ASM/EFTPXL.ASM` holds the last release
-  (a build shows `x.y-dev`; `make RELEASE=1` shows `x.y`). A release:
+  (every build shows `x.y`; there is no -dev label). A release:
   raise `VERSION`, commit, push, then run the Release workflow on main
   with the notes; `.github/workflows/release.yml` builds ATasm at
   `ATASM_REV` and the program, tags vX.Y and publishes `EFTPXL.XEX` and
   the source disks. Never reuse a number.
+- **Only formal releases leave the build machine.** Erez gets vX.Y
+  releases made by the Release workflow from `main`, nothing else: no
+  test builds, no CI artifacts, no builds from a branch. Work lands on
+  `main`; to try a fix on real hardware, release it. If a release
+  doesn't work, roll back with a release: revert on `main`, release the
+  next number, and say in the bad release's notes that it is withdrawn
+  and which one to use.
 - **The program is Mac/65 source** in `ASM/`, built here with ATasm
   (`-mac65`) and on the Atari with Mac/65. Keep to what both take:
   labels of letters and digits only, unique across all files (no

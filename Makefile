@@ -8,38 +8,28 @@
 #
 # bin/ and dist/ are what make builds, never committed: releases carry
 # the program (.github/workflows/release.yml). VERSION in ASM/EFTPXL.ASM
-# holds the last release, which a release build (RELEASE=1) shows;
-# others show "x.y-dev". The first version, in C, is in C/.
+# holds the last release, which every build shows. The first version,
+# in C, is in C/.
 
 ATASM      ?= atasm
 PYTHON     ?= python3
 PROGRAM    := bin/EFTPXL.XEX
 SRCS       := $(wildcard ASM/*.ASM)
 
-# whether the last build was a release, so that changing RELEASE rebuilds
-RELFLAG    := bin/release.flag
-
-.PHONY: all dist atr test clean FORCE
+.PHONY: all dist atr test clean
 
 all: $(PROGRAM)
 
 # The main file names its parts as Mac/65 on the Atari does,
 # ".INCLUDE #D:SCREEN.M65"; ATasm gets them as ASM/SCREEN.ASM.
-$(PROGRAM): Makefile $(SRCS) $(RELFLAG)
+$(PROGRAM): Makefile $(SRCS)
 	mkdir -p bin
 	sed -e 's/#D:\([A-Z0-9]*\)\.M65/\1.ASM/' \
-	    $(if $(RELEASE),-e 's/\(DEVTAG *\)\.BYTE .*/\1.BYTE 0/') \
 	    ASM/EFTPXL.ASM > bin/EFTPXL.ASM
 	$(ATASM) -s -mac65 -IASM -o$@ bin/EFTPXL.ASM > bin/EFTPXL.LST
 
 ASM/FONT.ASM: fonts/EFTPXL.FNT tools/font2asm.py
 	$(PYTHON) tools/font2asm.py
-
-$(RELFLAG): FORCE
-	@mkdir -p bin
-	@echo "$(RELEASE)" > $@.new
-	@if cmp -s $@.new $@; then rm $@.new; else mv $@.new $@; fi
-FORCE:
 
 # the sources on Atari disks; ATasm must build the same program from them
 atr: $(PROGRAM)
@@ -48,7 +38,6 @@ atr: $(PROGRAM)
 	$(PYTHON) tools/atari_src.py bin/EFTPXL.ATR $(SRCS)
 	$(PYTHON) tools/atari_src.py --check --to bin/atr bin/EFTPXL?.ATR > /dev/null
 	sed -e 's/#D:\([A-Z0-9]*\)\.M65/\1.ASM/' \
-	    $(if $(RELEASE),-e 's/\(DEVTAG *\)\.BYTE .*/\1.BYTE 0/') \
 	    bin/atr/EFTPXL.ASM > bin/atr/MAIN.ASM
 	cd bin/atr && $(ATASM) -s -mac65 -oCHECK.XEX MAIN.ASM > /dev/null
 	cmp bin/atr/CHECK.XEX $(PROGRAM)

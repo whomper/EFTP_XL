@@ -31,14 +31,9 @@
 #include "xfer.h"
 #include "ui.h"
 
-/* the last release; a release build (RELEASE=1) shows it as it is,
-   any other "0.2-dev" */
+/* the last release, which every build shows */
 #define VERSION     "0.2"
-#ifdef RELEASE
 #define APP_VERSION VERSION
-#else
-#define APP_VERSION VERSION "-dev"
-#endif
 
 #define DIV         19          /* the line between the panes */
 #define HEAD_ROW    3

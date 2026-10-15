@@ -32,7 +32,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Which release
         run: |
-          V=$(sed -n 's/^VERSION *\.BYTE "EFTP_XL \(.*\)"/\1/p' ASM/EFTPXL.ASM)
+          V=$(sed -n 's/^VERSION *\.BYTE "EFTP_XL \([^"]*\)".*/\1/p' ASM/EFTPXL.ASM)
           if [ "$GITHUB_REF_TYPE" = tag ]; then
             TAG=$GITHUB_REF_NAME
             if [ "$TAG" != "v$V" ]; then
@@ -60,7 +60,7 @@ jobs:
           make -C "$RUNNER_TEMP/atasm/src" -j"$(nproc)" >/dev/null
           echo "$RUNNER_TEMP/atasm/src" >> "$GITHUB_PATH"
       - name: Build
-        run: make dist RELEASE=1
+        run: make dist
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
