@@ -30,6 +30,7 @@ import fnmatch
 import os
 import socket
 import sys
+import time
 
 from py65.devices.mpu6502 import MPU
 
@@ -53,7 +54,7 @@ RETURN_TRAP = 0xFFF0        # fake return address ending a call
 SCREEN = 0xBC40
 
 EOL = 0x9B
-STEPS_PER_TICK = 10000      # RTCLOK advances every this many instructions
+CLOCK_STEPS = 2000          # RTCLOK is set from the wall clock this often
 HELP, SHOT, WAIT = 'help', 'shot', 'wait'
 IDLE_GAP = 300             # polls this close together: waiting for a key
 
@@ -314,6 +315,7 @@ class Sim:
         self.nshot = 0
         self.eout = bytearray()
         self.steps = 0
+        self.t0 = time.monotonic()
         self.polls = 0
         self.last_poll = 0
 
@@ -374,8 +376,15 @@ class Sim:
         self.mem[CH] = 0xFF
         return k
 
+    def _clock(self):
+        """RTCLOK runs at 60 Hz of real time, as on an NTSC Atari, so the
+        program's timeouts wait as long as they would there."""
+        t = int((time.monotonic() - self.t0) * 60)
+        self.poke(RTCLOK, [(t >> 16) & 255, (t >> 8) & 255, t & 255])
+
     def _trap(self):
         pc = self.mpu.pc
+        self._clock()
         if pc == SIOV:
             y = self.fujinet.call(self)
             self.mem[DCB + 3] = y
@@ -434,9 +443,8 @@ class Sim:
                 self._keyboard()                            # LDX CH
             mpu.step()
             self.steps += 1
-            if self.steps % STEPS_PER_TICK == 0:
-                t = (m[RTCLOK] << 16 | m[RTCLOK + 1] << 8 | m[RTCLOK + 2]) + 1
-                self.poke(RTCLOK, [(t >> 16) & 255, (t >> 8) & 255, t & 255])
+            if self.steps % CLOCK_STEPS == 0:
+                self._clock()
         raise RuntimeError(f'no return from ${addr:04X} (pc=${mpu.pc:04X})')
 
     def run(self):

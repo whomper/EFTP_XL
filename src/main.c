@@ -769,9 +769,13 @@ int main(void)
         case CTRL('K'):
             s = sites_screen();
             draw_all();
-            if (s >= 0)
+            if (s >= 0) {
                 connect(s);
-            draw_all();
+                /* the panes, but the info line keeps what connect said */
+                draw_pane(LOCAL);
+                draw_pane(REMOTE);
+                draw_details();
+            }
             break;
         case CTRL('D'):
             disconnect();
