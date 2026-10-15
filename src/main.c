@@ -13,6 +13,9 @@
  *   4  2 dirs 5 files| 2 dirs 5 files    19-21 transfers
  *   5-15 the files   | the files         22  ---------------
  *                                        23  keys
+ *
+ * Most functions work on the pane in `side` (pane_use), where its
+ * entries start at `base`; `active` is the pane with the keyboard.
  */
 
 #include <stdlib.h>
@@ -43,17 +46,8 @@
 #define LIST_ROW    5
 #define VIS         11          /* files shown in a pane */
 #define DETAIL_ROW  17
-#define KEYS_ROW    23
+#define NAME_W      (DIV - SCR_L - 6)
 
-#define MAX_LOCAL   64
-#define MAX_REMOTE  64
-
-#define LOCAL       0
-#define REMOTE      1
-
-static entry_t local_ent[MAX_LOCAL], remote_ent[MAX_REMOTE];
-static char local_pool[1024], remote_pool[1280];
-static pane_t pane[2];
 static unsigned char active;
 static unsigned char connected;
 static signed char site = -1;
@@ -61,105 +55,88 @@ static signed char site = -1;
 static char msg[100];           /* a reply (79) or a path (80), and words */
 static char tmp[PATH_LEN];
 static char pass[20];
+static char size[6];
 
 static const unsigned char col0[2] = { SCR_L, DIV + 1 };
 static const unsigned char width[2] = { DIV - SCR_L, SCR_R - DIV };
+
+static const char main_keys[] =
+    "^K\0Sites\0^T\0Send\0TAB\0Pane\0HELP\0Keys\0";
 
 /* -- drawing */
 
 void ui_info(const char *s)
 {
-    scr_putw(1, SCR_L, s, SCR_W - 1, 0);
-    scr_ch(1, SCR_R, connected ? CH_DOT : ' ', 0);
+    AT(1, SCR_L);
+    scr_w = SCR_W - 1;
+    scr_putw(s);
+    scr_char(connected ? CH_DOT : ' ');
 }
 
-static void draw_title(void)
+/* the info line when nothing is going on */
+static void idle(void)
 {
-    scr_fill(0, SCR_L, ' ', SCR_W, 1);
-    scr_put(0, SCR_L + 1, "EFTP_XL " APP_VERSION, 1);
-    scr_put(0, SCR_R - 13, "(C) AERA 2026", 1);
-}
-
-static void draw_keys(void)
-{
-    unsigned char c;
-
-    scr_clear(KEYS_ROW, KEYS_ROW);
-    c = scr_key(KEYS_ROW, SCR_L, "^K", "Sites");
-    c = scr_key(KEYS_ROW, c, "^T", "Send");
-    c = scr_key(KEYS_ROW, c, "TAB", "Pane");
-    scr_key(KEYS_ROW, c, "HELP", "Keys");
+    ui_info(connected ? sites[site].name : "Not connected");
 }
 
 static void draw_frame(void)
 {
     unsigned char r;
 
-    scr_clear(2, 22);
+    for (r = 2; r <= 22; ++r)
+        scr_clear(r);
     scr_rule(2);
-    scr_ch(2, DIV, CH_TT, 0);
-    for (r = HEAD_ROW; r < LIST_ROW + VIS; ++r)
-        scr_ch(r, DIV, CH_VLINE, 0);
     scr_rule(16);
-    scr_ch(16, DIV, CH_BT, 0);
+    for (r = 2; r <= 16; ++r) {
+        AT(r, DIV);
+        scr_char(r == 2 ? CH_TT : r == 16 ? CH_BT : CH_VLINE);
+    }
     scr_rule(XFER_ROW);
-    scr_put(XFER_ROW, SCR_L + 1, " Transfers ", 0);
+    AT(XFER_ROW, SCR_L + 1);
+    scr_puts(" Transfers ");
     scr_rule(22);
     xfer_draw();
 }
 
-/* Fit s into w columns: the end of it if it's too long, after "..." */
-static void put_tail(unsigned char row, unsigned char col, const char *s,
-                     unsigned char w, unsigned char inv)
+/* entry i of the pane in side, on its row */
+static void __fastcall__ draw_entry(unsigned char i)
 {
-    unsigned char n = strlen(s);
+    unsigned char k = base + i, f = e_flags[k], n;
 
-    if (n <= w) {
-        scr_putw(row, col, s, w, inv);
+    AT(LIST_ROW + i - p_top[side], col0[side]);
+    if (i >= p_count[side]) {
+        scr_w = width[side];
+        scr_rep(' ');
         return;
     }
-    scr_ch(row, col, CH_MORE, inv);
-    scr_putw(row, col + 1, s + n - (w - 1), w - 1, inv);
-}
-
-static void draw_entry(unsigned char side, unsigned char i)
-{
-    pane_t *p = &pane[side];
-    unsigned char row = LIST_ROW + i - p->top;
-    unsigned char c = col0[side], w = width[side], nw = w - 6, n, icon;
-    unsigned char cur = side == active && i == p->cur;
-    entry_t *e;
-    char size[6];
-
-    if (i >= p->count) {
-        scr_fill(row, c, ' ', w, 0);
-        return;
-    }
-    e = &p->ent[i];
-    icon = (e->flags & E_UP) ? CH_UP : (e->flags & E_MARK) ? CH_MARK
-         : (e->flags & E_DIR) ? CH_FOLDER : CH_FILE;
-    scr_ch(row, c, icon, cur);
-    n = strlen(e->name);
-    if (n > nw) {
-        scr_putw(row, c + 1, e->name, nw - 1, cur);
-        scr_ch(row, c + nw, CH_MORE, cur);
+    scr_inv = side == active && i == p_cur[side];
+    scr_char((f & E_UP) ? CH_UP : (f & E_MARK) ? CH_MARK
+             : (f & E_DIR) ? CH_FOLDER : CH_FILE);
+    scr_w = NAME_W + side;
+    if (strlen(e_name[k]) > scr_w) {
+        --scr_w;
+        scr_putw(e_name[k]);
+        scr_char(CH_MORE);
     } else
-        scr_putw(row, c + 1, e->name, nw, cur);
+        scr_putw(e_name[k]);
     size[0] = '\0';
-    if (!(e->flags & (E_DIR | E_UP)))
-        fmt_size(e->size, size);
+    if (!(f & (E_DIR | E_UP))) {
+        fmt_n = e_size[k];
+        fmt_size(size);
+    }
     n = strlen(size);
-    scr_fill(row, c + 1 + nw, ' ', 5 - n, cur);
-    scr_putw(row, c + 6 + nw - n, size, n, cur);
+    scr_w = 5 - n;
+    scr_rep(' ');
+    scr_puts(size);
+    scr_inv = 0;
 }
 
-static void draw_list(unsigned char side)
+static void draw_list(void)
 {
-    pane_t *p = &pane[side];
     unsigned char i;
 
-    for (i = p->top; i < p->top + VIS; ++i)
-        draw_entry(side, i);
+    for (i = p_top[side]; i < p_top[side] + VIS; ++i)
+        draw_entry(i);
 }
 
 /* How many are marked in the active pane; their size in marked_size. */
@@ -167,97 +144,128 @@ static unsigned long marked_size;
 
 static unsigned char marked(void)
 {
-    pane_t *p = &pane[active];
-    entry_t *e = p->ent;
-    unsigned char i, n = 0;
+    unsigned char k, end, n = 0;
 
+    pane_use(active);
+    end = base + p_count[side];
     marked_size = 0;
-    for (i = p->count; i; --i, ++e)
-        if (e->flags & E_MARK) {
+    for (k = base; k < end; ++k)
+        if (e_flags[k] & E_MARK) {
             ++n;
-            marked_size += e->size;
+            marked_size += e_size[k];
         }
     return n;
 }
 
 static void draw_details(void)
 {
-    pane_t *p = &pane[active];
-    entry_t *e;
-    unsigned char n, c;
-    char size[6];
+    unsigned char n, k;
 
-    scr_clear(DETAIL_ROW, DETAIL_ROW);
+    scr_clear(DETAIL_ROW);
+    AT(DETAIL_ROW, SCR_L);
     if ((n = marked()) != 0) {
         sb_start(msg);
         sb_num(n);
         sb_add(" marked, ");
         sb_size(marked_size);
-        scr_put(DETAIL_ROW, SCR_L, msg, 0);
+        scr_puts(msg);
         return;
     }
-    if (!p->count)
+    if (!p_count[side])
         return;
-    e = &p->ent[p->cur];
-    if (e->flags & E_UP) {
-        scr_put(DETAIL_ROW, SCR_L, "The folder above", 0);
+    k = base + p_cur[side];
+    if (e_flags[k] & E_UP) {
+        scr_puts("The folder above");
         return;
     }
-    scr_putw(DETAIL_ROW, SCR_L, e->name, 22, 0);
-    c = SCR_L + (strlen(e->name) < 22 ? strlen(e->name) : 22) + 1;
-    if (e->flags & E_DIR)
-        c = scr_put(DETAIL_ROW, c, "folder", 0) + 1;
-    else {
-        fmt_size(e->size, size);
-        c = scr_put(DETAIL_ROW, c, size, 0) + 1;
-    }
+    scr_w = strlen(e_name[k]) < 22 ? strlen(e_name[k]) : 22;
+    scr_putw(e_name[k]);
     sb_start(msg);
-    sb_stamp(&e->when);
-    if (c + strlen(msg) <= SCR_R + 1)
-        scr_put(DETAIL_ROW, c, msg, 0);
+    sb_add(" ");
+    if (e_flags[k] & E_DIR)
+        sb_add("folder");
+    else
+        sb_size(e_size[k]);
+    sb_add(" ");
+    sb_stamp(k);
+    if (scr_col + strlen(msg) <= SCR_R + 1)
+        scr_puts(msg);
 }
 
-static void draw_pane(unsigned char side)
+static void __fastcall__ draw_pane(unsigned char s)
 {
-    pane_t *p = &pane[side];
-    unsigned char c = col0[side], w = width[side], r;
+    unsigned char c = col0[s], w = width[s], n;
+    const char *path = p_path[s];
 
-    if (side == REMOTE && !connected) {
-        scr_putw(HEAD_ROW, c, "Server", w, 0);
-        for (r = COUNT_ROW; r < LIST_ROW + VIS; ++r)
-            scr_fill(r, c, ' ', w, 0);
-        scr_put(LIST_ROW + 2, c + 1, "Not connected.", 0);
-        scr_put(LIST_ROW + 4, c + 1, "Press ^K to pick", 0);
-        scr_put(LIST_ROW + 5, c + 1, "a site, or to add", 0);
-        scr_put(LIST_ROW + 6, c + 1, "one with ^N.", 0);
+    pane_use(s);
+    AT(HEAD_ROW, c);
+    scr_w = w;
+    if (s == REMOTE && !connected) {
+        scr_putw("Server");
+        for (n = COUNT_ROW; n < LIST_ROW + VIS; ++n) {
+            AT(n, c);
+            scr_rep(' ');
+        }
+        AT(LIST_ROW + 2, c + 1);
+        scr_puts("Not connected.");
+        AT(LIST_ROW + 4, c + 1);
+        scr_puts("Press ^K to pick");
+        AT(LIST_ROW + 5, c + 1);
+        scr_puts("a site, or to add");
+        AT(LIST_ROW + 6, c + 1);
+        scr_puts("one with ^N.");
         return;
     }
-    put_tail(HEAD_ROW, c, p->path, w, side == active);
+    /* the folder, its end if it's too long */
+    scr_inv = s == active;
+    n = strlen(path);
+    if (n > w) {
+        scr_char(CH_MORE);
+        path += n - w + 1;
+        --scr_w;
+    }
+    scr_putw(path);
+    scr_inv = 0;
     sb_start(msg);
-    sb_num(p->dirs);
-    sb_add(p->dirs == 1 ? " dir " : " dirs ");
-    sb_num(p->files);
-    sb_add(p->files == 1 ? " file" : " files");
-    if (p->full)
+    sb_num(p_dirs[s]);
+    sb_add(p_dirs[s] == 1 ? " dir " : " dirs ");
+    sb_num(p_files[s]);
+    sb_add(p_files[s] == 1 ? " file" : " files");
+    if (p_full[s])
         sb_add("+");
-    scr_putw(COUNT_ROW, c, msg, w, 0);
-    draw_list(side);
+    AT(COUNT_ROW, c);
+    scr_w = w;
+    scr_putw(msg);
+    draw_list();
+}
+
+static void draw_panes(void)
+{
+    draw_pane(LOCAL);
+    draw_pane(REMOTE);
+    draw_details();
 }
 
 static void draw_all(void)
 {
-    draw_title();
-    ui_info(connected ? sites[site].name : "Not connected");
+    AT(0, SCR_L);
+    scr_w = SCR_W;
+    scr_inv = 1;
+    scr_rep(' ');
+    AT(0, SCR_L + 1);
+    scr_puts("EFTP_XL " APP_VERSION);
+    AT(0, SCR_R - 13);
+    scr_puts("(C) AERA 2026");
+    scr_inv = 0;
+    idle();
     draw_frame();
-    draw_pane(LOCAL);
-    draw_pane(REMOTE);
-    draw_details();
-    draw_keys();
+    draw_panes();
+    scr_keys(main_keys);
 }
 
 /* -- reading the panes */
 
-static void report(const char *what, int r)
+static void __fastcall__ report(const char *what, int r)
 {
     sb_start(msg);
     sb_add(what);
@@ -278,15 +286,15 @@ static void read_local(void)
     unsigned char st;
 
     ui_info("Reading the disk...");
-    st = local_read(&pane[LOCAL]);
+    st = local_read();
     if (st >= 128) {
         sb_start(msg);
-        sb_add(pane[LOCAL].path);
+        sb_add(p_path[LOCAL]);
         sb_add(" error ");
         sb_num(st);
         ui_info(msg);
     } else
-        ui_info(connected ? sites[site].name : "Not connected");
+        idle();
 }
 
 static void read_remote(void)
@@ -294,34 +302,45 @@ static void read_remote(void)
     int r;
 
     ui_info("Reading the server's folder...");
-    r = remote_read(&pane[REMOTE]);
-    if (r)
+    if ((r = remote_read()) != 0)
         report("List", r);
     else
-        ui_info(sites[site].name);
+        idle();
 }
 
-/* Put the cursor on the entry called name, if it's there. */
-static void find(pane_t *p, const char *name)
+/* Put the cursor of the pane in side on name, if it's there. */
+static void __fastcall__ find(const char *name)
 {
-    unsigned char i;
+    unsigned char k = pane_find(name), i;
 
-    for (i = 0; i < p->count; ++i)
-        if (!strcmp(p->ent[i].name, name)) {
-            p->cur = i;
-            p->top = i >= VIS ? i - VIS / 2 : 0;
-            return;
-        }
+    if (k == NO)
+        return;
+    i = k - base;
+    p_cur[side] = i;
+    p_top[side] = i >= VIS ? i - VIS / 2 : 0;
+}
+
+/* Read a pane again, keeping the cursor on the same name. */
+static void __fastcall__ reread(unsigned char s)
+{
+    pane_use(s);
+    tmp[0] = '\0';
+    if (p_count[s])
+        strcpy(tmp, e_name[base + p_cur[s]]);
+    if (s == LOCAL)
+        local_read();
+    else
+        remote_read();
+    find(tmp);
 }
 
 /* Ask on the info line, editing buf; 0 when left with ESC. */
-static unsigned char ask(const char *q, char *buf, unsigned char max,
-                         unsigned char mask)
+static unsigned char ask(const char *q, char *buf)
 {
-    unsigned char c = SCR_L + strlen(q) + 1;
-
     ui_info(q);
-    return scr_edit(1, c, SCR_R - c, buf, max, mask) != K_ESC;
+    AT(1, SCR_L + strlen(q) + 1);
+    scr_w = SCR_R - scr_col;
+    return scr_edit(buf) != K_ESC;
 }
 
 /* -- connecting */
@@ -331,11 +350,12 @@ static void disconnect(void)
     if (connected)
         ftp_quit();
     connected = 0;
-    pane_clear(&pane[REMOTE]);
+    pane_use(REMOTE);
+    pane_clear();
     active = LOCAL;
 }
 
-static void connect(unsigned char i)
+static void __fastcall__ connect(unsigned char i)
 {
     site_t *s = &sites[i];
     int r;
@@ -349,8 +369,12 @@ static void connect(unsigned char i)
         sb_add("Password for ");
         sb_add(s->name);
         sb_add(":");
-        if (!ask(msg, pass, sizeof(pass), 1)) {
-            ui_info("Not connected");
+        edit_max = sizeof(pass);
+        edit_mask = 1;
+        r = ask(msg, pass);
+        edit_mask = 0;
+        if (!r) {
+            idle();
             return;
         }
     }
@@ -375,7 +399,7 @@ static void connect(unsigned char i)
     if (s->rdir[0] && (r = ftp_cwd(s->rdir)) != 0)
         report("Folder", r);
     if (s->ldir[0]) {
-        strcpy(pane[LOCAL].path, s->ldir);
+        strcpy(p_path[LOCAL], s->ldir);
         read_local();
     }
     read_remote();
@@ -384,35 +408,17 @@ static void connect(unsigned char i)
 
 /* -- sending */
 
-/* Read a pane again, keeping the cursor on the same name. */
-static void reread(unsigned char side)
-{
-    pane_t *p = &pane[side];
-
-    tmp[0] = '\0';
-    if (p->count)
-        strcpy(tmp, p->ent[p->cur].name);
-    if (side == LOCAL)
-        local_read(p);
-    else
-        remote_read(p);
-    find(p, tmp);
-}
-
-static void send(unsigned char cursor_only)
+static void __fastcall__ send(unsigned char cursor_only)
 {
     if (!connected) {
         ui_info("Not connected: ^K picks a site");
         return;
     }
-    if (xfer_send(&pane[LOCAL], &pane[REMOTE], active == REMOTE,
-                  sites[site].mode, cursor_only)) {
+    if (xfer_send(active == REMOTE, sites[site].mode, cursor_only)) {
         reread(LOCAL);
         reread(REMOTE);
         draw_frame();
-        draw_pane(LOCAL);
-        draw_pane(REMOTE);
-        draw_details();
+        draw_panes();
     }
 }
 
@@ -422,16 +428,16 @@ static void send(unsigned char cursor_only)
 #define spec ((char *)ftp_buf)      /* free while nothing is sent */
 
 /* spec = the Atari pane's folder + name */
-static void local_spec(const char *name)
+static void __fastcall__ local_spec(const char *name)
 {
     sb_start(spec);
-    sb_add(pane[LOCAL].path);
+    sb_add(p_path[LOCAL]);
     sb_add(name);
 }
 
 /* Done: say so, or why not; then read the pane again, the cursor on
-   name. err is a CIO status (Atari) or an ftp error (server). */
-static void after(const char *what, int err, const char *name)
+   tmp. err is a CIO status (Atari) or an ftp error (server). */
+static void after(const char *what, int err)
 {
     if (active == LOCAL && err >= 128) {
         sb_start(msg);
@@ -444,68 +450,75 @@ static void after(const char *what, int err, const char *name)
     } else if (active == REMOTE && err)
         report(what, err);
     else
-        ui_info(connected ? sites[site].name : "Not connected");
+        idle();
     if (active == LOCAL)
-        local_read(&pane[LOCAL]);
+        local_read();
     else
-        remote_read(&pane[REMOTE]);
-    find(&pane[active], name);
+        remote_read();
+    pane_use(active);
+    find(tmp);
     draw_pane(active);
     draw_details();
 }
 
-static void upper(char *s)
+/* the entry under the cursor of the active pane */
+static unsigned char cursor_entry(void)
 {
-    for (; *s; ++s)
+    pane_use(active);
+    return base + p_cur[side];
+}
+
+static void upper(void)
+{
+    char *s;
+
+    for (s = tmp; *s; ++s)
         *s = toupper(*s);
 }
 
 static void new_folder(void)
 {
     tmp[0] = '\0';
-    if (!ask("New folder:", tmp, active == LOCAL ? 9 : 64, 0) || !tmp[0])
+    edit_max = active == LOCAL ? 9 : 64;
+    if (!ask("New folder:", tmp) || !tmp[0])
         return;
     if (active == LOCAL) {
-        upper(tmp);
+        upper();
         local_spec(tmp);
-        after("New folder", cio_xio(42, spec), tmp);
+        after("New folder", cio_xio(42, spec));
     } else
-        after("New folder", ftp_do("MKD", tmp), tmp);
+        after("New folder", ftp_do("MKD", tmp));
 }
 
 static void rename_entry(void)
 {
-    pane_t *p = &pane[active];
-    entry_t *e = &p->ent[p->cur];
+    unsigned char k = cursor_entry();
     int r;
 
-    if (!p->count || (e->flags & E_UP))
+    if (!p_count[side] || (e_flags[k] & E_UP))
         return;
-    strcpy(tmp, e->name);
-    if (!ask("Rename to:", tmp, active == LOCAL ? 13 : 64, 0) || !tmp[0]
-        || !strcmp(tmp, e->name))
+    strcpy(tmp, e_name[k]);
+    edit_max = active == LOCAL ? 13 : 64;
+    if (!ask("Rename to:", tmp) || !tmp[0] || !strcmp(tmp, e_name[k]))
         return;
     if (active == LOCAL) {
-        upper(tmp);
-        local_spec(e->name);
+        upper();
+        local_spec(e_name[k]);
         sb_add(",");
         sb_add(tmp);
         r = cio_xio(32, spec);
-    } else if ((r = ftp_do("RNFR", e->name)) == 0)
+    } else if ((r = ftp_do("RNFR", e_name[k])) == 0)
         r = ftp_do("RNTO", tmp);
-    after("Rename", r, tmp);
+    after("Rename", r);
 }
 
 /* the marked files and folders, or the one under the cursor */
 static void delete_entries(void)
 {
-    pane_t *p = &pane[active];
-    entry_t *e;
-    unsigned char i, n = marked(), k;
+    unsigned char n = marked(), k = cursor_entry(), end, key;
     int r = active == LOCAL ? 1 : 0;
 
-    e = &p->ent[p->cur];
-    if (!n && (!p->count || (e->flags & E_UP)))
+    if (!n && (!p_count[side] || (e_flags[k] & E_UP)))
         return;
     sb_start(msg);
     sb_add("Delete ");
@@ -513,72 +526,76 @@ static void delete_entries(void)
         sb_num(n);
         sb_add(" marked");
     } else
-        sb_add(e->name);
+        sb_add(e_name[k]);
     sb_add("? Y/N");
     ui_info(msg);
-    k = key_get();
-    if (k != 'Y' && k != 'y') {
-        ui_info(connected ? sites[site].name : "Not connected");
+    key = key_get();
+    if (key != 'Y' && key != 'y') {
+        idle();
         return;
     }
     /* a folder has to be empty first, as DOS and FTP want */
-    for (i = 0, e = p->ent; i < p->count; ++i, ++e) {
-        if (n ? !(e->flags & E_MARK) : i != p->cur)
+    end = base + p_count[side];
+    for (k = n ? base : k; k < end; ++k) {
+        if (n && !(e_flags[k] & E_MARK))
             continue;
         if (active == LOCAL) {
-            local_spec(e->name);
-            r = cio_xio(e->flags & E_DIR ? 43 : 33, spec);
+            local_spec(e_name[k]);
+            r = cio_xio(e_flags[k] & E_DIR ? 43 : 33, spec);
             if (r >= 128)
                 break;
-        } else if ((r = ftp_do(e->flags & E_DIR ? "RMD" : "DELE",
-                               e->name)) != 0)
+        } else if ((r = ftp_do(e_flags[k] & E_DIR ? "RMD" : "DELE",
+                               e_name[k])) != 0)
+            break;
+        if (!n)
             break;
     }
     tmp[0] = '\0';
-    after("Delete", r, tmp);
+    after("Delete", r);
 }
 
 /* -- moving about */
 
-static void move_to(unsigned char i)
+static void __fastcall__ move_to(unsigned char i)
 {
-    pane_t *p = &pane[active];
-    unsigned char old = p->cur, top = p->top;
+    unsigned char old, top;
 
-    if (!p->count)
+    pane_use(active);
+    if (!p_count[side])
         return;
-    if (i >= p->count)
-        i = p->count - 1;
-    p->cur = i;
-    if (i < p->top)
-        p->top = i;
-    else if (i >= p->top + VIS)
-        p->top = i - VIS + 1;
-    if (p->top != top)
-        draw_list(active);
+    old = p_cur[side];
+    top = p_top[side];
+    if (i >= p_count[side])
+        i = p_count[side] - 1;
+    p_cur[side] = i;
+    if (i < top)
+        p_top[side] = i;
+    else if (i >= top + VIS)
+        p_top[side] = i - VIS + 1;
+    if (p_top[side] != top)
+        draw_list();
     else {
-        draw_entry(active, old);
-        draw_entry(active, i);
+        draw_entry(old);
+        draw_entry(i);
     }
     draw_details();
 }
 
 static void go_up(void)
 {
-    pane_t *p = &pane[active];
     char *s;
     int r;
 
     if (active == LOCAL) {
         /* remember the folder we're leaving: "D1:>A>B>" -> "B" */
-        strcpy(tmp, p->path);
+        strcpy(tmp, p_path[LOCAL]);
         tmp[strlen(tmp) - 1] = '\0';
         s = strrchr(tmp, '>');
-        if (!local_up(p))
+        if (!local_up())
             return;
         read_local();
     } else {
-        s = strrchr(p->path, '/');
+        s = strrchr(p_path[REMOTE], '/');
         strcpy(tmp, s ? s : "/");
         s = tmp;
         if ((r = ftp_cwd("..")) != 0) {
@@ -587,32 +604,31 @@ static void go_up(void)
         }
         read_remote();
     }
+    pane_use(active);
     if (s)
-        find(p, s + 1);
+        find(s + 1);
     draw_pane(active);
     draw_details();
 }
 
 static void open_entry(void)
 {
-    pane_t *p = &pane[active];
-    entry_t *e;
+    unsigned char k = cursor_entry();
     int r;
 
-    if (!p->count)
+    if (!p_count[side])
         return;
-    e = &p->ent[p->cur];
-    if (e->flags & E_UP) {
+    if (e_flags[k] & E_UP) {
         go_up();
         return;
     }
-    if (!(e->flags & E_DIR)) {
+    if (!(e_flags[k] & E_DIR)) {
         send(1);
         return;
     }
-    strcpy(tmp, e->name);
+    strcpy(tmp, e_name[k]);
     if (active == LOCAL) {
-        local_into(p, tmp);
+        local_into(tmp);
         read_local();
     } else {
         if ((r = ftp_cwd(tmp)) != 0) {
@@ -625,101 +641,100 @@ static void open_entry(void)
     draw_details();
 }
 
-static void mark(unsigned char all)
+static void __fastcall__ mark(unsigned char all)
 {
-    pane_t *p = &pane[active];
-    unsigned char i, any = 0;
+    unsigned char k = cursor_entry(), end = base + p_count[side], any = 0;
 
-    if (!p->count)
+    if (!p_count[side])
         return;
     if (!all) {
-        if (!(p->ent[p->cur].flags & E_UP))
-            p->ent[p->cur].flags ^= E_MARK;
-        draw_entry(active, p->cur);
-        move_to(p->cur + 1);
+        if (!(e_flags[k] & E_UP))
+            e_flags[k] ^= E_MARK;
+        draw_entry(p_cur[side]);
+        move_to(p_cur[side] + 1);
         return;
     }
-    for (i = 0; i < p->count; ++i)
-        if (!(p->ent[i].flags & (E_UP | E_DIR | E_MARK)))
+    for (k = base; k < end; ++k)
+        if (!(e_flags[k] & (E_UP | E_DIR | E_MARK)))
             any = 1;
-    for (i = 0; i < p->count; ++i)
-        if (!(p->ent[i].flags & (E_UP | E_DIR))) {
+    for (k = base; k < end; ++k)
+        if (!(e_flags[k] & (E_UP | E_DIR))) {
             if (any)
-                p->ent[i].flags |= E_MARK;
+                e_flags[k] |= E_MARK;
             else
-                p->ent[i].flags &= ~E_MARK;
+                e_flags[k] &= ~E_MARK;
         }
-    draw_list(active);
+    draw_list();
     draw_details();
 }
 
 /* A letter jumps to the next name starting with it. */
-static void jump(unsigned char k)
+static void __fastcall__ jump(unsigned char key)
 {
-    pane_t *p = &pane[active];
-    unsigned char i, n = p->count;
+    unsigned char i, n, j;
 
-    k = toupper(k);
-    for (i = 1; i <= n; ++i)
-        if (toupper(p->ent[(p->cur + i) % n].name[0]) == k) {
-            move_to((p->cur + i) % n);
+    pane_use(active);
+    n = p_count[side];
+    key = toupper(key);
+    for (i = 1; i <= n; ++i) {
+        j = (p_cur[side] + i) % n;
+        if (toupper(e_name[base + j][0]) == key) {
+            move_to(j);
             return;
         }
+    }
 }
 
 static void help(void)
 {
-    static const char *const keys[] = {
-        "^K ^D", "sites / disconnect",
-        "RETURN", "open folder, send file",
-        "SPACE", "mark file and move on",
-        "^A", "mark all",
-        "^T", "send what is marked",
-        "BKSP", "folder up",
-        "TAB", "other pane",
-        "^N ^E", "new folder / rename",
-        "DEL", "delete",
-        "^R", "read lists again",
-        "1-8", "drive D1:-D8:",
-        "ESC", "stop transfer",
-        "^Q", "quit to DOS",
-    };
-    unsigned char i;
+    static const char keys[] =
+        "^K ^D\0sites / disconnect\0"
+        "RETURN\0open folder, send file\0"
+        "SPACE\0mark file and move on\0"
+        "^A\0mark all\0"
+        "^T\0send what is marked\0"
+        "BKSP\0folder up\0"
+        "TAB\0other pane\0"
+        "^N ^E\0new folder / rename\0"
+        "DEL\0delete\0"
+        "^R\0read lists again\0"
+        "1-8\0drive D1:-D8:\0"
+        "ESC\0stop transfer\0"
+        "^Q\0quit to DOS\0";
+    const char *p = keys;
+    unsigned char r;
 
-    scr_box(3, 22, "Keys");
-    for (i = 0; i < sizeof(keys) / sizeof(keys[0]); i += 2) {
-        scr_put(4 + i / 2, SCR_L + 2, keys[i], 1);
-        scr_put(4 + i / 2, SCR_L + 10, keys[i + 1], 0);
+    scr_box("Keys");
+    for (r = 4; *p; ++r) {
+        AT(r, SCR_L + 2);
+        scr_inv = 1;
+        scr_puts(p);
+        scr_inv = 0;
+        p += strlen(p) + 1;
+        AT(r, SCR_L + 10);
+        scr_puts(p);
+        p += strlen(p) + 1;
     }
-    scr_put(18, SCR_L + 2, "The same keys as EFTP on the ST.", 0);
-    scr_put(21, SCR_L + 2, "Any key", 1);
-    scr_put(21, SCR_L + 10, "back", 0);
+    AT(18, SCR_L + 2);
+    scr_puts("The same keys as EFTP on the ST.");
+    AT(21, SCR_L + 2);
+    scr_inv = 1;
+    scr_puts("Any key");
+    scr_inv = 0;
+    ++scr_col;
+    scr_puts("back");
     key_get();
     draw_all();
 }
 
 /* -- start */
 
-static void init(void)
-{
-    pane[LOCAL].ent = local_ent;
-    pane[LOCAL].max = MAX_LOCAL;
-    pane[LOCAL].pool = local_pool;
-    pane[LOCAL].pool_size = sizeof(local_pool);
-    strcpy(pane[LOCAL].path, "D1:");
-    pane[REMOTE].ent = remote_ent;
-    pane[REMOTE].max = MAX_REMOTE;
-    pane[REMOTE].pool = remote_pool;
-    pane[REMOTE].pool_size = sizeof(remote_pool);
-}
-
 int main(void)
 {
     unsigned char k;
     signed char s;
-    pane_t *p;
 
-    init();
+    strcpy(p_path[LOCAL], "D1:");
     scr_init();
     draw_all();
     sites_load();
@@ -728,21 +743,21 @@ int main(void)
     draw_details();
 
     for (;;) {
-        p = &pane[active];
         k = key_get();
+        pane_use(active);
         switch (k) {
         case K_UP: case '-':
-            if (p->cur)
-                move_to(p->cur - 1);
+            if (p_cur[side])
+                move_to(p_cur[side] - 1);
             break;
         case K_DOWN: case '=':
-            move_to(p->cur + 1);
+            move_to(p_cur[side] + 1);
             break;
         case K_LEFT: case '+':
-            move_to(p->cur > VIS ? p->cur - VIS : 0);
+            move_to(p_cur[side] > VIS ? p_cur[side] - VIS : 0);
             break;
         case K_RIGHT: case '*':
-            move_to(p->cur + VIS);
+            move_to(p_cur[side] + VIS);
             break;
         case K_TAB:
             if (!connected) {
@@ -750,9 +765,7 @@ int main(void)
                 break;
             }
             active ^= 1;
-            draw_pane(LOCAL);
-            draw_pane(REMOTE);
-            draw_details();
+            draw_panes();
             break;
         case K_RETURN:
             open_entry();
@@ -772,9 +785,7 @@ int main(void)
             if (s >= 0) {
                 connect(s);
                 /* the panes, but the info line keeps what connect said */
-                draw_pane(LOCAL);
-                draw_pane(REMOTE);
-                draw_details();
+                draw_panes();
             }
             break;
         case CTRL('D'):
@@ -808,7 +819,7 @@ int main(void)
             break;
         default:
             if (k >= '1' && k <= '8' && active == LOCAL) {
-                local_drive(&pane[LOCAL], k - '0');
+                local_drive(k - '0');
                 read_local();
                 draw_pane(LOCAL);
                 draw_details();

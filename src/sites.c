@@ -48,20 +48,20 @@ static const unsigned char sizes[7] = {
     sizeof(sites[0].ldir)
 };
 
-static char *field(site_t *s, unsigned char i, unsigned char *max)
+static char *field(site_t *s, unsigned char i)
 {
-    *max = sizes[i];
+    edit_max = sizes[i];
     return (char *)s + offs[i];
 }
 
 void sites_load(void)
 {
     site_t *s;
-    char *p, *bar, *f;
-    unsigned char i, max;
+    char *p, *bar;
+    unsigned char i;
 
     site_count = 0;
-    if (cio_open(CFG, 4, 0) >= 128) {
+    if (cio_open(CFG, 4) >= 128) {
         cio_close();
         return;
     }
@@ -75,10 +75,9 @@ void sites_load(void)
             bar = strchr(p, '|');
             if (bar)
                 *bar = '\0';
-            if (i < 7) {
-                f = field(s, i, &max);
-                strncpy(f, p, max - 1);
-            } else
+            if (i < 7)
+                strncpy(field(s, i), p, edit_max - 1);
+            else
                 s->mode = *p - '0';
             p = bar ? bar + 1 : 0;
         }
@@ -90,10 +89,10 @@ void sites_load(void)
 
 unsigned char sites_save(void)
 {
-    unsigned char i, j, max, st;
+    unsigned char i, j, st;
     site_t *s;
 
-    if ((st = cio_open(CFG, 8, 0)) >= 128) {
+    if ((st = cio_open(CFG, 8)) >= 128) {
         cio_close();
         return st;
     }
@@ -101,7 +100,7 @@ unsigned char sites_save(void)
         s = &sites[i];
         line[0] = '\0';
         for (j = 0; j < 7; ++j) {
-            strcat(line, field(s, j, &max));
+            strcat(line, field(s, j));
             strcat(line, "|");
         }
         j = strlen(line);
@@ -113,58 +112,78 @@ unsigned char sites_save(void)
     return st;
 }
 
-static void show_mode(unsigned char row, unsigned char mode)
+static void __fastcall__ show_mode(unsigned char mode)
 {
-    unsigned char i, c = VALUE_COL;
+    unsigned char i;
 
+    AT(FIELD_ROW + 7, VALUE_COL);
     for (i = 0; i < 3; ++i) {
-        c = scr_put(row, c, modes[i], i == mode);
-        ++c;
+        scr_inv = i == mode;
+        scr_puts(modes[i]);
+        scr_inv = 0;
+        ++scr_col;
     }
 }
 
-static void show_fields(site_t *s)
+static void __fastcall__ show_fields(site_t *s)
 {
-    unsigned char i, max;
+    unsigned char i, n;
     char *v;
 
     for (i = 0; i < 8; ++i) {
-        scr_putw(FIELD_ROW + i, LABEL_COL, s ? labels[i] : "", 10, 0);
-        scr_fill(FIELD_ROW + i, VALUE_COL, ' ', VALUE_W, 0);
+        AT(FIELD_ROW + i, LABEL_COL);
+        scr_w = 10;
+        scr_putw(s ? labels[i] : "");
+        AT(FIELD_ROW + i, VALUE_COL);
+        scr_w = VALUE_W;
+        scr_rep(' ');
         if (!s)
             continue;
         if (i == 7) {
-            show_mode(FIELD_ROW + i, s->mode);
+            show_mode(s->mode);
             continue;
         }
-        v = field(s, i, &max);
-        if (i == 4)
-            scr_fill(FIELD_ROW + i, VALUE_COL, '*',
-                     strlen(v) < VALUE_W ? strlen(v) : VALUE_W, 0);
-        else
-            scr_putw(FIELD_ROW + i, VALUE_COL, v, VALUE_W, 0);
+        v = field(s, i);
+        AT(FIELD_ROW + i, VALUE_COL);
+        if (i == 4) {
+            n = strlen(v);
+            scr_w = n < VALUE_W ? n : VALUE_W;
+            scr_rep('*');
+        } else
+            scr_putw(v);
     }
-    if (s && !s->pass[0])
-        scr_put(FIELD_ROW + 4, VALUE_COL, "(asked for)", 0);
+    if (s && !s->pass[0]) {
+        AT(FIELD_ROW + 4, VALUE_COL);
+        scr_puts("(asked for)");
+    }
 }
 
-static void show_list(unsigned char cur)
+static void __fastcall__ show_list(unsigned char cur)
 {
     unsigned char i;
 
     for (i = 0; i < MAX_SITES; ++i) {
-        scr_fill(LIST_ROW + i, SCR_L + 1, ' ', SCR_W - 2, 0);
+        AT(LIST_ROW + i, SCR_L + 1);
+        scr_w = SCR_W - 2;
+        scr_rep(' ');
         if (i < site_count) {
-            scr_ch(LIST_ROW + i, SCR_L + 2, ' ', i == cur);
-            scr_putw(LIST_ROW + i, SCR_L + 3, sites[i].name, SCR_W - 5,
-                     i == cur);
+            AT(LIST_ROW + i, SCR_L + 2);
+            scr_inv = i == cur;
+            scr_char(' ');
+            scr_w = SCR_W - 5;
+            scr_putw(sites[i].name);
+            scr_inv = 0;
         }
     }
     if (!site_count) {
-        scr_put(LIST_ROW + 1, SCR_L + 3, "No sites yet.", 0);
-        scr_put(LIST_ROW + 3, SCR_L + 3, "^N adds one: a name, the", 0);
-        scr_put(LIST_ROW + 4, SCR_L + 3, "server, your user and the", 0);
-        scr_put(LIST_ROW + 5, SCR_L + 3, "folders to start in.", 0);
+        AT(LIST_ROW + 1, SCR_L + 3);
+        scr_puts("No sites yet.");
+        AT(LIST_ROW + 3, SCR_L + 3);
+        scr_puts("^N adds one: a name, the");
+        AT(LIST_ROW + 4, SCR_L + 3);
+        scr_puts("server, your user and the");
+        AT(LIST_ROW + 5, SCR_L + 3);
+        scr_puts("folders to start in.");
     }
     show_fields(site_count ? &sites[cur] : 0);
 }
@@ -172,47 +191,41 @@ static void show_list(unsigned char cur)
 static void frame(void)
 {
     scr_rule(2);
-    scr_box(3, 22, "Sites");
-    scr_ch(SEP_ROW, SCR_L, CH_LT, 0);
-    scr_fill(SEP_ROW, SCR_L + 1, CH_HLINE, SCR_W - 2, 0);
-    scr_ch(SEP_ROW, SCR_R, CH_RT, 0);
-}
-
-static void list_keys(void)
-{
-    unsigned char c;
-
-    scr_clear(23, 23);
-    c = scr_key(23, SCR_L, "RETURN", "Connect");
-    c = scr_key(23, c, "^N", "New");
-    c = scr_key(23, c, "^E", "Edit");
-    scr_key(23, c, "DEL", "Del");
-    ui_info("Pick a site. ESC goes back.");
+    scr_box("Sites");
+    AT(SEP_ROW, SCR_L);
+    scr_char(CH_LT);
+    scr_w = SCR_W - 2;
+    scr_rep(CH_HLINE);
+    scr_char(CH_RT);
 }
 
 /* Edit s in place; returns 1 when saved, 0 when left with ESC. */
-static unsigned char edit(site_t *s)
+static unsigned char __fastcall__ edit(site_t *s)
 {
     static site_t copy;
-    unsigned char i = 0, k, max;
+    unsigned char i = 0, k;
+    char *v;
 
     copy = *s;
-    scr_clear(23, 23);
-    scr_key(23, scr_key(23, SCR_L, "RETURN", "Next"), "ESC", "Cancel");
+    scr_keys("RETURN\0Next\0ESC\0Cancel\0");
     show_fields(&copy);
     for (;;) {
         if (i < 7) {
             ui_info(i == 4 ? "Blank: asked for when connecting"
                            : "Type, then RETURN for the next one");
-            k = scr_edit(FIELD_ROW + i, VALUE_COL, VALUE_W,
-                         field(&copy, i, &max), max, i == 4);
+            v = field(&copy, i);
+            AT(FIELD_ROW + i, VALUE_COL);
+            scr_w = VALUE_W;
+            edit_mask = i == 4;
+            k = scr_edit(v);
+            edit_mask = 0;
         } else {
             ui_info("SPACE changes, RETURN saves");
             k = key_get();
             if (k == ' ' || k == K_RIGHT || k == K_LEFT) {
                 copy.mode = k == K_LEFT ? (copy.mode + 2) % 3
                                           : (copy.mode + 1) % 3;
-                show_mode(FIELD_ROW + 7, copy.mode);
+                show_mode(copy.mode);
                 continue;
             }
         }
@@ -257,7 +270,8 @@ signed char sites_screen(void)
     frame();
     for (;;) {
         show_list(cur);
-        list_keys();
+        scr_keys("RETURN\0Connect\0^N\0New\0^E\0Edit\0DEL\0Del\0");
+        ui_info("Pick a site. ESC goes back.");
         k = key_get();
         switch (k) {
         case K_ESC:

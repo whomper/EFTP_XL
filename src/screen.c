@@ -16,21 +16,14 @@ extern const unsigned char font[];
 #define TEXT        0xCA
 #define BORDER      0x00
 
+unsigned char scr_row, scr_col, scr_inv, scr_w;
+unsigned char edit_max, edit_mask;
+
 static unsigned char *row_addr[SCR_ROWS];
 static unsigned char old_chbas, old_c1, old_c2, old_c4;
 
-/* ATASCII -> the screen's internal code */
-static unsigned char internal(unsigned char a)
-{
-    unsigned char inv = a & 0x80;
-
-    a &= 0x7F;
-    if (a < 0x20)
-        a += 0x40;
-    else if (a < 0x60)
-        a -= 0x20;
-    return a | inv;
-}
+/* ATASCII -> the screen's internal code, by the top 2 bits of 7 */
+static const unsigned char adjust[4] = { 0x40, 0xE0, 0xE0, 0x00 };
 
 /* cc65's cgetc puts the E: cursor's cell back and clears its inverse
    bit; keep that cursor at row 0, column 0, where nothing is drawn. */
@@ -76,78 +69,81 @@ void scr_done(void)
     OS.colcrs = 2;
 }
 
-unsigned char scr_put(unsigned char row, unsigned char col,
-                      const char *s, unsigned char inv)
+void __fastcall__ scr_char(unsigned char c)
 {
-    unsigned char *p = row_addr[row] + col;
-
-    inv = inv ? 0x80 : 0;
-    while (*s && col < 40) {
-        *p++ = internal(*s++) ^ inv;
-        ++col;
-    }
-    return col;
+    row_addr[scr_row][scr_col++] =
+        (c + adjust[(c >> 5) & 3]) ^ (scr_inv ? 0x80 : 0);
 }
 
-void scr_putw(unsigned char row, unsigned char col, const char *s,
-              unsigned char w, unsigned char inv)
+void __fastcall__ scr_puts(const char *s)
 {
-    unsigned char *p = row_addr[row] + col;
-    unsigned char sp = inv ? 0x80 : 0;
-
-    while (w--) {
-        *p++ = (*s ? internal(*s++) : 0) ^ sp;
-    }
+    while (*s && scr_col < 40)
+        scr_char(*s++);
 }
 
-void scr_ch(unsigned char row, unsigned char col, unsigned char c,
-            unsigned char inv)
+void __fastcall__ scr_putw(const char *s)
 {
-    row_addr[row][col] = internal(c) ^ (inv ? 0x80 : 0);
+    unsigned char n = scr_w;
+
+    while (n--)
+        scr_char(*s ? *s++ : ' ');
 }
 
-void scr_fill(unsigned char row, unsigned char col, unsigned char c,
-              unsigned char n, unsigned char inv)
+void __fastcall__ scr_rep(unsigned char c)
 {
-    memset(row_addr[row] + col, internal(c) ^ (inv ? 0x80 : 0), n);
+    unsigned char n = scr_w;
+
+    while (n--)
+        scr_char(c);
 }
 
-void scr_clear(unsigned char r0, unsigned char r1)
+void __fastcall__ scr_clear(unsigned char row)
 {
-    memset(row_addr[r0], 0, (r1 - r0 + 1) * 40);
+    memset(row_addr[row], 0, 40);
 }
 
-void scr_rule(unsigned char row)
+void __fastcall__ scr_rule(unsigned char row)
 {
-    scr_fill(row, SCR_L, CH_HLINE, SCR_W, 0);
+    AT(row, SCR_L);
+    scr_w = SCR_W;
+    scr_rep(CH_HLINE);
 }
 
-void scr_box(unsigned char r0, unsigned char r1, const char *title)
+void __fastcall__ scr_box(const char *title)
 {
     unsigned char r;
 
-    scr_ch(r0, SCR_L, CH_TL, 0);
-    scr_fill(r0, SCR_L + 1, CH_HLINE, SCR_W - 2, 0);
-    scr_ch(r0, SCR_R, CH_TR, 0);
-    scr_ch(r0, SCR_L + 2, ' ', 1);
-    scr_ch(r0, scr_put(r0, SCR_L + 3, title, 1), ' ', 1);
-    for (r = r0 + 1; r < r1; ++r) {
-        scr_ch(r, SCR_L, CH_VLINE, 0);
-        scr_fill(r, SCR_L + 1, ' ', SCR_W - 2, 0);
-        scr_ch(r, SCR_R, CH_VLINE, 0);
+    scr_w = SCR_W - 2;
+    for (r = 3; r <= 22; ++r) {
+        AT(r, SCR_L);
+        scr_char(r == 3 ? CH_TL : r == 22 ? CH_BL : CH_VLINE);
+        scr_rep(r == 3 || r == 22 ? CH_HLINE : ' ');
+        scr_char(r == 3 ? CH_TR : r == 22 ? CH_BR : CH_VLINE);
     }
-    scr_ch(r1, SCR_L, CH_BL, 0);
-    scr_fill(r1, SCR_L + 1, CH_HLINE, SCR_W - 2, 0);
-    scr_ch(r1, SCR_R, CH_BR, 0);
+    AT(3, SCR_L + 2);
+    scr_inv = 1;
+    scr_char(' ');
+    scr_puts(title);
+    scr_char(' ');
+    scr_inv = 0;
 }
 
-unsigned char scr_key(unsigned char row, unsigned char col,
-                      const char *key, const char *label)
+void __fastcall__ scr_keys(const char *list)
 {
-    col = scr_put(row, col, key, 1);
-    if (*label)
-        col = scr_put(row, col + 1, label, 0);
-    return col + 1;
+    scr_clear(23);
+    AT(23, SCR_L);
+    while (*list) {
+        scr_inv = 1;
+        scr_puts(list);
+        scr_inv = 0;
+        list += strlen(list) + 1;
+        if (*list) {
+            ++scr_col;
+            scr_puts(list);
+        }
+        list += strlen(list) + 1;
+        ++scr_col;
+    }
 }
 
 unsigned char key_get(void)
@@ -164,25 +160,25 @@ unsigned char key_get(void)
     }
 }
 
-unsigned char scr_edit(unsigned char row, unsigned char col, unsigned char w,
-                       char *s, unsigned char max, unsigned char mask)
+unsigned char __fastcall__ scr_edit(char *s)
 {
-    unsigned char len = strlen(s), k, first, i;
+    unsigned char len = strlen(s), k, first, i, w = scr_w, col = scr_col;
 
     for (;;) {
         /* show the end of what fits, then the cursor block */
         first = len >= w ? len - w + 1 : 0;
-        for (i = 0; i < w; ++i) {
-            k = first + i < len ? (mask ? '*' : s[first + i]) : ' ';
-            scr_ch(row, col + i, k, first + i == len);
+        scr_col = col;
+        for (i = first; i < first + w; ++i) {
+            scr_inv = i == len;
+            scr_char(i < len ? (edit_mask ? '*' : s[i]) : ' ');
         }
+        scr_inv = 0;
         k = key_get();
         switch (k) {
-        case K_RETURN: case K_ESC: case K_UP: case K_DOWN:
-        case K_TAB:
-            scr_putw(row, col, mask ? "" : s + first, w, 0);
-            if (mask)
-                scr_fill(row, col, '*', len < w ? len : w, 0);
+        case K_RETURN: case K_ESC: case K_UP: case K_DOWN: case K_TAB:
+            scr_col = col;
+            for (i = first; i < first + w; ++i)
+                scr_char(i < len ? (edit_mask ? '*' : s[i]) : ' ');
             return k;
         case K_BKSP:
             if (len)
@@ -190,7 +186,7 @@ unsigned char scr_edit(unsigned char row, unsigned char col, unsigned char w,
             break;
         default:
             k &= 0x7F;      /* the inverse key doesn't belong in names */
-            if (k >= 0x20 && k < 0x7B && len < max - 1) {
+            if (k >= 0x20 && k < 0x7B && len < edit_max - 1) {
                 s[len++] = k;
                 s[len] = '\0';
             }

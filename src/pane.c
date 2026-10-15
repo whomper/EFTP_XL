@@ -1,5 +1,5 @@
 /*
- * EFTP_XL - a pane's entries
+ * EFTP_XL - the panes' entries
  * Copyright (C) 2026 AERA | Erez Yaary. GPL-2.0-or-later, see COPYING.
  */
 
@@ -9,130 +9,174 @@
 
 #include "pane.h"
 
-void pane_clear(pane_t *p)
+char *e_name[NE + 1];
+unsigned long e_size[NE + 1];
+unsigned char e_flags[NE + 1];
+stamp_t e_when[NE + 1];
+
+unsigned char p_count[2], p_top[2], p_cur[2];
+unsigned char p_dirs[2], p_files[2], p_full[2];
+char p_path[2][PATH_LEN];
+
+unsigned char side, base;
+
+unsigned long new_size;
+unsigned char new_flags;
+stamp_t new_when;
+
+/* the names, a pool for each pane */
+static char pool0[1024], pool1[1280];
+static char *const pool[2] = { pool0, pool1 };
+static const unsigned int pool_size[2] = { sizeof(pool0), sizeof(pool1) };
+static unsigned int pool_used[2];
+
+void __fastcall__ pane_use(unsigned char s)
 {
-    p->count = p->top = p->cur = 0;
-    p->pool_used = 0;
-    p->dirs = p->files = 0;
-    p->full = 0;
+    side = s;
+    base = s ? MAXE : 0;
 }
 
-entry_t *pane_add(pane_t *p, const char *name, unsigned long size,
-                  const stamp_t *when, unsigned char flags)
+void pane_clear(void)
 {
-    entry_t *e;
+    p_count[side] = p_top[side] = p_cur[side] = 0;
+    p_dirs[side] = p_files[side] = p_full[side] = 0;
+    pool_used[side] = 0;
+}
+
+void __fastcall__ pane_add(const char *name)
+{
     unsigned int n = strlen(name) + 1;
+    unsigned char k = base + p_count[side];
 
-    if (p->count == p->max || p->pool_used + n > p->pool_size) {
-        p->full = 1;
-        return 0;
+    if (p_count[side] == MAXE || pool_used[side] + n > pool_size[side]) {
+        p_full[side] = 1;
+        return;
     }
-    e = &p->ent[p->count++];
-    e->name = p->pool + p->pool_used;
-    memcpy(e->name, name, n);
-    p->pool_used += n;
-    e->size = size;
-    if (when)
-        e->when = *when;
-    else
-        e->when.day = 0;
-    e->flags = flags;
-    if (flags & E_DIR)
-        ++p->dirs;
-    else if (!(flags & E_UP))
-        ++p->files;
-    return e;
+    ++p_count[side];
+    e_name[k] = pool[side] + pool_used[side];
+    memcpy(e_name[k], name, n);
+    pool_used[side] += n;
+    e_size[k] = new_size;
+    e_when[k] = new_when;
+    e_flags[k] = new_flags;
+    if (new_flags & E_DIR)
+        ++p_dirs[side];
+    else if (!(new_flags & E_UP))
+        ++p_files[side];
+    new_when.day = 0;
+    new_size = 0;
+    new_flags = 0;
 }
 
-static unsigned char rank(const entry_t *e)
+static unsigned char rank(unsigned char k)
 {
-    return (e->flags & E_UP) ? 0 : (e->flags & E_DIR) ? 1 : 2;
+    return (e_flags[k] & E_UP) ? 0 : (e_flags[k] & E_DIR) ? 1 : 2;
 }
 
-static int compare(const void *a, const void *b)
+/* entry a goes after entry b? */
+static unsigned char after(unsigned char a, unsigned char b)
 {
-    const entry_t *x = a, *y = b;
-    const unsigned char *s, *t;
+    const unsigned char *s = (const unsigned char *)e_name[a];
+    const unsigned char *t = (const unsigned char *)e_name[b];
     unsigned char c, d;
 
-    if (rank(x) != rank(y))
-        return rank(x) - rank(y);
-    for (s = (const unsigned char *)x->name,
-         t = (const unsigned char *)y->name; ; ++s, ++t) {
+    if (rank(a) != rank(b))
+        return rank(a) > rank(b);
+    for (;; ++s, ++t) {
         c = toupper(*s);
         d = toupper(*t);
         if (c != d || !c)
-            return c - d;
+            return c > d;
     }
 }
 
-void pane_sort(pane_t *p)
+static void copy(unsigned char to, unsigned char from)
 {
-    static entry_t e;
-    unsigned char i, j;
+    e_name[to] = e_name[from];
+    e_size[to] = e_size[from];
+    e_flags[to] = e_flags[from];
+    e_when[to] = e_when[from];
+}
 
-    for (i = 1; i < p->count; ++i) {
-        e = p->ent[i];
-        for (j = i; j && compare(&p->ent[j - 1], &e) > 0; --j)
-            p->ent[j] = p->ent[j - 1];
-        p->ent[j] = e;
+void pane_sort(void)
+{
+    unsigned char i, j, end = base + p_count[side];
+
+    for (i = base + 1; i < end; ++i) {
+        copy(NE, i);
+        for (j = i; j > base && after(j - 1, NE); --j)
+            copy(j, j - 1);
+        copy(j, NE);
     }
 }
 
-void fmt_size(unsigned long n, char *s)
+unsigned char __fastcall__ pane_find(const char *name)
 {
-    unsigned int k;
+    unsigned char k, end = base + p_count[side];
 
-    if (n < 1000) {
-        utoa((unsigned int)n, s, 10);
-        return;
+    for (k = base; k < end; ++k)
+        if (!strcmp(e_name[k], name))
+            return k;
+    return NO;
+}
+
+unsigned long fmt_n;
+
+void __fastcall__ fmt_size(char *s)
+{
+    unsigned long n = fmt_n;
+    const char *unit = "";
+
+    if (n >= 1000) {
+        n = (n + 1023) >> 10;
+        unit = "K";
+        if (n >= 1000) {
+            n = (n + 512) >> 10;
+            unit = "M";
+        }
     }
-    k = (unsigned int)((n + 1023) >> 10);
-    if (k < 1000) {
-        utoa(k, s, 10);
-        strcat(s, "K");
-        return;
-    }
-    k = (unsigned int)((n + 524288UL) >> 20);
-    utoa(k, s, 10);
-    strcat(s, "M");
+    utoa((unsigned int)n, s, 10);
+    strcat(s, unit);
 }
 
 static char *sb;
 
-void sb_start(char *s)
+void __fastcall__ sb_start(char *s)
 {
     sb = s;
     *s = '\0';
 }
 
-void sb_add(const char *s)
+void __fastcall__ sb_add(const char *s)
 {
     while ((*sb = *s++) != '\0')
         ++sb;
 }
 
-void sb_num(unsigned int n)
+void __fastcall__ sb_num(unsigned int n)
 {
     utoa(n, sb, 10);
     sb += strlen(sb);
 }
 
-void sb_size(unsigned long n)
+void __fastcall__ sb_size(unsigned long n)
 {
-    fmt_size(n, sb);
+    fmt_n = n;
+    fmt_size(sb);
     sb += strlen(sb);
 }
 
-static void sb_2(unsigned char n)
+static void __fastcall__ sb_2(unsigned char n)
 {
     if (n < 10)
         sb_add("0");
     sb_num(n);
 }
 
-void sb_stamp(const stamp_t *w)
+void __fastcall__ sb_stamp(unsigned char k)
 {
+    stamp_t *w = &e_when[k];
+
     if (!w->day)
         return;
     sb_2(w->day);

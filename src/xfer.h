@@ -8,13 +8,12 @@
 
 #include "pane.h"
 
-/* The files of src that are marked (or, with none marked or with
-   cursor_only, the one under the cursor) go to the other side: down
-   when src is the server's pane, up when it's the Atari's. mode is the
-   site's MODE_*. Returns 1 when something was sent (the panes need
-   reading again). */
-unsigned char xfer_send(pane_t *local, pane_t *remote, unsigned char down,
-                        unsigned char mode, unsigned char cursor_only);
+/* The marked files of a pane (or, with none marked or with cursor_only,
+   the one under the cursor) go to the other side: down from the server's
+   pane when down, else up from the Atari's. mode is the site's MODE_*.
+   Returns 1 when something was sent (the panes need reading again). */
+unsigned char xfer_send(unsigned char down, unsigned char mode,
+                        unsigned char cursor_only);
 
 /* The transfers area: what the last transfer did. */
 void xfer_draw(void);

@@ -35,6 +35,7 @@
 #define EOL         0x9B
 #define ATAB        0x7F
 
+
 #define buf ftp_buf
 static char spec[PATH_LEN + 13];
 static char aname[13];
@@ -42,12 +43,11 @@ static char line[40];
 static char summary[39];
 static char error[39];          /* why the last file that failed did */
 
-static pane_t *src;
-static unsigned char down;
+static unsigned char down, text, stop;
 static unsigned char queue[MAX_QUEUE], count, cur, first;
+static unsigned char k;         /* the entry going */
 static unsigned long file_size, file_done, total_done;
 static unsigned long t_start;
-static unsigned char stop;
 
 /* EFTP's text types, and BASIC listings */
 static const char text_types[] = " TXT ASC DOC ME NFO DIZ HTM HTML INF LST ";
@@ -63,15 +63,15 @@ static unsigned char hz(void)
     return (GTIA_READ.pal & 0x0E) ? 60 : 50;
 }
 
-static unsigned char is_text(const char *name, unsigned char mode)
+static unsigned char __fastcall__ is_text(unsigned char mode)
 {
-    const char *dot = strrchr(name, '.');
+    const char *dot = strrchr(e_name[k], '.');
     char ext[7];
     unsigned char i;
 
     if (mode != MODE_BYTYPE)
         return mode == MODE_TEXT;
-    if (!dot || strlen(dot + 1) > 4 || !dot[1])
+    if (!dot || !dot[1] || strlen(dot + 1) > 4)
         return 0;
     ext[0] = ' ';
     for (i = 1; dot[i]; ++i)
@@ -81,102 +81,106 @@ static unsigned char is_text(const char *name, unsigned char mode)
     return strstr(text_types, ext) != NULL;
 }
 
-/* A name DOS takes: up to 8 letters and digits, a letter first, and up
-   to 3 for the extension, in capitals. */
-static void atari_name(const char *s, char *out)
+/* aname = a name DOS takes for entry j: up to 8 letters and digits, a
+   letter first, and up to 3 for the extension, in capitals */
+static void __fastcall__ atari_name(unsigned char j)
 {
-    const char *dot = strrchr(s, '.');
+    const char *s = e_name[j], *dot = strrchr(s, '.');
     unsigned char n = 0, m = 0;
 
     if (!isalpha(*s))
-        out[n++] = 'F';
+        aname[n++] = 'F';
     for (; *s && s != dot && n < 8; ++s)
         if (isalnum(*s))
-            out[n++] = toupper(*s);
+            aname[n++] = toupper(*s);
     if (dot) {
-        out[n++] = '.';
+        aname[n++] = '.';
         for (++dot; *dot && m < 3; ++dot)
             if (isalnum(*dot))
-                out[n + m++] = toupper(*dot);
+                aname[n + m++] = toupper(*dot);
         if (!m)
             --n;
         n += m;
     }
-    out[n] = '\0';
+    aname[n] = '\0';
+}
+
+/* the name entry j has on the screen: its Atari name going down */
+static const char *__fastcall__ shown(unsigned char j)
+{
+    if (!down)
+        return e_name[j];
+    atari_name(j);
+    return aname;
 }
 
 /* -- the line ends of text files */
 
 /* server -> Atari, in place: CR LF -> EOL, TAB -> Atari TAB */
-static unsigned int to_atari(unsigned int n)
+static unsigned int __fastcall__ to_atari(unsigned int n)
 {
-    unsigned int i, o = 0;
-    unsigned char c;
+    unsigned char *in = buf, *out = buf, c;
 
-    for (i = 0; i < n; ++i) {
-        c = buf[i];
-        if (c == CR)
-            continue;
-        buf[o++] = c == LF ? EOL : c == TAB ? ATAB : c;
+    for (; n; --n) {
+        c = *in++;
+        if (c != CR)
+            *out++ = c == LF ? EOL : c == TAB ? ATAB : c;
     }
-    return o;
+    return out - buf;
 }
 
 /* Atari -> server: n bytes at buf + BUF/2 become CR LF text from buf */
-static unsigned int to_server(unsigned int n)
+static unsigned int __fastcall__ to_server(unsigned int n)
 {
-    unsigned char *in = buf + BUF / 2;
-    unsigned int i, o = 0;
-    unsigned char c;
+    unsigned char *in = buf + BUF / 2, *out = buf, c;
 
-    for (i = 0; i < n; ++i) {
-        c = in[i];
+    for (; n; --n) {
+        c = *in++;
         if (c == EOL) {
-            buf[o++] = CR;
-            buf[o++] = LF;
+            *out++ = CR;
+            *out++ = LF;
         } else
-            buf[o++] = c == ATAB ? TAB : c;
+            *out++ = c == ATAB ? TAB : c;
     }
-    return o;
+    return out - buf;
 }
 
 /* -- showing it */
 
-static const char *shown_name(entry_t *e)
+static void __fastcall__ draw_row(unsigned char i)
 {
-    if (!down)
-        return e->name;
-    atari_name(e->name, aname);
-    return aname;
-}
-
-static void draw_row(unsigned char row, unsigned char i)
-{
-    entry_t *e = &src->ent[queue[i]];
-    unsigned char c = SCR_L + 15, fill;
+    unsigned char j = queue[i], f = e_flags[j], fill;
     char size[6];
 
-    scr_clear(row, row);
-    scr_ch(row, SCR_L, down ? CH_DOWN : CH_UP, 0);
-    scr_putw(row, SCR_L + 2, shown_name(e), 12, 0);
-    if (i == cur && !(e->flags & (E_DONE | E_FAIL | E_SKIP))) {
+    AT(XFER_ROW + 1 + i - first, SCR_L);
+    scr_clear(scr_row);
+    scr_char(down ? CH_DOWN : CH_UP);
+    ++scr_col;
+    scr_w = 12;
+    scr_putw(shown(j));
+    ++scr_col;
+    if (i == cur && !(f & (E_DONE | E_FAIL | E_SKIP))) {
         fill = file_size ? (unsigned char)(file_done * BAR / file_size) : 0;
         if (fill > BAR)
             fill = BAR;
-        scr_fill(row, c, ' ', fill, 1);
-        scr_fill(row, c + fill, CH_SHADE, BAR - fill, 0);
+        scr_w = fill;
+        scr_inv = 1;
+        scr_rep(' ');
+        scr_inv = 0;
+        scr_w = BAR - fill;
+        scr_rep(CH_SHADE);
         fill = file_size ? (unsigned char)(file_done * 100 / file_size) : 0;
         utoa(fill > 99 ? 99 : fill, size, 10);
         strcat(size, "%");
-        scr_put(row, SCR_R - 3, size, 0);
-        return;
+    } else {
+        scr_puts((f & E_DONE) ? "Done"
+                 : (f & E_FAIL) ? (stop && i == cur ? "Stopped" : "Failed")
+                 : (f & E_SKIP) ? "Skipped" : "Waiting");
+        fmt_n = e_size[j];
+        fmt_size(size);
     }
-    scr_put(row, c, (e->flags & E_DONE) ? "Done"
-                  : (e->flags & E_FAIL) ? (stop && i == cur ? "Stopped"
-                                                            : "Failed")
-                  : (e->flags & E_SKIP) ? "Skipped" : "Waiting", 0);
-    fmt_size(e->size, size);
-    scr_put(row, SCR_R + 1 - strlen(size), size, 0);
+    scr_col = SCR_R + 1 - strlen(size);
+    scr_puts(size);
 }
 
 static void draw_queue(void)
@@ -184,40 +188,43 @@ static void draw_queue(void)
     unsigned char r;
 
     first = cur ? cur - 1 : 0;
-    if (count > XFER_ROWS && first > count - XFER_ROWS)
-        first = count - XFER_ROWS;
     if (count <= XFER_ROWS)
         first = 0;
-    for (r = 0; r < XFER_ROWS; ++r) {
-        if (first + r < count)
-            draw_row(XFER_ROW + 1 + r, first + r);
+    else if (first > count - XFER_ROWS)
+        first = count - XFER_ROWS;
+    for (r = first; r < first + XFER_ROWS; ++r)
+        if (r < count)
+            draw_row(r);
         else
-            scr_clear(XFER_ROW + 1 + r, XFER_ROW + 1 + r);
-    }
+            scr_clear(XFER_ROW + 1 + r - first);
     sb_start(line);
     sb_add(" ");
     sb_num(cur + 1 > count ? count : cur + 1);
     sb_add(" of ");
     sb_num(count);
     sb_add(" ");
-    scr_fill(XFER_ROW, SCR_R - 10, CH_HLINE, 11, 0);
-    scr_put(XFER_ROW, SCR_R - strlen(line) + 1, line, 0);
+    AT(XFER_ROW, SCR_R - 10);
+    scr_w = 11;
+    scr_rep(CH_HLINE);
+    scr_col = SCR_R + 1 - strlen(line);
+    scr_puts(line);
 }
 
 /* "3K/s" so far */
 static void sb_rate(void)
 {
     unsigned long t = ticks() - t_start;
+    unsigned long r = total_done * hz() / (t ? t : 1);
 
-    sb_size(total_done * hz() / (t ? t : 1));
-    sb_add(total_done * hz() / (t ? t : 1) < 1000 ? "B/s" : "/s");
+    sb_size(r);
+    sb_add(r < 1000 ? "B/s" : "/s");
 }
 
-static void progress(entry_t *e)
+static void progress(void)
 {
     sb_start(line);
     sb_add(down ? "\x1D " : "\x1C ");
-    sb_add(shown_name(e));
+    sb_add(shown(k));
     sb_add(" ");
     sb_size(file_done);
     sb_add("/");
@@ -225,16 +232,21 @@ static void progress(entry_t *e)
     sb_add(" ");
     sb_rate();
     ui_info(line);
-    draw_row(XFER_ROW + 1 + cur - first, cur);
+    draw_row(cur);
 }
 
-/* ESC pressed? */
-static unsigned char esc(void)
+/* the bytes of a block moved: count them, show them; 1 when ESC */
+static unsigned char __fastcall__ moved(unsigned int n)
 {
-    return kbhit() && key_get() == K_ESC;
+    file_done += n;
+    total_done += n;
+    progress();
+    if (kbhit() && key_get() == K_ESC)
+        stop = 1;
+    return stop;
 }
 
-static void say_error(const char *what, int r)
+static void __fastcall__ say_error(const char *what, int r)
 {
     sb_start(error);
     sb_add(what);
@@ -250,7 +262,7 @@ static void say_error(const char *what, int r)
     ui_info(error);
 }
 
-static void say_cio(unsigned char st)
+static void __fastcall__ say_cio(unsigned char st)
 {
     const char *n = strrchr(spec, '>');
 
@@ -263,63 +275,59 @@ static void say_cio(unsigned char st)
     ui_info(error);
 }
 
-/* Is name in p? Then ask; 0: leave it (or ESC: stop). */
-static unsigned char may_replace(pane_t *p, const char *name)
+/* Is name in pane s? Then ask; 0: leave it (or ESC: stop). */
+static unsigned char may_replace(unsigned char s, const char *name)
 {
-    unsigned char i, k;
+    unsigned char key;
 
-    for (i = 0; i < p->count; ++i)
-        if (!strcmp(p->ent[i].name, name))
-            break;
-    if (i == p->count)
+    pane_use(s);
+    if (pane_find(name) == NO)
         return 1;
     sb_start(line);
     sb_add(name);
     sb_add(" is there. Replace? Y/N");
     ui_info(line);
-    k = key_get();
-    if (k == K_ESC)
+    key = key_get();
+    if (key == K_ESC)
         stop = 1;
-    return k == 'Y' || k == 'y';
+    return key == 'Y' || key == 'y';
+}
+
+/* spec = the Atari's folder + name */
+static void __fastcall__ make_spec(const char *name)
+{
+    sb_start(spec);
+    sb_add(p_path[LOCAL]);
+    sb_add(name);
 }
 
 /* -- one file each way; they return E_DONE, E_FAIL or E_SKIP */
 
-static unsigned char get_file(entry_t *e, pane_t *local, unsigned char text)
+static unsigned char get_file(void)
 {
     int n = 0, r;
     unsigned char st = 1;
-    unsigned int out;
 
-    atari_name(e->name, aname);
-    if (!may_replace(local, aname))
+    atari_name(k);
+    if (!may_replace(LOCAL, aname))
         return E_SKIP;
-    strcpy(spec, local->path);
-    strcat(spec, aname);
-    if ((r = ftp_retr(e->name)) != 0) {
+    make_spec(aname);
+    if ((r = ftp_retr(e_name[k])) != 0) {
         say_error("Download", r);
         return E_FAIL;
     }
-    if ((st = cio_open(spec, 8, 0)) >= 128) {
+    if ((st = cio_open(spec, 8)) >= 128) {
         cio_close();
         ftp_abort();
         say_cio(st);
         return E_FAIL;
     }
-    for (;;) {
-        n = ftp_read(buf, BUF);
-        if (n <= 0)
+    while ((n = ftp_read(buf, BUF)) > 0) {
+        r = text ? to_atari(n) : n;
+        if (r && (st = cio_write(buf, r)) >= 128)
             break;
-        out = text ? to_atari(n) : n;
-        if (out && (st = cio_write(buf, out)) >= 128)
+        if (moved(n))
             break;
-        file_done += n;
-        total_done += n;
-        progress(e);
-        if (esc()) {
-            stop = 1;
-            break;
-        }
     }
     cio_close();
     if (n == 0 && st < 128) {
@@ -337,46 +345,37 @@ static unsigned char get_file(entry_t *e, pane_t *local, unsigned char text)
     return E_FAIL;
 }
 
-static unsigned char put_file(entry_t *e, pane_t *local, pane_t *remote,
-                              unsigned char text)
+static unsigned char put_file(void)
 {
     unsigned char st;
-    unsigned int got, n;
     int r = 0;
 
-    if (!may_replace(remote, e->name))
+    if (!may_replace(REMOTE, e_name[k]))
         return E_SKIP;
-    strcpy(spec, local->path);
-    strcat(spec, e->name);
-    if ((st = cio_open(spec, 4, 0)) >= 128) {
+    make_spec(e_name[k]);
+    if ((st = cio_open(spec, 4)) >= 128) {
         cio_close();
         say_cio(st);
         return E_FAIL;
     }
-    if ((r = ftp_stor(e->name)) != 0) {
+    if ((r = ftp_stor(e_name[k])) != 0) {
         cio_close();
         say_error("Upload", r);
         return E_FAIL;
     }
     for (;;) {
-        st = cio_read(text ? buf + BUF / 2 : buf, text ? BUF / 2 : BUF, &got);
-        if (got) {
-            n = text ? to_server(got) : got;
-            if ((r = ftp_write(buf, n)) != 0)
+        st = cio_read(text ? buf + BUF / 2 : buf, text ? BUF / 2 : BUF);
+        if (cio_got) {
+            if ((r = ftp_write(buf, text ? to_server(cio_got) : cio_got)) != 0)
                 break;
-            file_done += got;
-            total_done += got;
-            progress(e);
+            if (moved(cio_got))
+                break;
         }
         if (st >= 128)
             break;
-        if (esc()) {
-            stop = 1;
-            break;
-        }
     }
     cio_close();
-    if (st == 136 && !r) {
+    if (st == 136 && !r && !stop) {
         if ((r = ftp_done()) == 0)
             return E_DONE;
         say_error("Upload", r);
@@ -385,47 +384,46 @@ static unsigned char put_file(entry_t *e, pane_t *local, pane_t *remote,
     ftp_abort();
     if (r)
         say_error("Upload", r);
-    else if (st >= 128)
+    else if (st >= 128 && st != 136)
         say_cio(st);
     return E_FAIL;
 }
 
-unsigned char xfer_send(pane_t *local, pane_t *remote, unsigned char to_atari_,
-                        unsigned char mode, unsigned char cursor_only)
+unsigned char xfer_send(unsigned char to_atari_, unsigned char mode,
+                        unsigned char cursor_only)
 {
-    unsigned char i, n_ok = 0, result;
+    unsigned char n_ok = 0, result, src, end;
     unsigned long secs;
-    entry_t *e;
 
     down = to_atari_;
-    src = down ? remote : local;
-    count = cur = 0;
-    stop = 0;
+    src = down ? REMOTE : LOCAL;
+    pane_use(src);
+    count = cur = stop = 0;
     error[0] = '\0';
-    for (i = 0; i < src->count && count < MAX_QUEUE && !cursor_only; ++i)
-        if ((src->ent[i].flags & (E_MARK | E_DIR)) == E_MARK)
-            queue[count++] = i;
-    if (!count && src->count
-        && !(src->ent[src->cur].flags & (E_DIR | E_UP)))
-        queue[count++] = src->cur;
+    end = base + p_count[src];
+    if (!cursor_only)
+        for (k = base; k < end && count < MAX_QUEUE; ++k)
+            if ((e_flags[k] & (E_MARK | E_DIR)) == E_MARK)
+                queue[count++] = k;
+    k = base + p_cur[src];
+    if (!count && p_count[src] && !(e_flags[k] & (E_DIR | E_UP)))
+        queue[count++] = k;
     if (!count) {
         ui_info("Mark files with SPACE, or put the cursor on one.");
         return 0;
     }
-    for (i = 0; i < count; ++i)
-        src->ent[queue[i]].flags |= E_QUEUED;
 
     total_done = 0;
     t_start = ticks();
     for (cur = 0; cur < count && !stop; ++cur) {
-        e = &src->ent[queue[cur]];
-        file_size = e->size;
+        k = queue[cur];
+        file_size = e_size[k];
         file_done = 0;
+        text = is_text(mode);
         draw_queue();
-        progress(e);
-        result = down ? get_file(e, local, is_text(e->name, mode))
-                      : put_file(e, local, remote, is_text(e->name, mode));
-        e->flags = (e->flags & ~E_MARK) | result;
+        progress();
+        result = down ? get_file() : put_file();
+        e_flags[k] = (e_flags[k] & ~E_MARK) | result;
         if (result == E_DONE)
             ++n_ok;
         draw_queue();
@@ -457,10 +455,12 @@ unsigned char xfer_send(pane_t *local, pane_t *remote, unsigned char to_atari_,
 
 void xfer_draw(void)
 {
+    AT(XFER_ROW + 1, SCR_L);
     if (summary[0]) {
-        scr_put(XFER_ROW + 1, SCR_L, summary, 0);
+        scr_puts(summary);
         return;
     }
-    scr_put(XFER_ROW + 1, SCR_L, "Nothing yet. RETURN sends a file,", 0);
-    scr_put(XFER_ROW + 2, SCR_L, "SPACE marks several, ^T sends them.", 0);
+    scr_puts("Nothing yet. RETURN sends a file,");
+    AT(XFER_ROW + 2, SCR_L);
+    scr_puts("SPACE marks several, ^T sends them.");
 }

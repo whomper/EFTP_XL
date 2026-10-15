@@ -8,11 +8,11 @@
 
 #include "pane.h"
 
-/* Read the server's current folder into p (p->path from PWD).
-   Returns 0 or an ftp error. */
-int remote_read(pane_t *p);
+/* Read the server's current folder into the server's pane (its path
+   from PWD). Returns 0 or an ftp error. */
+int remote_read(void);
 
-/* Take one LIST line apart into p; exported for the host tests. */
-void remote_add_line(pane_t *p, char *line);
+/* Take one LIST line apart into the server's pane. */
+void __fastcall__ remote_add_line(char *line);
 
 #endif

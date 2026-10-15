@@ -2,6 +2,10 @@
  * EFTP_XL - the screen: GRAPHICS 0 in EDOS's font and colours, drawn
  * straight into screen memory, and the keyboard
  * Copyright (C) 2026 AERA | Erez Yaary. GPL-2.0-or-later, see COPYING.
+ *
+ * Drawing goes at scr_row, scr_col (AT sets both), in inverse when
+ * scr_inv is 1; the functions take one argument, which cc65 turns into
+ * the least code.
  */
 
 #ifndef SCREEN_H
@@ -46,31 +50,32 @@
 #define K_HELP      0xFF
 #define CTRL(c)     ((c) & 0x1F)
 
+extern unsigned char scr_row, scr_col, scr_inv, scr_w;
+#define AT(r, c)    (scr_row = (r), scr_col = (c))
+
 void scr_init(void);
 void scr_done(void);
 
-/* Draw text (ATASCII) at row, col; returns the column after it. */
-unsigned char scr_put(unsigned char row, unsigned char col,
-                      const char *s, unsigned char inv);
-/* The same, cut or padded with spaces to exactly w columns. */
-void scr_putw(unsigned char row, unsigned char col, const char *s,
-              unsigned char w, unsigned char inv);
-void scr_ch(unsigned char row, unsigned char col, unsigned char c,
-            unsigned char inv);
-void scr_fill(unsigned char row, unsigned char col, unsigned char c,
-              unsigned char n, unsigned char inv);
-void scr_clear(unsigned char r0, unsigned char r1);
-void scr_rule(unsigned char row);
-void scr_box(unsigned char r0, unsigned char r1, const char *title);
-/* Inverse key name, then its label: returns the column after both. */
-unsigned char scr_key(unsigned char row, unsigned char col,
-                      const char *key, const char *label);
+/* text at scr_row, scr_col; scr_col moves on past it */
+void __fastcall__ scr_puts(const char *s);
+/* the same, cut or padded with spaces to exactly scr_w columns */
+void __fastcall__ scr_putw(const char *s);
+void __fastcall__ scr_char(unsigned char c);
+/* c, scr_w times */
+void __fastcall__ scr_rep(unsigned char c);
+void __fastcall__ scr_clear(unsigned char row);
+void __fastcall__ scr_rule(unsigned char row);
+/* a box over rows 3..22, title in inverse in its top line */
+void __fastcall__ scr_box(const char *title);
+/* the key bar on row 23: "KEY\0label\0KEY\0label\0\0", keys in inverse */
+void __fastcall__ scr_keys(const char *list);
 
 unsigned char key_get(void);
 
-/* Edit s (max chars, shown in w columns) at row, col. Returns the key
-   that ended it: RETURN, ESC, up or down, or TAB. */
-unsigned char scr_edit(unsigned char row, unsigned char col, unsigned char w,
-                       char *s, unsigned char max, unsigned char mask);
+/* Edit s (at most edit_max - 1 characters; '*' for each when
+   edit_mask) in scr_w columns at scr_row, scr_col. Returns the key that
+   ended it: RETURN, ESC, up, down or TAB. */
+extern unsigned char edit_max, edit_mask;
+unsigned char __fastcall__ scr_edit(char *s);
 
 #endif

@@ -27,21 +27,32 @@
 #define SECTOR  125         /* data bytes in a DOS 2 sector */
 
 unsigned int local_free;
+unsigned int cio_got;
 
 static char line[64];
 static char spec[PATH_LEN + 4];
 static char name[13];
-static stamp_t when;
+static unsigned char sparta;
 
-unsigned char cio_open(const char *s, unsigned char aux1, unsigned char aux2)
+static unsigned char __fastcall__ io(unsigned char command)
+{
+    IO->command = command;
+    return cio(LOCAL_IOCB);
+}
+
+static void __fastcall__ io_buf(const void *buf)
+{
+    IO->buffer = (void *)buf;
+}
+
+unsigned char cio_open(const char *s, unsigned char aux1)
 {
     cio_close();
-    IO->command = 3;
-    IO->buffer = (void *)s;
+    io_buf(s);
     IO->buflen = strlen(s);
     IO->aux1 = aux1;
-    IO->aux2 = aux2;
-    return cio(LOCAL_IOCB);
+    IO->aux2 = 0;
+    return io(3);
 }
 
 unsigned char cio_getline(char *buf, unsigned int len)
@@ -49,10 +60,9 @@ unsigned char cio_getline(char *buf, unsigned int len)
     unsigned char st;
     unsigned int n;
 
-    IO->command = 5;
-    IO->buffer = buf;
+    io_buf(buf);
     IO->buflen = len - 1;
-    st = cio(LOCAL_IOCB);
+    st = io(5);
     n = IO->buflen;
     if (n && buf[n - 1] == (char)0x9B)
         --n;
@@ -60,7 +70,7 @@ unsigned char cio_getline(char *buf, unsigned int len)
     return st;
 }
 
-unsigned char cio_putline(const char *s)
+unsigned char __fastcall__ cio_putline(const char *s)
 {
     static char out[200];
     unsigned int n = strlen(s);
@@ -69,46 +79,41 @@ unsigned char cio_putline(const char *s)
         n = sizeof(out) - 1;
     memcpy(out, s, n);
     out[n] = (char)0x9B;
-    IO->command = 9;
-    IO->buffer = out;
+    io_buf(out);
     IO->buflen = n + 1;
-    return cio(LOCAL_IOCB);
+    return io(9);
 }
 
-unsigned char cio_read(void *buf, unsigned int len, unsigned int *got)
+unsigned char cio_read(void *buf, unsigned int len)
 {
     unsigned char st;
 
-    IO->command = 7;
-    IO->buffer = buf;
+    io_buf(buf);
     IO->buflen = len;
-    st = cio(LOCAL_IOCB);
-    *got = IO->buflen;
+    st = io(7);
+    cio_got = IO->buflen;
     return st;
 }
 
 unsigned char cio_write(const void *buf, unsigned int len)
 {
-    IO->command = 11;
-    IO->buffer = (void *)buf;
+    io_buf(buf);
     IO->buflen = len;
-    return cio(LOCAL_IOCB);
+    return io(11);
 }
 
-unsigned char cio_xio(unsigned char cmd, const char *spec)
+unsigned char cio_xio(unsigned char cmd, const char *s)
 {
     cio_close();
-    IO->command = cmd;
-    IO->buffer = (void *)spec;
-    IO->buflen = strlen(spec);
+    io_buf(s);
+    IO->buflen = strlen(s);
     IO->aux1 = IO->aux2 = 0;
-    return cio(LOCAL_IOCB);
+    return io(cmd);
 }
 
 void cio_close(void)
 {
-    IO->command = 12;
-    cio(LOCAL_IOCB);
+    io(12);
 }
 
 /* Split s into words (in place); returns how many, at most max. */
@@ -129,13 +134,13 @@ static unsigned char words(char *s, char **w, unsigned char max)
     }
 }
 
-/* name = base (to a space, at most 8) "." ext (to a space, at most 3) */
-static void make_name(const char *base, const char *ext)
+/* name = b (to a space, at most 8) "." ext (to a space, at most 3) */
+static void make_name(const char *b, const char *ext)
 {
     unsigned char n = 0, m = 0;
 
-    while (n < 8 && base[n] > ' ')
-        name[n] = base[n], ++n;
+    while (n < 8 && b[n] > ' ')
+        name[n] = b[n], ++n;
     if (ext && *ext > ' ') {
         name[n++] = '.';
         while (m < 3 && ext[m] > ' ')
@@ -144,11 +149,10 @@ static void make_name(const char *base, const char *ext)
     name[n] = '\0';
 }
 
-static void add_line(pane_t *p, char *s, unsigned char sparta)
+static void __fastcall__ add_line(char *s)
 {
     char *w[4];
-    unsigned char n, i = 1, flags = 0;
-    unsigned long size = 0;
+    unsigned char n, i = 1;
 
     if (strstr(s, "FREE SECTORS")) {
         local_free = atoi(s);
@@ -160,7 +164,8 @@ static void add_line(pane_t *p, char *s, unsigned char sparta)
         if (strlen(s) < 14 || s[1] != ' ')
             return;
         make_name(s + 2, s + 10);
-        pane_add(p, name, atol(s + 14) * SECTOR, 0, 0);
+        new_size = atol(s + 14) * SECTOR;
+        pane_add(name);
         return;
     }
     if (!strncmp(s, "Volume", 6) || !strncmp(s, "Directory", 9)
@@ -170,32 +175,36 @@ static void add_line(pane_t *p, char *s, unsigned char sparta)
     make_name(w[0], i < n && w[1][0] != '<' && !isdigit(w[1][0])
                     ? w[i++] : 0);
     if (i < n && w[i][0] == '<')
-        flags = E_DIR;
+        new_flags = E_DIR;
     else if (i < n)
-        size = atol(w[i]);
-    when.day = 0;
+        new_size = atol(w[i]);
     if (++i < n) {
         /* "12-03-89" */
-        when.day = atoi(w[i]);
-        when.mon = atoi(w[i] + 3);
-        when.year = atoi(w[i] + 6);
-        when.hour = NO;
+        new_when.day = atoi(w[i]);
+        new_when.mon = atoi(w[i] + 3);
+        new_when.year = atoi(w[i] + 6);
+        new_when.hour = NO;
     }
-    pane_add(p, name, size, &when, flags);
+    pane_add(name);
 }
 
-unsigned char local_read(pane_t *p)
+#define path p_path[LOCAL]
+
+unsigned char local_read(void)
 {
-    unsigned char st, sparta = 0, first = 1;
+    unsigned char st, first = 1;
 
-    pane_clear(p);
+    pane_use(LOCAL);
+    pane_clear();
     local_free = 0;
-    if (strchr(p->path, '>'))
-        pane_add(p, "..", 0, 0, E_UP);
-
-    strcpy(spec, p->path);
+    sparta = 0;
+    if (strchr(path, '>')) {
+        new_flags = E_UP;
+        pane_add("..");
+    }
+    strcpy(spec, path);
     strcat(spec, "*.*");
-    st = cio_open(spec, 6, 0);
+    st = cio_open(spec, 6);
     if (st >= 128) {
         cio_close();
         return st;
@@ -204,30 +213,30 @@ unsigned char local_read(pane_t *p)
         if (first && !strncmp(line, "Volume", 6))
             sparta = 1;
         first = 0;
-        add_line(p, line, sparta);
+        add_line(line);
     }
     cio_close();
-    pane_sort(p);
+    pane_sort();
     return st == 136 ? 1 : st;
 }
 
-void local_into(pane_t *p, const char *dir)
+void __fastcall__ local_into(const char *dir)
 {
-    if (!strchr(p->path, '>'))
-        strcat(p->path, ">");
-    if (strlen(p->path) + strlen(dir) + 2 < PATH_LEN) {
-        strcat(p->path, dir);
-        strcat(p->path, ">");
+    if (!strchr(path, '>'))
+        strcat(path, ">");
+    if (strlen(path) + strlen(dir) + 2 < PATH_LEN) {
+        strcat(path, dir);
+        strcat(path, ">");
     }
 }
 
-unsigned char local_up(pane_t *p)
+unsigned char local_up(void)
 {
-    char *s = p->path + strlen(p->path) - 1;   /* the trailing '>' */
+    char *s = path + strlen(path) - 1;      /* the trailing '>' */
 
-    if (!strchr(p->path, '>'))
+    if (!strchr(path, '>'))
         return 0;
-    while (s > p->path && *--s != '>')
+    while (s > path && *--s != '>')
         ;
     if (s[-1] == ':')
         s[0] = '\0';        /* back to "D1:" */
@@ -236,10 +245,10 @@ unsigned char local_up(pane_t *p)
     return 1;
 }
 
-void local_drive(pane_t *p, unsigned char n)
+void __fastcall__ local_drive(unsigned char n)
 {
-    p->path[0] = 'D';
-    p->path[1] = '0' + n;
-    p->path[2] = ':';
-    p->path[3] = '\0';
+    path[0] = 'D';
+    path[1] = '0' + n;
+    path[2] = ':';
+    path[3] = '\0';
 }
