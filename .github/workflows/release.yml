@@ -1,9 +1,10 @@
 name: Release
 
-# Builds EFTPXL.XEX and publishes it as a GitHub Release (a pre-release
+# Builds EFTPXL.XEX and the source disks (EFTPXL1.ATR, EFTPXL2.ATR) and
+# publishes them as a GitHub Release (a pre-release
 # while the version is 0.x). Two ways to start it:
 # - Actions > Release > Run workflow, on main, with the notes: it tags
-#   main's commit vX.Y, from VERSION in src/main.c;
+#   main's commit vX.Y, from VERSION in ASM/EFTPXL.ASM;
 # - push a tag vX.Y that matches it: the tag's message (git tag -a) is
 #   the notes.
 on:
@@ -20,24 +21,22 @@ permissions:
   contents: write
 
 env:
-  # cc65 from git (2.19 is too old for fujinet-lib), at the commit the
+  # ATasm (Mac/65's source on another computer), at the commit the
   # releases are built and checked with
-  CC65_REV: a6530f46914232c085c281c4bf84e87bd136596f
+  ATASM_REV: 46be895a4312205dbcc4cf7a4a6721d72219d711
 
 jobs:
   release:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
       - name: Which release
         run: |
-          V=$(sed -n 's/^#define VERSION *"\(.*\)"/\1/p' src/main.c)
+          V=$(sed -n 's/^VERSION *\.BYTE "EFTP_XL \(.*\)"/\1/p' ASM/EFTPXL.ASM)
           if [ "$GITHUB_REF_TYPE" = tag ]; then
             TAG=$GITHUB_REF_NAME
             if [ "$TAG" != "v$V" ]; then
-              echo "::error::tag $TAG, but src/main.c says $V"
+              echo "::error::tag $TAG, but ASM/EFTPXL.ASM says $V"
               exit 1
             fi
           else
@@ -47,19 +46,19 @@ jobs:
               exit 1
             fi
             if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null; then
-              echo "::error::$TAG is out already: raise VERSION in src/main.c first"
+              echo "::error::$TAG is out already: raise VERSION in ASM/EFTPXL.ASM first"
               exit 1
             fi
           fi
           echo "TAG=$TAG" >> "$GITHUB_ENV"
           echo "VERSION=$V" >> "$GITHUB_ENV"
-      - name: cc65
+      - name: ATasm
         run: |
-          git init -q "$RUNNER_TEMP/cc65"
-          git -C "$RUNNER_TEMP/cc65" fetch -q --depth 1 https://github.com/cc65/cc65 "$CC65_REV"
-          git -C "$RUNNER_TEMP/cc65" checkout -q FETCH_HEAD
-          make -C "$RUNNER_TEMP/cc65" -j"$(nproc)" >/dev/null
-          echo "$RUNNER_TEMP/cc65/bin" >> "$GITHUB_PATH"
+          git init -q "$RUNNER_TEMP/atasm"
+          git -C "$RUNNER_TEMP/atasm" fetch -q --depth 1 https://github.com/CycoPH/atasm "$ATASM_REV"
+          git -C "$RUNNER_TEMP/atasm" checkout -q FETCH_HEAD
+          make -C "$RUNNER_TEMP/atasm/src" -j"$(nproc)" >/dev/null
+          echo "$RUNNER_TEMP/atasm/src" >> "$GITHUB_PATH"
       - name: Build
         run: make dist RELEASE=1
       - name: Publish

@@ -1,9 +1,10 @@
 # EFTP_XL
 
 File transfer for 8-bit Atari computers (400/800/XL/XE) over
-[FujiNet](https://fujinet.online), written in C with cc65. Connects to any
-FTP server (a Mac, a NAS, a Linux box) and moves files between it and your
-Atari drives.
+[FujiNet](https://fujinet.online), written in 6502 assembly for Mac/65,
+so it can be built on the Atari as well. Connects to any FTP server (a
+Mac, a NAS, a Linux box) and moves files between it and your Atari
+drives.
 
 EFTP_XL has its own FTP client. It talks to the server over plain FujiNet
 TCP connections (`N1:` for commands, `N2:` for data in passive mode), so it
@@ -12,8 +13,8 @@ password. FujiNet's built-in FTP protocol is not used: up to firmware 1.6.1
 it always logs in as `anonymous` on port 21.
 
 Works with DOS 2.5 and SpartaDOS 3.x. All local file access goes through CIO,
-so any CIO-compatible DOS should work. Files are transferred as raw binary
-with no conversion.
+so any CIO-compatible DOS should work. Files go as they are, or as text
+with their line ends changed (the site's Files setting).
 
 ## Status
 
@@ -55,12 +56,9 @@ FTP is unencrypted, so only use it on your home network.
 1. Get `EFTPXL.XEX` from the
    [latest release](https://github.com/whomper/EFTP_XL/releases) onto a disk
    the Atari can read, e.g. an ATR on the FujiNet SD card or a TNFS share.
-2. Turn BASIC off (hold OPTION while booting DOS 2.5): the program needs
-   the 48K that leaves free. With BASIC on, the loader says there is not
-   enough memory.
-3. Load it: `L` from the DOS 2.5 menu, or type `EFTPXL` at the SpartaDOS
+2. Load it: `L` from the DOS 2.5 menu, or type `EFTPXL` at the SpartaDOS
    prompt.
-4. Press ^K for the sites, ^N to add one: a name, the server (IP address
+3. Press ^K for the sites, ^N to add one: a name, the server (IP address
    or name), port (21 unless your server uses another), user and
    password, the folder on the server to start in, and the folder on the
    Atari (e.g. `D1:>DOWNLOAD>`). RETURN on a site connects.
@@ -129,29 +127,64 @@ Notes:
 - A blank user logs in as `anonymous`.
 - On an error the info line shows the server's own reply, for example
   `530 Login incorrect`.
-- The program loads at `$2000`, above DOS 2.5's and SpartaDOS 3's MEMLO
-  (EDOS loads at `$1E00`). Start it from DOS, not with EDOS's Load
-  Binary: it would load over EDOS while EDOS is still loading it. If a
-  DOS's MEMLO is higher, the loader says "Program would load below
-  MEMLO" and goes back to DOS.
+- The program takes `$4000`-`$953F`: above EDOS (`$1E00`-`$3752`) and
+  the MEMLO of DOS 2.5 and SpartaDOS 3, and below a cartridge, so BASIC
+  can stay on. If a DOS's MEMLO is above `$4000`, the program says so
+  and goes back to DOS before loading itself.
 
 ## Building
 
-You need a recent [cc65](https://github.com/cc65/cc65) built from git (the
-2.19 release is too old for fujinet-lib):
+The program is 6502 assembly in Mac/65's form, in [ASM](ASM):
+`EFTPXL.ASM` is the main file and includes the others. It is 13.8K, the
+font included; the first version, in C with cc65, was 27K, and is kept
+in [C](C) for reference.
+
+**On another computer** with [ATasm](https://github.com/CycoPH/atasm), a
+cross-assembler that takes Mac/65's source:
 
 ```sh
-git clone https://github.com/cc65/cc65 && make -C cc65
-export PATH="$PWD/cc65/bin:$PATH"
+git clone https://github.com/CycoPH/atasm && make -C atasm/src
+export PATH="$PWD/atasm/src:$PATH"
 
-git clone --recurse-submodules https://github.com/whomper/EFTP_XL
+git clone https://github.com/whomper/EFTP_XL
 cd EFTP_XL
-make
+make            # bin/EFTPXL.XEX
+make atr        # bin/EFTPXL1.ATR, bin/EFTPXL2.ATR: the sources, for the Atari
 ```
 
-The output is `bin/EFTPXL.XEX`. `START_ADDR` changes the load address, for
-example `make START_ADDR=0x2800`. `bin/` and `dist/` are what make builds;
-they are never committed.
+`bin/` and `dist/` are what make builds; they are never committed.
+
+**On the Atari** with Mac/65. `make atr` puts the sources on two DOS 2
+disks (single density; DOS 2.5 and SpartaDOS read them) as Mac/65 takes
+them: ATASCII, numbered lines. A release has these disks too.
+
+1. Copy all the files of both disks to one disk, or one SpartaDOS
+   folder, and make it the default drive (`D:`).
+2. In Mac/65, each file but `EFTPXL.ASM` into Mac/65's own form, which
+   `.INCLUDE` reads:
+
+   ```
+   NEW
+   ENTER #D:SCREEN.ASM
+   SAVE #D:SCREEN.M65
+   ```
+
+   for `EQUATES`, `FONT`, `UI`, `CMDS`, `XFER`, `XSHOW`, `SITES`, `FTP`,
+   `REMOTE`, `LOCAL`, `PANE`, `SCREEN`, `TEXT` and `DATA`.
+3. Then the main file, which includes them:
+
+   ```
+   NEW
+   ENTER #D:EFTPXL.ASM
+   ASM ,,#D:EFTPXL.XEX
+   ```
+
+The source keeps to what Mac/65 and ATasm both take: labels of letters
+and digits, `*=*+n` for room (no `.DS`), the font as `.BYTE` lines (no
+`.INCBIN`), `[ ]` around expressions, one level of `.INCLUDE`. ATasm
+builds the same program from the files on those disks (`make atr`
+checks this is so with `tools/atari_src.py --check`); Mac/65 itself is
+not run here.
 
 **Testing without an Atari.** `tools/sim.py` runs the real
 `bin/EFTPXL.XEX` on an emulated 6502 ([py65](https://github.com/mnaberez/py65)),
@@ -163,7 +196,7 @@ program's FTP client talks to a real server:
 
 ```sh
 pip install py65 pillow
-tools/sim.py --d1 disk --shots shot '^K^NTest\n192.168.1.20\n21\nATARI\nSECRET\n/\n\n\n\n\s'
+make && tools/sim.py --d1 disk --shots shot '^K^NTest\n192.168.1.20\n21\nATARI\nSECRET\n/\n\n\n\n\s'
 ```
 
 The keys are what you would type (`\n` RETURN, `\e` ESC, `\t` TAB, `\b`
@@ -172,18 +205,23 @@ a snapshot: the screen as text, and `shot-N.png` as the Atari shows it.
 `--dos dos2` lists D1: as DOS 2.5 does (SpartaDOS 3 otherwise), and
 `--sio-log` shows every FTP command sent.
 
-**Versions and releases.** `VERSION` in `src/main.c` holds the last
+`make test` (`tools/test_sim.py`, with `pip install py65 pyftpdlib`) runs
+the program that way against an FTP server it starts, through 26 checks:
+sites, both panes, downloads and uploads (binary and text), the replace
+question, ESC, new folder, rename and delete on both sides, DOS 2.5.
+
+**Versions and releases.** `VERSION` in `ASM/EFTPXL.ASM` holds the last
 release, and a release build (`make RELEASE=1`) shows it at startup; any
 other build shows `0.2-dev`. To release: raise `VERSION`, commit and push,
 then run the Release workflow (Actions > Release > Run workflow, on main)
 with what is new: [`.github/workflows/release.yml`](.github/workflows/release.yml)
-builds cc65 (at a fixed commit) and the program, tags the commit `vX.Y`
-and publishes `EFTPXL.XEX` as a GitHub Release (a pre-release while the
+builds ATasm (at a fixed commit) and the program, tags the commit `vX.Y`
+and publishes `EFTPXL.XEX` and the source disks as a GitHub Release (a pre-release while the
 version is 0.x). Pushing a tag made with `git tag -a` does the same, with
 the tag's message as the notes.
 
-[fujinet-lib](https://github.com/FujiNetWIFI/fujinet-lib) is included as a
-submodule (GPL-3.0).
+The C version in `C/` uses [fujinet-lib](https://github.com/FujiNetWIFI/fujinet-lib),
+a submodule (GPL-3.0); the program in assembly uses no library.
 
 ## Licence
 
@@ -196,5 +234,5 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See [COPYING](COPYING).
 
 Copyright (C) 2026 AERA | Erez Yaary.
 
-`EFTPXL.XEX` is linked with fujinet-lib (GPL-3.0), so the built program
-as a whole is distributed under the GPL version 3.
+The C version, linked with fujinet-lib (GPL-3.0), is distributed as a
+whole under the GPL version 3.

@@ -1,39 +1,39 @@
-# EFTP_XL build. Needs a recent cc65 (built from git; the 2.19 release is too
-# old for fujinet-lib) on the PATH.
+# EFTP_XL build: the Mac/65 sources in ASM/, assembled with ATasm
+# (https://github.com/CycoPH/atasm, Mac/65 compatible) on the PATH.
 #
 #   make            bin/EFTPXL.XEX
 #   make dist       a release's files in dist/
+#   make atr        bin/EFTPXL1.ATR, 2: the sources as Mac/65 takes them
+#   make test       tools/test_sim.py (pip install py65 pyftpdlib)
 #
-# bin/ is what make builds, never committed: releases carry the program
-# (.github/workflows/release.yml). VERSION in src/main.c holds the last
-# release, which a release build (RELEASE=1) shows; others show "x.y-dev".
+# bin/ and dist/ are what make builds, never committed: releases carry
+# the program (.github/workflows/release.yml). VERSION in ASM/EFTPXL.ASM
+# holds the last release, which a release build (RELEASE=1) shows;
+# others show "x.y-dev". The first version, in C, is in C/.
 
-CL65       ?= cl65
+ATASM      ?= atasm
+PYTHON     ?= python3
 PROGRAM    := bin/EFTPXL.XEX
-SRCS       := src/main.c src/screen.c src/pane.c src/local.c src/remote.c \
-              src/sites.c src/xfer.c src/ftp.c src/cio.s src/font.s
-
-# Load address, 1K-aligned (the font comes first): cc65's default. DOS
-# 2.5's and SpartaDOS 3's MEMLO are below $1E00, where EDOS loads; if a
-# DOS's is higher, cc65's loader check says so.
-START_ADDR ?= 0x2000
-
-FNLIB_DIR  := fujinet-lib
-FNLIB      := $(FNLIB_DIR)/r2r/atari/fujinet.atari.lib
-
-CFLAGS     := -t atari -O -W error -I $(FNLIB_DIR)/include --bin-include-dir fonts $(if $(RELEASE),-D RELEASE)
-LDFLAGS    := --start-addr $(START_ADDR) -C src/eftpxl.cfg
+SRCS       := $(wildcard ASM/*.ASM)
 
 # whether the last build was a release, so that changing RELEASE rebuilds
 RELFLAG    := bin/release.flag
 
-.PHONY: all dist clean distclean FORCE
+.PHONY: all dist atr test clean FORCE
 
 all: $(PROGRAM)
 
-$(PROGRAM): Makefile $(SRCS) src/*.h src/eftpxl.cfg fonts/EFTPXL.FNT $(FNLIB) $(RELFLAG)
+# The main file names its parts as Mac/65 on the Atari does,
+# ".INCLUDE #D:SCREEN.M65"; ATasm gets them as ASM/SCREEN.ASM.
+$(PROGRAM): Makefile $(SRCS) $(RELFLAG)
 	mkdir -p bin
-	$(CL65) $(CFLAGS) $(LDFLAGS) -o $@ $(SRCS) $(FNLIB)
+	sed -e 's/#D:\([A-Z0-9]*\)\.M65/\1.ASM/' \
+	    $(if $(RELEASE),-e 's/\(DEVTAG *\)\.BYTE .*/\1.BYTE 0/') \
+	    ASM/EFTPXL.ASM > bin/EFTPXL.ASM
+	$(ATASM) -s -mac65 -IASM -o$@ bin/EFTPXL.ASM > bin/EFTPXL.LST
+
+ASM/FONT.ASM: fonts/EFTPXL.FNT tools/font2asm.py
+	$(PYTHON) tools/font2asm.py
 
 $(RELFLAG): FORCE
 	@mkdir -p bin
@@ -41,16 +41,26 @@ $(RELFLAG): FORCE
 	@if cmp -s $@.new $@; then rm $@.new; else mv $@.new $@; fi
 FORCE:
 
-dist: all
+# the sources on Atari disks; ATasm must build the same program from them
+atr: $(PROGRAM)
+	rm -rf bin/atr bin/EFTPXL?.ATR
+	mkdir -p bin/atr
+	$(PYTHON) tools/atari_src.py bin/EFTPXL.ATR $(SRCS)
+	$(PYTHON) tools/atari_src.py --check --to bin/atr bin/EFTPXL?.ATR > /dev/null
+	sed -e 's/#D:\([A-Z0-9]*\)\.M65/\1.ASM/' \
+	    $(if $(RELEASE),-e 's/\(DEVTAG *\)\.BYTE .*/\1.BYTE 0/') \
+	    bin/atr/EFTPXL.ASM > bin/atr/MAIN.ASM
+	cd bin/atr && $(ATASM) -s -mac65 -oCHECK.XEX MAIN.ASM > /dev/null
+	cmp bin/atr/CHECK.XEX $(PROGRAM)
+	rm -rf bin/atr
+
+test: all
+	$(PYTHON) tools/test_sim.py
+
+dist: all atr
 	rm -rf dist
 	mkdir -p dist
-	cp $(PROGRAM) dist/
-
-$(FNLIB):
-	$(MAKE) -C $(FNLIB_DIR) atari
+	cp $(PROGRAM) bin/EFTPXL?.ATR dist/
 
 clean:
-	rm -rf bin dist src/*.o
-
-distclean: clean
-	$(MAKE) -C $(FNLIB_DIR) clean
+	rm -rf bin dist
