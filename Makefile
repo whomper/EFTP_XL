@@ -11,11 +11,11 @@
 CL65       ?= cl65
 PROGRAM    := bin/EFTPXL.XEX
 SRCS       := src/main.c src/screen.c src/pane.c src/local.c src/remote.c \
-              src/sites.c src/ftp.c src/cio.s src/font.s
+              src/sites.c src/xfer.c src/ftp.c src/cio.s src/font.s
 
-# Load address. Above SpartaDOS 3.x / DOS 2.5 MEMLO with room to spare;
-# lower it to gain RAM once MEMLO on your setup is known.
-START_ADDR ?= 0x3000
+# Load address, 1K-aligned (the font comes first). Above DOS 2.5's and
+# SpartaDOS 3's MEMLO; if a DOS's is higher, cc65's loader check says so.
+START_ADDR ?= 0x2800
 
 FNLIB_DIR  := fujinet-lib
 FNLIB      := $(FNLIB_DIR)/r2r/atari/fujinet.atari.lib

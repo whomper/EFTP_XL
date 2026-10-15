@@ -27,7 +27,10 @@
 
 char ftp_msg[FTP_MSG_LEN];
 
-static char spec[MAX_FILENAME_LEN];     /* network_open sends 256 bytes */
+static unsigned int timeout = TIMEOUT;
+
+unsigned char ftp_buf[512];
+#define spec ((char *)ftp_buf)            /* network_open sends 256 bytes */
 static char host_name[64];
 static char line[160];                  /* LIST lines can be long */
 static char cmd[FTP_MSG_LEN + 8];
@@ -73,7 +76,7 @@ static int conn_getc(conn_t *c)
         }
         if (!connected)
             return -FTP_ERR_CLOSED;
-        if ((unsigned int)(ticks() - start) > TIMEOUT)
+        if ((unsigned int)(ticks() - start) > timeout)
             return -FTP_ERR_TIMEOUT;
     }
 }
@@ -102,7 +105,7 @@ static int conn_gets(conn_t *c, char *s, unsigned char len)
 
 static int conn_open(conn_t *c, const char *port)
 {
-    memset(spec, 0, sizeof(spec));
+    memset(spec, 0, MAX_FILENAME_LEN);
     strcpy(spec, c->dev);
     strcat(spec, "TCP://");
     strcat(spec, host_name);
@@ -240,7 +243,8 @@ static int passive(char *port)
     return 0;
 }
 
-int ftp_list(void (*show)(char *line))
+/* Passive mode, the data connection, then verb (LIST, RETR, STOR). */
+static int data_open(const char *verb, const char *arg)
 {
     int r;
     char port[6];
@@ -251,20 +255,81 @@ int ftp_list(void (*show)(char *line))
         strcpy(ftp_msg, "Could not open data connection.");
         return FTP_ERR_OPEN;
     }
-
-    r = send_cmd("LIST", NULL);
+    r = send_cmd(verb, arg);
     if (r != 125 && r != 150) {
         network_close(DAT);
         return r;
     }
+    return 0;
+}
 
+int ftp_list(void (*show)(char *line))
+{
+    int r;
+
+    if ((r = data_open("LIST", NULL)) != 0)
+        return r;
     while (conn_gets(&dat, line, sizeof(line)) == 0)
         if (line[0])
             show(line);
-    network_close(DAT);
+    return ftp_done();
+}
 
+int ftp_retr(const char *name)
+{
+    return data_open("RETR", name);
+}
+
+int ftp_stor(const char *name)
+{
+    return data_open("STOR", name);
+}
+
+int ftp_read(unsigned char *buf, unsigned int len)
+{
+    unsigned int start = ticks();
+    uint16_t avail;
+    uint8_t connected, err;
+    int16_t n;
+
+    for (;;) {
+        if (network_status(DAT, &avail, &connected, &err) != FN_ERR_OK)
+            return -FTP_ERR_CLOSED;
+        if (avail) {
+            n = network_read_nb(DAT, buf, avail < len ? avail : len);
+            return n > 0 ? n : -FTP_ERR_CLOSED;
+        }
+        if (!connected)
+            return 0;
+        if ((unsigned int)(ticks() - start) > timeout)
+            return -FTP_ERR_TIMEOUT;
+    }
+}
+
+int ftp_write(const unsigned char *buf, unsigned int len)
+{
+    return network_write(DAT, buf, len) == FN_ERR_OK ? 0 : FTP_ERR_CLOSED;
+}
+
+int ftp_done(void)
+{
+    int r;
+
+    network_close(DAT);
     r = reply();
     return r == 226 || r == 250 ? 0 : r;
+}
+
+void ftp_abort(void)
+{
+    /* Closing the data connection ends the transfer; the server then
+       says so (426, sometimes a 226 after it). Read what comes within a
+       second or two, so it isn't taken for the next command's reply. */
+    network_close(DAT);
+    timeout = 2 * 60;
+    while (reply() >= 100)
+        ;
+    timeout = TIMEOUT;
 }
 
 void ftp_quit(void)

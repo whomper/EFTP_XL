@@ -17,9 +17,9 @@ with no conversion.
 
 ## Status
 
-**Step 2.** The full-screen program: the Atari and the server side by
-side, after EFTP on the ST, in EDOS's font and colours. Transfers come
-next.
+**Step 3.** The full-screen program, after EFTP on the ST, in EDOS's
+font and colours: the Atari and the server side by side, and files going
+both ways.
 
 ![EFTP_XL connected to a server (tools/sim.py)](docs/design/eftpxl-running.png)
 
@@ -30,9 +30,10 @@ The design for the finished program, transfers included, is in
 - [x] Two panes: browse folders on the Atari (D1:-D8:, SpartaDOS
       folders) and on the server
 - [x] Sites, saved in `EFTPXL.CFG`
-- [ ] Download a file to `Dn:`
-- [ ] Upload a file from `Dn:`
+- [x] Download and upload files, marked ones one after the other, with
+      progress, speed, ESC to stop, and text line ends converted
 - [ ] Delete / rename / new folder
+- [ ] Folders with everything in them
 
 ## The server
 
@@ -72,7 +73,9 @@ file under the cursor, then the transfers.
 | Key            | Does                                    |
 |----------------|-----------------------------------------|
 | ^K / ^D        | the sites (connect) / disconnect        |
-| RETURN         | open the folder                         |
+| RETURN         | open the folder, send the file          |
+| ^T             | send the marked files                   |
+| ESC            | stop the transfer                       |
 | BACKSPACE      | the folder up                           |
 | TAB            | the other pane                          |
 | ↑ ↓ (or - =)   | move; ← → (or + \*) a page              |
@@ -83,8 +86,26 @@ file under the cursor, then the transfers.
 | HELP (or ?)    | the keys                                |
 | ^Q             | quit to DOS                             |
 
-The keys are EFTP's. ^T (send), ^N (new folder), ^E (rename) and DEL
-come with the transfers.
+The keys are EFTP's. ^N (new folder), ^E (rename) and DEL come next.
+
+**Sending files.** RETURN on a file sends it to the other side; mark
+several with SPACE (or ^A for all) and ^T sends them, one after the
+other. The transfers area shows them (Done, Waiting, a progress bar for
+the one going), the info line the speed, and at the end "3 files, 260K
+in 0:42 (6K/s)". ESC stops; a file stopped on its way to the Atari is
+deleted rather than left half there.
+
+- A file coming to the Atari gets a name DOS takes: up to 8 letters and
+  digits and 3 for the extension, in capitals (`STinG 1.26.zip` becomes
+  `STING126.ZIP`). Atari names go to the server as they are.
+- When the file is already there, EFTP_XL asks before replacing it.
+- The site's **Files** setting: *Binary* sends every byte as it is;
+  *Text* changes the line ends (CR LF on the server, EOL on the Atari,
+  and the TAB character); *By type* does that for EFTP's text types (TXT,
+  ASC, DOC, ME, NFO, DIZ, HTM, HTML, INF) and LST, and sends the rest as
+  binary.
+- On DOS 2.5 a file's size is counted in sectors, so the size shown for
+  an Atari file (and its progress) is close, not exact.
 
 Notes:
 
@@ -96,8 +117,9 @@ Notes:
 - A blank user logs in as `anonymous`.
 - On an error the info line shows the server's own reply, for example
   `530 Login incorrect`.
-- The program loads at `$3000`. If DOS's MEMLO is higher, the loader
-  stops with an error. Let me know your value and we'll adjust.
+- The program loads at `$2800`. If DOS's MEMLO is higher, the loader
+  says "Program would load below MEMLO"; let me know your value and
+  we'll adjust.
 
 ## Building
 

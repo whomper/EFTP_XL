@@ -25,6 +25,7 @@
 #include "remote.h"
 #include "ftp.h"
 #include "sites.h"
+#include "xfer.h"
 #include "ui.h"
 
 /* the last release; a release build (RELEASE=1) shows it as it is,
@@ -42,7 +43,6 @@
 #define LIST_ROW    5
 #define VIS         11          /* files shown in a pane */
 #define DETAIL_ROW  17
-#define XFER_ROW    18
 #define KEYS_ROW    23
 
 #define MAX_LOCAL   64
@@ -52,15 +52,15 @@
 #define REMOTE      1
 
 static entry_t local_ent[MAX_LOCAL], remote_ent[MAX_REMOTE];
-static char local_pool[1024], remote_pool[2048];
+static char local_pool[1024], remote_pool[1536];
 static pane_t pane[2];
 static unsigned char active;
 static unsigned char connected;
 static signed char site = -1;
 
-static char msg[64];
+static char msg[100];           /* a reply (79) or a path (80), and words */
 static char tmp[PATH_LEN];
-static char pass[24];
+static char pass[20];
 
 static const unsigned char col0[2] = { SCR_L, DIV + 1 };
 static const unsigned char width[2] = { DIV - SCR_L, SCR_R - DIV };
@@ -105,8 +105,7 @@ static void draw_frame(void)
     scr_rule(XFER_ROW);
     scr_put(XFER_ROW, SCR_L + 1, " Transfers ", 0);
     scr_rule(22);
-    scr_put(19, SCR_L, "Nothing yet. Sending files comes", 0);
-    scr_put(20, SCR_L, "in the next version.", 0);
+    xfer_draw();
 }
 
 /* Fit s into w columns: the end of it if it's too long, after "..." */
@@ -178,10 +177,10 @@ static void draw_details(void)
             total += p->ent[i].size;
         }
     if (n) {
-        utoa(n, msg, 10);
-        strcat(msg, " marked, ");
-        fmt_size(total, size);
-        strcat(msg, size);
+        sb_start(msg);
+        sb_num(n);
+        sb_add(" marked, ");
+        sb_size(total);
         scr_put(DETAIL_ROW, SCR_L, msg, 0);
         return;
     }
@@ -200,8 +199,10 @@ static void draw_details(void)
         fmt_size(e->size, size);
         c = scr_put(DETAIL_ROW, c, size, 0) + 1;
     }
-    if (c + strlen(e->date) <= SCR_R + 1)
-        scr_put(DETAIL_ROW, c, e->date, 0);
+    sb_start(msg);
+    sb_stamp(&e->when);
+    if (c + strlen(msg) <= SCR_R + 1)
+        scr_put(DETAIL_ROW, c, msg, 0);
 }
 
 static void draw_pane(unsigned char side)
@@ -220,12 +221,13 @@ static void draw_pane(unsigned char side)
         return;
     }
     put_tail(HEAD_ROW, c, p->path, w, side == active);
-    utoa(p->dirs, msg, 10);
-    strcat(msg, p->dirs == 1 ? " dir " : " dirs ");
-    utoa(p->files, msg + strlen(msg), 10);
-    strcat(msg, p->files == 1 ? " file" : " files");
+    sb_start(msg);
+    sb_num(p->dirs);
+    sb_add(p->dirs == 1 ? " dir " : " dirs ");
+    sb_num(p->files);
+    sb_add(p->files == 1 ? " file" : " files");
     if (p->full)
-        strcat(msg, "+");
+        sb_add("+");
     scr_putw(COUNT_ROW, c, msg, w, 0);
     draw_list(side);
 }
@@ -245,14 +247,15 @@ static void draw_all(void)
 
 static void report(const char *what, int r)
 {
-    strcpy(msg, what);
-    strcat(msg, ": ");
+    sb_start(msg);
+    sb_add(what);
+    sb_add(": ");
     if (r == FTP_ERR_TIMEOUT)
-        strcat(msg, "no answer");
+        sb_add("no answer");
     else if (r == FTP_ERR_CLOSED)
-        strcat(msg, "connection closed");
+        sb_add("connection closed");
     else
-        strncat(msg, ftp_msg, sizeof(msg) - strlen(msg) - 1);
+        sb_add(ftp_msg);
     ui_info(msg);
     if (r == FTP_ERR_CLOSED || r == FTP_ERR_TIMEOUT)
         connected = 0;
@@ -265,9 +268,10 @@ static void read_local(void)
     ui_info("Reading the disk...");
     st = local_read(&pane[LOCAL]);
     if (st >= 128) {
-        strcpy(msg, pane[LOCAL].path);
-        strcat(msg, " error ");
-        utoa(st, msg + strlen(msg), 10);
+        sb_start(msg);
+        sb_add(pane[LOCAL].path);
+        sb_add(" error ");
+        sb_num(st);
         ui_info(msg);
     } else
         ui_info(connected ? sites[site].name : "Not connected");
@@ -319,9 +323,10 @@ static void connect(unsigned char i)
     draw_all();
     strcpy(pass, s->pass);
     if (!pass[0]) {
-        strcpy(msg, "Password for ");
-        strcat(msg, s->name);
-        strcat(msg, ":");
+        sb_start(msg);
+        sb_add("Password for ");
+        sb_add(s->name);
+        sb_add(":");
         ui_info(msg);
         if (scr_edit(1, SCR_L + strlen(msg) + 1, SCR_R - SCR_L - strlen(msg)
                      - 1, pass, sizeof(pass), 1) == K_ESC) {
@@ -329,9 +334,10 @@ static void connect(unsigned char i)
             return;
         }
     }
-    strcpy(msg, "Connecting to ");
-    strcat(msg, s->name);
-    strcat(msg, "...");
+    sb_start(msg);
+    sb_add("Connecting to ");
+    sb_add(s->name);
+    sb_add("...");
     ui_info(msg);
     if ((r = ftp_connect(s->host, s->port)) != 0) {
         report("Connect", r);
@@ -354,6 +360,40 @@ static void connect(unsigned char i)
     }
     read_remote();
     active = connected ? REMOTE : LOCAL;
+}
+
+/* -- sending */
+
+/* Read a pane again, keeping the cursor on the same name. */
+static void reread(unsigned char side)
+{
+    pane_t *p = &pane[side];
+
+    tmp[0] = '\0';
+    if (p->count)
+        strcpy(tmp, p->ent[p->cur].name);
+    if (side == LOCAL)
+        local_read(p);
+    else
+        remote_read(p);
+    find(p, tmp);
+}
+
+static void send(unsigned char cursor_only)
+{
+    if (!connected) {
+        ui_info("Not connected: ^K picks a site");
+        return;
+    }
+    if (xfer_send(&pane[LOCAL], &pane[REMOTE], active == REMOTE,
+                  sites[site].mode, cursor_only)) {
+        reread(LOCAL);
+        reread(REMOTE);
+        draw_frame();
+        draw_pane(LOCAL);
+        draw_pane(REMOTE);
+        draw_details();
+    }
 }
 
 /* -- moving about */
@@ -425,7 +465,7 @@ static void open_entry(void)
         return;
     }
     if (!(e->flags & E_DIR)) {
-        ui_info("Sending files comes next version.");
+        send(1);
         return;
     }
     strcpy(tmp, e->name);
@@ -510,7 +550,7 @@ static void help(void)
         scr_put(4 + i / 2, SCR_L + 10, keys[i + 1], 0);
     }
     scr_put(18, SCR_L + 2, "The same keys as EFTP on the ST.", 0);
-    scr_put(19, SCR_L + 2, "^N ^E ^T DEL: next version.", 0);
+    scr_put(19, SCR_L + 2, "^N ^E DEL: next version.", 0);
     scr_put(21, SCR_L + 2, "Any key", 1);
     scr_put(21, SCR_L + 10, "back", 0);
     key_get();
@@ -609,7 +649,10 @@ int main(void)
             disconnect();
             scr_done();
             return EXIT_SUCCESS;
-        case CTRL('T'): case CTRL('N'): case CTRL('E'): case K_DEL:
+        case CTRL('T'):
+            send(0);
+            break;
+        case CTRL('N'): case CTRL('E'): case K_DEL:
         case K_DEL2:
             ui_info("That comes in the next version.");
             break;

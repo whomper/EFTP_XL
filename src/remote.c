@@ -19,7 +19,7 @@
 #include "remote.h"
 
 static pane_t *target;
-static char date[DATE_LEN];
+static stamp_t when;
 
 static const char months[] = "JanFebMarAprMayJunJulAugSepOctNovDec";
 
@@ -40,30 +40,22 @@ static void word(char *dst, const char *s, unsigned char max)
     *dst = '\0';
 }
 
-/* "Oct 15 15:20" -> "15.10 15:20", "Apr 22 2024" -> "22.04.24" */
+/* "Oct 15 15:20" (this year) or "Apr 22 2024" */
 static void unix_date(char *mon, char *day, char *t)
 {
     char m[4], *f;
-    unsigned char n = 0;
 
     word(m, mon, sizeof(m));
     f = strstr(months, m);
-    if (f && *m)
-        n = (f - months) / 3 + 1;
-    word(date, day, 3);
-    if (date[1] == '\0') {
-        date[1] = date[0];
-        date[0] = '0';
-        date[2] = '\0';
-    }
-    strcat(date, n < 10 ? ".0" : ".");
-    utoa(n, date + strlen(date), 10);
+    when.mon = f && *m ? (f - months) / 3 + 1 : 0;
+    when.day = atoi(day);
     if (t[2] == ':') {
-        strcat(date, " ");
-        strncat(date, t, 5);
+        when.year = NO;
+        when.hour = atoi(t);
+        when.min = atoi(t + 3);
     } else {
-        strcat(date, ".");
-        strncat(date, t + 2, 2);    /* "2024" -> "24" */
+        when.year = atoi(t) % 100;
+        when.hour = NO;
     }
 }
 
@@ -84,9 +76,11 @@ void remote_add_line(pane_t *p, char *s)
             flags = E_DIR;
         else
             size = atol(f[2]);
-        word(date, f[0], 9);
-        while ((arrow = strchr(date, '-')) != NULL)
-            *arrow = '.';
+        /* "10-15-26": month first */
+        when.mon = atoi(f[0]);
+        when.day = atoi(f[0] + 3);
+        when.year = atoi(f[0] + 6);
+        when.hour = NO;
     } else if (s[0] == '-' || s[0] == 'd' || s[0] == 'l') {
         f[0] = s;
         for (i = 1; i < 9; ++i)
@@ -105,7 +99,7 @@ void remote_add_line(pane_t *p, char *s)
 
     if (!strcmp(name, ".") || !strcmp(name, ".."))
         return;
-    pane_add(p, name, size, date, flags);
+    pane_add(p, name, size, &when, flags);
 }
 
 static void add(char *line)

@@ -18,7 +18,7 @@ void pane_clear(pane_t *p)
 }
 
 entry_t *pane_add(pane_t *p, const char *name, unsigned long size,
-                  const char *date, unsigned char flags)
+                  const stamp_t *when, unsigned char flags)
 {
     entry_t *e;
     unsigned int n = strlen(name) + 1;
@@ -32,8 +32,10 @@ entry_t *pane_add(pane_t *p, const char *name, unsigned long size,
     memcpy(e->name, name, n);
     p->pool_used += n;
     e->size = size;
-    strncpy(e->date, date ? date : "", DATE_LEN - 1);
-    e->date[DATE_LEN - 1] = '\0';
+    if (when)
+        e->when = *when;
+    else
+        e->when.day = 0;
     e->flags = flags;
     if (flags & E_DIR)
         ++p->dirs;
@@ -66,7 +68,15 @@ static int compare(const void *a, const void *b)
 
 void pane_sort(pane_t *p)
 {
-    qsort(p->ent, p->count, sizeof(entry_t), compare);
+    static entry_t e;
+    unsigned char i, j;
+
+    for (i = 1; i < p->count; ++i) {
+        e = p->ent[i];
+        for (j = i; j && compare(&p->ent[j - 1], &e) > 0; --j)
+            p->ent[j] = p->ent[j - 1];
+        p->ent[j] = e;
+    }
 }
 
 void fmt_size(unsigned long n, char *s)
@@ -86,4 +96,55 @@ void fmt_size(unsigned long n, char *s)
     k = (unsigned int)((n + 524288UL) >> 20);
     utoa(k, s, 10);
     strcat(s, "M");
+}
+
+static char *sb;
+
+void sb_start(char *s)
+{
+    sb = s;
+    *s = '\0';
+}
+
+void sb_add(const char *s)
+{
+    while ((*sb = *s++) != '\0')
+        ++sb;
+}
+
+void sb_num(unsigned int n)
+{
+    utoa(n, sb, 10);
+    sb += strlen(sb);
+}
+
+void sb_size(unsigned long n)
+{
+    fmt_size(n, sb);
+    sb += strlen(sb);
+}
+
+static void sb_2(unsigned char n)
+{
+    if (n < 10)
+        sb_add("0");
+    sb_num(n);
+}
+
+void sb_stamp(const stamp_t *w)
+{
+    if (!w->day)
+        return;
+    sb_2(w->day);
+    sb_add(".");
+    sb_2(w->mon);
+    if (w->year != NO) {
+        sb_add(".");
+        sb_2(w->year);
+    } else if (w->hour != NO) {
+        sb_add(" ");
+        sb_2(w->hour);
+        sb_add(":");
+        sb_2(w->min);
+    }
 }

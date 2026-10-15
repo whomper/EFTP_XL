@@ -20,6 +20,10 @@
 #define FTP_ERR_CLOSED  3       /* server closed the connection */
 #define FTP_ERR_REPLY   4       /* reply we could not understand */
 
+/* 512 bytes for file data; ftp_* use it only while opening a
+   connection (FujiNet takes the 256-byte N: spec from it). */
+extern unsigned char ftp_buf[512];
+
 /* Last reply line from the server, e.g. "530 Login incorrect." */
 extern char ftp_msg[FTP_MSG_LEN];
 
@@ -32,6 +36,17 @@ int ftp_pwd(char *buf, unsigned char len);
 
 /* List the current directory, calling show() for each line received. */
 int ftp_list(void (*show)(char *line));
+
+/* A file: ftp_retr or ftp_stor opens it, ftp_read / ftp_write move the
+   bytes, ftp_done ends it (0, or the server's reply), ftp_abort stops
+   it early. ftp_read returns the bytes read, 0 at the end of the file,
+   or a negative FTP_ERR_*. */
+int ftp_retr(const char *name);
+int ftp_stor(const char *name);
+int ftp_read(unsigned char *buf, unsigned int len);
+int ftp_write(const unsigned char *buf, unsigned int len);
+int ftp_done(void);
+void ftp_abort(void);
 
 void ftp_quit(void);
 

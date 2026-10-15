@@ -31,7 +31,7 @@ unsigned int local_free;
 static char line[64];
 static char spec[PATH_LEN + 4];
 static char name[13];
-static char date[DATE_LEN];
+static stamp_t when;
 
 unsigned char cio_open(const char *s, unsigned char aux1, unsigned char aux2)
 {
@@ -75,6 +75,36 @@ unsigned char cio_putline(const char *s)
     return cio(LOCAL_IOCB);
 }
 
+unsigned char cio_read(void *buf, unsigned int len, unsigned int *got)
+{
+    unsigned char st;
+
+    IO->command = 7;
+    IO->buffer = buf;
+    IO->buflen = len;
+    st = cio(LOCAL_IOCB);
+    *got = IO->buflen;
+    return st;
+}
+
+unsigned char cio_write(const void *buf, unsigned int len)
+{
+    IO->command = 11;
+    IO->buffer = (void *)buf;
+    IO->buflen = len;
+    return cio(LOCAL_IOCB);
+}
+
+unsigned char cio_xio(unsigned char cmd, const char *spec)
+{
+    cio_close();
+    IO->command = cmd;
+    IO->buffer = (void *)spec;
+    IO->buflen = strlen(spec);
+    IO->aux1 = IO->aux2 = 0;
+    return cio(LOCAL_IOCB);
+}
+
 void cio_close(void)
 {
     IO->command = 12;
@@ -97,14 +127,6 @@ static unsigned char words(char *s, char **w, unsigned char max)
         if (*s)
             *s++ = '\0';
     }
-}
-
-/* "12-03-89" -> "12.03.89", as EFTP shows dates */
-static void dots(char *d)
-{
-    for (; *d; ++d)
-        if (*d == '-')
-            *d = '.';
 }
 
 static void add_line(pane_t *p, char *s, unsigned char sparta)
@@ -150,7 +172,7 @@ static void add_line(pane_t *p, char *s, unsigned char sparta)
         strncat(name, w[i], 3);
         ++i;
     }
-    date[0] = '\0';
+    when.day = 0;
     if (i < n && !strcmp(w[i], "<DIR>")) {
         flags = E_DIR;
         ++i;
@@ -160,15 +182,13 @@ static void add_line(pane_t *p, char *s, unsigned char sparta)
             size *= SECTOR;
     }
     if (i < n) {
-        strncpy(date, w[i], 8);
-        date[8] = '\0';
-        dots(date);
-        if (i + 1 < n) {
-            strcat(date, " ");
-            strncat(date, w[i + 1], 5);
-        }
+        /* "12-03-89" */
+        when.day = atoi(w[i]);
+        when.mon = atoi(w[i] + 3);
+        when.year = atoi(w[i] + 6);
+        when.hour = NO;
     }
-    pane_add(p, name, size, date, flags);
+    pane_add(p, name, size, &when, flags);
 }
 
 unsigned char local_read(pane_t *p)

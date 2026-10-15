@@ -13,13 +13,13 @@
 #define MODE_BYTYPE 2
 
 typedef struct {
-    char name[20];
-    char host[40];
+    char name[16];
+    char host[32];
     char port[6];
-    char user[24];
-    char pass[24];          /* blank: asked for when connecting */
-    char rdir[48];          /* folder on the server */
-    char ldir[32];          /* folder on the Atari, e.g. D1:>DOWNLOAD> */
+    char user[20];
+    char pass[20];          /* blank: asked for when connecting */
+    char rdir[40];          /* folder on the server */
+    char ldir[24];          /* folder on the Atari, e.g. D1:>DOWNLOAD> */
     unsigned char mode;
 } site_t;
 

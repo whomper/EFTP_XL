@@ -19,8 +19,8 @@ stood in for, the way EDOS's tools/sim.py tests EDOS:
     sim.py [--d1 DIR] [--dos sparta|dos2] [--shots PREFIX] [--sio-log] KEYS
 
 KEYS is what to type: "\\n" RETURN, "\\e" ESC, "\\t" TAB, "\\b" BACKSPACE,
-"\\u" "\\d" up and down, "\\h" HELP, "^X" Ctrl+X, and "\\s" takes a
-snapshot of the screen (printed, and PREFIX-N.png with --shots). The run
+"\\u" "\\d" up and down, "\\h" HELP, "^X" Ctrl+X, "\\w" waits until the
+program is idle (after a transfer), and "\\s" takes a snapshot of the screen (printed, and PREFIX-N.png with --shots). The run
 ends when the program waits for a key and the script has none left.
 """
 import argparse
@@ -52,7 +52,8 @@ SCREEN = 0xBC40
 
 EOL = 0x9B
 STEPS_PER_TICK = 10000      # RTCLOK advances every this many instructions
-HELP, SHOT = 'help', 'shot'
+HELP, SHOT, WAIT = 'help', 'shot', 'wait'
+IDLE_GAP = 300             # polls this close together: waiting for a key
 
 
 class Stop(Exception):
@@ -244,6 +245,19 @@ class Disks:
                 return 170
             self.open[x] = dict(data=open(path, 'rb').read(), pos=0, write=False)
             return 1
+        if cmd in (32, 33):                                 # XIO RENAME / DELETE
+            spec = bytes(m[buf:buf + n]).split(b'\x9b')[0].decode('latin-1')
+            folder, name = self._resolve(spec.split(',')[0])
+            if folder is None:
+                return 130
+            path = os.path.join(folder, name)
+            if not os.path.exists(path):
+                return 170
+            if cmd == 33:
+                os.remove(path)
+            else:
+                os.rename(path, os.path.join(folder, spec.split(',')[1]))
+            return 1
         if cmd == 12:                                       # CLOSE
             if f and f['write']:
                 open(f['path'], 'wb').write(f['data'])
@@ -284,6 +298,7 @@ class Sim:
         self.eout = bytearray()
         self.steps = 0
         self.polls = 0
+        self.last_poll = 0
 
         self.poke(RAMTOP, [0xC0])
         self.poke_word(SAVMSC, SCREEN)
@@ -355,9 +370,16 @@ class Sim:
 
     def _keyboard(self):
         """Called when the program looks at CH (kbhit)."""
-        while self.keys and self.keys[0] == SHOT:
-            self.keys.pop(0)
-            self.snapshot()
+        idle = self.steps - self.last_poll < IDLE_GAP
+        self.last_poll = self.steps
+        while self.keys and self.keys[0] in (WAIT, SHOT):
+            if self.keys[0] == WAIT:
+                if not idle:
+                    return          # busy (a transfer): hold the keys back
+                self.keys.pop(0)
+            else:
+                self.keys.pop(0)
+                self.snapshot()
         if self.keys and self.keys[0] == HELP:
             if not self.mem[HELPFG]:
                 self.keys.pop(0)
@@ -367,7 +389,7 @@ class Sim:
             self.mem[CH] = 0x0C if self.mem[CH] == 0xFF else self.mem[CH]
             self.polls = 0
             return
-        self.polls += 1
+        self.polls = self.polls + 1 if idle else 0
         if self.polls > 200:
             raise Stop()
 
@@ -480,7 +502,8 @@ def parse_keys(s):
         c = s[i]
         if c == '\\' and i + 1 < len(s):
             k = s[i + 1]
-            out.append(HELP if k == 'h' else SHOT if k == 's' else named.get(k, ord(k)))
+            out.append(HELP if k == 'h' else SHOT if k == 's' else WAIT if k == 'w'
+                       else named.get(k, ord(k)))
             i += 2
         elif c == '^' and i + 1 < len(s):
             out.append(ord(s[i + 1].upper()) & 0x1F)
