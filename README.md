@@ -32,7 +32,7 @@ The design for the finished program, transfers included, is in
 - [x] Sites, saved in `EFTPXL.CFG`
 - [x] Download and upload files, marked ones one after the other, with
       progress, speed, ESC to stop, and text line ends converted
-- [ ] Delete / rename / new folder
+- [x] New folder, rename, delete, on both sides
 - [ ] Folders with everything in them
 
 ## The server
@@ -82,11 +82,23 @@ file under the cursor, then the transfers.
 | A-Z            | the next name starting with the letter  |
 | SPACE / ^A     | mark the file and move on / mark all    |
 | 1-8            | drive D1:-D8: (in the Atari pane)       |
+| ^N             | new folder                              |
+| ^E             | rename                                  |
+| DEL            | delete (the marked ones, or the one under the cursor) |
 | ^R             | read both lists again                   |
 | HELP (or ?)    | the keys                                |
 | ^Q             | quit to DOS                             |
 
-The keys are EFTP's. ^N (new folder), ^E (rename) and DEL come next.
+The keys are EFTP's.
+
+**New folder, rename, delete.** ^N asks for a folder's name, ^E for a
+new name (the old one to change), and DEL deletes the marked files and
+folders, or the one under the cursor, after "Delete ...? Y/N". On the
+server they are FTP's MKD, RNFR/RNTO, DELE and RMD; on the Atari the
+DOS's XIO: rename (32) and delete (33) on any DOS, new folder (42) and
+removing one (43) on SpartaDOS; DOS 2.5 has no folders, and EFTP_XL says
+so. A folder has to be empty to be deleted, as DOS and FTP want. DEL is
+Shift+Delete (or Ctrl+Delete).
 
 **Sending files.** RETURN on a file sends it to the other side; mark
 several with SPACE (or ^A for all) and ^T sends them, one after the

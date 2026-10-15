@@ -7,6 +7,7 @@
  * D: is the drive (and on SpartaDOS the folder) EFTP_XL was run from.
  */
 
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -36,17 +37,21 @@ static const char *const labels[] = {
 static const char *const modes[] = { "Binary", "Text", "By type" };
 
 /* a site's text fields, in the order of the labels and the file */
+static const unsigned char offs[7] = {
+    offsetof(site_t, name), offsetof(site_t, host), offsetof(site_t, port),
+    offsetof(site_t, user), offsetof(site_t, pass), offsetof(site_t, rdir),
+    offsetof(site_t, ldir)
+};
+static const unsigned char sizes[7] = {
+    sizeof(sites[0].name), sizeof(sites[0].host), sizeof(sites[0].port),
+    sizeof(sites[0].user), sizeof(sites[0].pass), sizeof(sites[0].rdir),
+    sizeof(sites[0].ldir)
+};
+
 static char *field(site_t *s, unsigned char i, unsigned char *max)
 {
-    switch (i) {
-    case 0: *max = sizeof(s->name); return s->name;
-    case 1: *max = sizeof(s->host); return s->host;
-    case 2: *max = sizeof(s->port); return s->port;
-    case 3: *max = sizeof(s->user); return s->user;
-    case 4: *max = sizeof(s->pass); return s->pass;
-    case 5: *max = sizeof(s->rdir); return s->rdir;
-    default: *max = sizeof(s->ldir); return s->ldir;
-    }
+    *max = sizes[i];
+    return (char *)s + offs[i];
 }
 
 void sites_load(void)

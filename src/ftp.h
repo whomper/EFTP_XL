@@ -31,6 +31,9 @@ extern char ftp_msg[FTP_MSG_LEN];
 int ftp_connect(const char *host, const char *port);
 int ftp_login(const char *user, const char *pass);
 int ftp_cwd(const char *path);
+/* One command and its reply, as MKD, DELE, RMD, RNFR, RNTO: 0 when the
+   server took it (a 2xx or 3xx reply). */
+int ftp_do(const char *verb, const char *arg);
 /* The server's current folder, from PWD, into buf. */
 int ftp_pwd(char *buf, unsigned char len);
 

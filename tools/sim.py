@@ -245,6 +245,21 @@ class Disks:
                 return 170
             self.open[x] = dict(data=open(path, 'rb').read(), pos=0, write=False)
             return 1
+        if cmd in (42, 43):                                 # XIO MKDIR / RMDIR
+            if self.dos != 'sparta':
+                return 146                                  # not on DOS 2
+            spec = bytes(m[buf:buf + n]).split(b'\x9b')[0].decode('latin-1')
+            folder, name = self._resolve(spec)
+            if folder is None:
+                return 130
+            path = os.path.join(folder, name)
+            try:
+                os.mkdir(path) if cmd == 42 else os.rmdir(path)
+            except FileExistsError:
+                return 151
+            except OSError:
+                return 167 if cmd == 43 and os.path.isdir(path) else 170
+            return 1
         if cmd in (32, 33):                                 # XIO RENAME / DELETE
             spec = bytes(m[buf:buf + n]).split(b'\x9b')[0].decode('latin-1')
             folder, name = self._resolve(spec.split(',')[0])

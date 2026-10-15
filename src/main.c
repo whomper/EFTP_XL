@@ -52,7 +52,7 @@
 #define REMOTE      1
 
 static entry_t local_ent[MAX_LOCAL], remote_ent[MAX_REMOTE];
-static char local_pool[1024], remote_pool[1536];
+static char local_pool[1024], remote_pool[1280];
 static pane_t pane[2];
 static unsigned char active;
 static unsigned char connected;
@@ -162,25 +162,37 @@ static void draw_list(unsigned char side)
         draw_entry(side, i);
 }
 
+/* How many are marked in the active pane; their size in marked_size. */
+static unsigned long marked_size;
+
+static unsigned char marked(void)
+{
+    pane_t *p = &pane[active];
+    entry_t *e = p->ent;
+    unsigned char i, n = 0;
+
+    marked_size = 0;
+    for (i = p->count; i; --i, ++e)
+        if (e->flags & E_MARK) {
+            ++n;
+            marked_size += e->size;
+        }
+    return n;
+}
+
 static void draw_details(void)
 {
     pane_t *p = &pane[active];
     entry_t *e;
-    unsigned char i, n = 0, c;
-    unsigned long total = 0;
+    unsigned char n, c;
     char size[6];
 
     scr_clear(DETAIL_ROW, DETAIL_ROW);
-    for (i = 0; i < p->count; ++i)
-        if (p->ent[i].flags & E_MARK) {
-            ++n;
-            total += p->ent[i].size;
-        }
-    if (n) {
+    if ((n = marked()) != 0) {
         sb_start(msg);
         sb_num(n);
         sb_add(" marked, ");
-        sb_size(total);
+        sb_size(marked_size);
         scr_put(DETAIL_ROW, SCR_L, msg, 0);
         return;
     }
@@ -302,6 +314,16 @@ static void find(pane_t *p, const char *name)
         }
 }
 
+/* Ask on the info line, editing buf; 0 when left with ESC. */
+static unsigned char ask(const char *q, char *buf, unsigned char max,
+                         unsigned char mask)
+{
+    unsigned char c = SCR_L + strlen(q) + 1;
+
+    ui_info(q);
+    return scr_edit(1, c, SCR_R - c, buf, max, mask) != K_ESC;
+}
+
 /* -- connecting */
 
 static void disconnect(void)
@@ -327,9 +349,7 @@ static void connect(unsigned char i)
         sb_add("Password for ");
         sb_add(s->name);
         sb_add(":");
-        ui_info(msg);
-        if (scr_edit(1, SCR_L + strlen(msg) + 1, SCR_R - SCR_L - strlen(msg)
-                     - 1, pass, sizeof(pass), 1) == K_ESC) {
+        if (!ask(msg, pass, sizeof(pass), 1)) {
             ui_info("Not connected");
             return;
         }
@@ -394,6 +414,128 @@ static void send(unsigned char cursor_only)
         draw_pane(REMOTE);
         draw_details();
     }
+}
+
+/* -- new folder, rename, delete: on the server FTP's MKD, RNFR/RNTO,
+   DELE and RMD; on the Atari the DOS's XIO 42 (SpartaDOS), 32, 33, 43 */
+
+#define spec ((char *)ftp_buf)      /* free while nothing is sent */
+
+/* spec = the Atari pane's folder + name */
+static void local_spec(const char *name)
+{
+    sb_start(spec);
+    sb_add(pane[LOCAL].path);
+    sb_add(name);
+}
+
+/* Done: say so, or why not; then read the pane again, the cursor on
+   name. err is a CIO status (Atari) or an ftp error (server). */
+static void after(const char *what, int err, const char *name)
+{
+    if (active == LOCAL && err >= 128) {
+        sb_start(msg);
+        sb_add(what);
+        sb_add(err == 146 ? ": this DOS has no folders"
+                          : err == 170 ? ": not found" : ": error ");
+        if (err != 146 && err != 170)
+            sb_num(err);
+        ui_info(msg);
+    } else if (active == REMOTE && err)
+        report(what, err);
+    else
+        ui_info(connected ? sites[site].name : "Not connected");
+    if (active == LOCAL)
+        local_read(&pane[LOCAL]);
+    else
+        remote_read(&pane[REMOTE]);
+    find(&pane[active], name);
+    draw_pane(active);
+    draw_details();
+}
+
+static void upper(char *s)
+{
+    for (; *s; ++s)
+        *s = toupper(*s);
+}
+
+static void new_folder(void)
+{
+    tmp[0] = '\0';
+    if (!ask("New folder:", tmp, active == LOCAL ? 9 : 64, 0) || !tmp[0])
+        return;
+    if (active == LOCAL) {
+        upper(tmp);
+        local_spec(tmp);
+        after("New folder", cio_xio(42, spec), tmp);
+    } else
+        after("New folder", ftp_do("MKD", tmp), tmp);
+}
+
+static void rename_entry(void)
+{
+    pane_t *p = &pane[active];
+    entry_t *e = &p->ent[p->cur];
+    int r;
+
+    if (!p->count || (e->flags & E_UP))
+        return;
+    strcpy(tmp, e->name);
+    if (!ask("Rename to:", tmp, active == LOCAL ? 13 : 64, 0) || !tmp[0]
+        || !strcmp(tmp, e->name))
+        return;
+    if (active == LOCAL) {
+        upper(tmp);
+        local_spec(e->name);
+        sb_add(",");
+        sb_add(tmp);
+        r = cio_xio(32, spec);
+    } else if ((r = ftp_do("RNFR", e->name)) == 0)
+        r = ftp_do("RNTO", tmp);
+    after("Rename", r, tmp);
+}
+
+/* the marked files and folders, or the one under the cursor */
+static void delete_entries(void)
+{
+    pane_t *p = &pane[active];
+    entry_t *e;
+    unsigned char i, n = marked(), k;
+    int r = active == LOCAL ? 1 : 0;
+
+    e = &p->ent[p->cur];
+    if (!n && (!p->count || (e->flags & E_UP)))
+        return;
+    sb_start(msg);
+    sb_add("Delete ");
+    if (n) {
+        sb_num(n);
+        sb_add(" marked");
+    } else
+        sb_add(e->name);
+    sb_add("? Y/N");
+    ui_info(msg);
+    k = key_get();
+    if (k != 'Y' && k != 'y') {
+        ui_info(connected ? sites[site].name : "Not connected");
+        return;
+    }
+    /* a folder has to be empty first, as DOS and FTP want */
+    for (i = 0, e = p->ent; i < p->count; ++i, ++e) {
+        if (n ? !(e->flags & E_MARK) : i != p->cur)
+            continue;
+        if (active == LOCAL) {
+            local_spec(e->name);
+            r = cio_xio(e->flags & E_DIR ? 43 : 33, spec);
+            if (r >= 128)
+                break;
+        } else if ((r = ftp_do(e->flags & E_DIR ? "RMD" : "DELE",
+                               e->name)) != 0)
+            break;
+    }
+    tmp[0] = '\0';
+    after("Delete", r, tmp);
 }
 
 /* -- moving about */
@@ -550,7 +692,6 @@ static void help(void)
         scr_put(4 + i / 2, SCR_L + 10, keys[i + 1], 0);
     }
     scr_put(18, SCR_L + 2, "The same keys as EFTP on the ST.", 0);
-    scr_put(19, SCR_L + 2, "^N ^E DEL: next version.", 0);
     scr_put(21, SCR_L + 2, "Any key", 1);
     scr_put(21, SCR_L + 10, "back", 0);
     key_get();
@@ -652,9 +793,14 @@ int main(void)
         case CTRL('T'):
             send(0);
             break;
-        case CTRL('N'): case CTRL('E'): case K_DEL:
-        case K_DEL2:
-            ui_info("That comes in the next version.");
+        case CTRL('N'):
+            new_folder();
+            break;
+        case CTRL('E'):
+            rename_entry();
+            break;
+        case K_DEL: case K_DEL2:
+            delete_entries();
             break;
         default:
             if (k >= '1' && k <= '8' && active == LOCAL) {

@@ -129,17 +129,28 @@ static unsigned char words(char *s, char **w, unsigned char max)
     }
 }
 
+/* name = base (to a space, at most 8) "." ext (to a space, at most 3) */
+static void make_name(const char *base, const char *ext)
+{
+    unsigned char n = 0, m = 0;
+
+    while (n < 8 && base[n] > ' ')
+        name[n] = base[n], ++n;
+    if (ext && *ext > ' ') {
+        name[n++] = '.';
+        while (m < 3 && ext[m] > ' ')
+            name[n++] = ext[m++];
+    }
+    name[n] = '\0';
+}
+
 static void add_line(pane_t *p, char *s, unsigned char sparta)
 {
-    char *w[6];
+    char *w[4];
     unsigned char n, i = 1, flags = 0;
     unsigned long size = 0;
 
-    if (!strncmp(s, "Volume", 6) || !strncmp(s, "Directory", 9))
-        return;
     if (strstr(s, "FREE SECTORS")) {
-        while (*s == ' ')
-            ++s;
         local_free = atoi(s);
         return;
     }
@@ -148,40 +159,22 @@ static void add_line(pane_t *p, char *s, unsigned char sparta)
            right after it, space, sectors: "* STARRAIDXEX 012" */
         if (strlen(s) < 14 || s[1] != ' ')
             return;
-        for (n = 0; n < 8 && s[2 + n] != ' '; ++n)
-            name[n] = s[2 + n];
-        name[n] = '\0';
-        if (s[10] != ' ') {
-            i = strlen(name);
-            name[i++] = '.';
-            for (n = 0; n < 3 && s[10 + n] != ' '; ++n)
-                name[i++] = s[10 + n];
-            name[i] = '\0';
-        }
+        make_name(s + 2, s + 10);
         pane_add(p, name, atol(s + 14) * SECTOR, 0, 0);
         return;
     }
-    n = words(s, w, 6);
-    if (!n)
+    if (!strncmp(s, "Volume", 6) || !strncmp(s, "Directory", 9)
+        || !(n = words(s, w, 4)))
         return;
-
-    strncpy(name, w[0], 8);
-    name[8] = '\0';
-    if (i < n && strcmp(w[i], "<DIR>") && !isdigit(w[i][0])) {
-        strcat(name, ".");
-        strncat(name, w[i], 3);
-        ++i;
-    }
-    when.day = 0;
-    if (i < n && !strcmp(w[i], "<DIR>")) {
+    /* SpartaDOS: NAME [EXT] size|<DIR> date */
+    make_name(w[0], i < n && w[1][0] != '<' && !isdigit(w[1][0])
+                    ? w[i++] : 0);
+    if (i < n && w[i][0] == '<')
         flags = E_DIR;
-        ++i;
-    } else if (i < n) {
-        size = atol(w[i++]);
-        if (!sparta)
-            size *= SECTOR;
-    }
-    if (i < n) {
+    else if (i < n)
+        size = atol(w[i]);
+    when.day = 0;
+    if (++i < n) {
         /* "12-03-89" */
         when.day = atoi(w[i]);
         when.mon = atoi(w[i] + 3);

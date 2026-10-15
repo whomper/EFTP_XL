@@ -182,8 +182,14 @@ int ftp_login(const char *user, const char *pass)
 
 int ftp_cwd(const char *path)
 {
-    int r = send_cmd("CWD", path);
-    return r == 250 ? 0 : r;
+    return ftp_do("CWD", path);
+}
+
+int ftp_do(const char *verb, const char *arg)
+{
+    int r = send_cmd(verb, arg);
+
+    return r >= 200 && r < 400 ? 0 : r;
 }
 
 int ftp_pwd(char *buf, unsigned char len)
