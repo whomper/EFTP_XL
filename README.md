@@ -21,7 +21,10 @@ with no conversion.
 side, after EFTP on the ST, in EDOS's font and colours. Transfers come
 next.
 
-![EFTP_XL connected to a server](docs/design/eftpxl-1-main.png)
+![EFTP_XL connected to a server (tools/sim.py)](docs/design/eftpxl-running.png)
+
+The design for the finished program, transfers included, is in
+[docs/design](docs/design).
 
 - [x] Log in and list a remote directory
 - [x] Two panes: browse folders on the Atari (D1:-D8:, SpartaDOS
