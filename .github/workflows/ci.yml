@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  CC65_REV: a6530f46914232c085c281c4bf84e87bd136596f
+
+jobs:
+  build:
+    name: Atari 8-bit build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: cc65
+        run: |
+          git init -q "$RUNNER_TEMP/cc65"
+          git -C "$RUNNER_TEMP/cc65" fetch -q --depth 1 https://github.com/cc65/cc65 "$CC65_REV"
+          git -C "$RUNNER_TEMP/cc65" checkout -q FETCH_HEAD
+          make -C "$RUNNER_TEMP/cc65" -j"$(nproc)" >/dev/null
+          echo "$RUNNER_TEMP/cc65/bin" >> "$GITHUB_PATH"
+      - name: Build
+        run: make
+      - name: The build changed no tracked file
+        run: |
+          git status --porcelain
+          test -z "$(git status --porcelain)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: eftpxl-dev
+          path: bin/EFTPXL.XEX

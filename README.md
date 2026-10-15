@@ -47,8 +47,9 @@ the firmware (they report success without doing anything). Use SFTP for those.
 
 ## Running on the Atari
 
-1. Get `bin/EFTPXL.XEX` onto a disk the Atari can read, e.g. an ATR on the
-   FujiNet SD card or a TNFS share.
+1. Get `EFTPXL.XEX` from the
+   [latest release](https://github.com/whomper/EFTP_XL/releases) onto a disk
+   the Atari can read, e.g. an ATR on the FujiNet SD card or a TNFS share.
 2. Load it: `L` from the DOS 2.5 menu, or type `EFTPXL` at the SpartaDOS prompt.
 3. At the prompts, pick `S` (SFTP) or `F` (FTP), then enter the host (IP
    address of the Mac), port (blank = default), username, password and path.
@@ -81,7 +82,18 @@ make
 ```
 
 The output is `bin/EFTPXL.XEX`. `START_ADDR` changes the load address, for
-example `make START_ADDR=0x2800`.
+example `make START_ADDR=0x2800`. `bin/` and `dist/` are what make builds;
+they are never committed.
+
+**Versions and releases.** `VERSION` in `src/main.c` holds the last
+release, and a release build (`make RELEASE=1`) shows it at startup; any
+other build shows `0.2-dev`. To release: raise `VERSION`, commit and push,
+then run the Release workflow (Actions > Release > Run workflow, on main)
+with what is new: [`.github/workflows/release.yml`](.github/workflows/release.yml)
+builds cc65 (at a fixed commit) and the program, tags the commit `vX.Y`
+and publishes `EFTPXL.XEX` as a GitHub Release (a pre-release while the
+version is 0.x). Pushing a tag made with `git tag -a` does the same, with
+the tag's message as the notes.
 
 [fujinet-lib](https://github.com/FujiNetWIFI/fujinet-lib) is included as a
 submodule (GPL-3.0).
@@ -97,5 +109,5 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See [COPYING](COPYING).
 
 Copyright (C) 2026 AERA | Erez Yaary.
 
-`bin/EFTPXL.XEX` is linked with fujinet-lib (GPL-3.0), so the built
-program as a whole is distributed under the GPL version 3.
+`EFTPXL.XEX` is linked with fujinet-lib (GPL-3.0), so the built program
+as a whole is distributed under the GPL version 3.

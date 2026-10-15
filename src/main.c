@@ -14,7 +14,14 @@
 #include <fujinet-fuji.h>
 #include <fujinet-network.h>
 
+/* the last release; a release build (RELEASE=1) shows it as it is,
+   any other "0.2-dev" */
 #define VERSION     "0.2"
+#ifdef RELEASE
+#define APP_VERSION VERSION
+#else
+#define APP_VERSION VERSION "-dev"
+#endif
 
 #define MODE_DIR    6       /* aux1: open as directory */
 #define DIR_LONG    0x80    /* aux2: long names with sizes, '/' after dirs */
@@ -184,7 +191,7 @@ int main(void)
     char c;
 
     printf("\x7D");     /* clear screen */
-    printf("EFTP_XL %s - FujiNet smoke test\n", VERSION);
+    printf("EFTP_XL %s - FujiNet smoke test\n", APP_VERSION);
     printf("MEMLO $%04X\n\n", MEMLO);
 
     show_adapter();

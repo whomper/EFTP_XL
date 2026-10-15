@@ -1,0 +1,79 @@
+name: Release
+
+# Builds EFTPXL.XEX and publishes it as a GitHub Release (a pre-release
+# while the version is 0.x). Two ways to start it:
+# - Actions > Release > Run workflow, on main, with the notes: it tags
+#   main's commit vX.Y, from VERSION in src/main.c;
+# - push a tag vX.Y that matches it: the tag's message (git tag -a) is
+#   the notes.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      notes:
+        description: "What is new (Markdown): the release's notes"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  # cc65 from git (2.19 is too old for fujinet-lib), at the commit the
+  # releases are built and checked with
+  CC65_REV: a6530f46914232c085c281c4bf84e87bd136596f
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Which release
+        run: |
+          V=$(sed -n 's/^#define VERSION *"\(.*\)"/\1/p' src/main.c)
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            TAG=$GITHUB_REF_NAME
+            if [ "$TAG" != "v$V" ]; then
+              echo "::error::tag $TAG, but src/main.c says $V"
+              exit 1
+            fi
+          else
+            TAG=v$V
+            if [ "$GITHUB_REF_NAME" != main ]; then
+              echo "::error::run it on main"
+              exit 1
+            fi
+            if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null; then
+              echo "::error::$TAG is out already: raise VERSION in src/main.c first"
+              exit 1
+            fi
+          fi
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          echo "VERSION=$V" >> "$GITHUB_ENV"
+      - name: cc65
+        run: |
+          git init -q "$RUNNER_TEMP/cc65"
+          git -C "$RUNNER_TEMP/cc65" fetch -q --depth 1 https://github.com/cc65/cc65 "$CC65_REV"
+          git -C "$RUNNER_TEMP/cc65" checkout -q FETCH_HEAD
+          make -C "$RUNNER_TEMP/cc65" -j"$(nproc)" >/dev/null
+          echo "$RUNNER_TEMP/cc65/bin" >> "$GITHUB_PATH"
+      - name: Build
+        run: make dist RELEASE=1
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOTES: ${{ inputs.notes }}
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            git fetch -q --force origin "refs/tags/$TAG:refs/tags/$TAG"
+            git tag -l --format='%(contents)' "$TAG" > "$RUNNER_TEMP/notes.md"
+          else
+            printf '%s\n' "$NOTES" > "$RUNNER_TEMP/notes.md"
+          fi
+          pre=""
+          [ "${VERSION%%.*}" = 0 ] && pre=--prerelease
+          gh release create "$TAG" dist/* --target "$GITHUB_SHA" --title "EFTP_XL $VERSION" $pre \
+            --notes-file "$RUNNER_TEMP/notes.md"
