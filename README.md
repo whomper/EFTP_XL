@@ -1,8 +1,15 @@
 # EFTP_XL
 
 File transfer for 8-bit Atari computers (400/800/XL/XE) over
-[FujiNet](https://fujinet.online), written in C with cc65. Connects to a
-Mac (or any SFTP/FTP server) and moves files between it and your Atari drives.
+[FujiNet](https://fujinet.online), written in C with cc65. Connects to any
+FTP server (a Mac, a NAS, a Linux box) and moves files between it and your
+Atari drives.
+
+EFTP_XL has its own FTP client. It talks to the server over plain FujiNet
+TCP connections (`N1:` for commands, `N2:` for data in passive mode), so it
+works on FujiNet firmware 1.3 and later and logs in with your username and
+password. FujiNet's built-in FTP protocol is not used: up to firmware 1.6.1
+it always logs in as `anonymous` on port 21.
 
 Works with DOS 2.5 and SpartaDOS 3.x. All local file access goes through CIO,
 so any CIO-compatible DOS should work. Files are transferred as raw binary
@@ -10,29 +17,20 @@ with no conversion.
 
 ## Status
 
-**Step 1: smoke test.** Shows FujiNet info and lists a remote directory.
+**Step 1.** Logs in to an FTP server and lists a remote directory.
 Transfers come next.
 
-- [x] Connect over SFTP or FTP and list a remote directory
+- [x] Log in and list a remote directory
 - [ ] Download a file to `Dn:`
 - [ ] Upload a file from `Dn:`
 - [ ] Two-pane browser UI, saved settings
-- [ ] Delete / rename / mkdir (SFTP only, see below)
+- [ ] Delete / rename / mkdir
 
-## Setting up the Mac
+## The server
 
-### SFTP (recommended)
-
-macOS already includes an SFTP server. Turn it on in
-**System Settings → General → Sharing → Remote Login**, and allow your user.
-
-Use your normal Mac username and password. The path is a full Mac path, for
-example `/Users/yourname/AtariShare/`.
-
-### FTP
-
-Any standard FTP server works: a NAS, vsftpd, pure-ftpd, or pyftpdlib.
-macOS no longer includes one; a quick option is pyftpdlib:
+Any standard FTP server with passive mode works; tested with pure-ftpd and
+pyftpdlib. On a Mac, pure-ftpd from Homebrew is a good choice. For a quick
+test, pyftpdlib:
 
 ```sh
 python3 -m venv ~/eftp-venv
@@ -41,13 +39,7 @@ mkdir -p ~/AtariShare
 ~/eftp-venv/bin/python -m pyftpdlib -p 2121 -w -d ~/AtariShare -u ATARI -P SECRET
 ```
 
-On the Atari, pick `F`, enter the Mac's IP address, port `2121`, the same
-username and password, and path `/`. An uppercase username and password
-are easiest, since the Atari keyboard starts in uppercase.
-
-FTP is unencrypted, so only use it on your home network. FujiNet's FTP support
-can list, download and upload, but rename/delete/mkdir are not implemented in
-the firmware (they report success without doing anything). Use SFTP for those.
+FTP is unencrypted, so only use it on your home network.
 
 ## Running on the Atari
 
@@ -55,19 +47,16 @@ the firmware (they report success without doing anything). Use SFTP for those.
    [latest release](https://github.com/whomper/EFTP_XL/releases) onto a disk
    the Atari can read, e.g. an ATR on the FujiNet SD card or a TNFS share.
 2. Load it: `L` from the DOS 2.5 menu, or type `EFTPXL` at the SpartaDOS prompt.
-3. At the prompts, pick `S` (SFTP) or `F` (FTP), then enter the host (IP
-   address of the Mac), port (blank = default), username, password and path.
+3. Enter the host (the server's IP address or name), port (21 unless your
+   server uses another), username, password and path.
 
 Notes:
 
 - Usernames, passwords and paths are case-sensitive. The Atari keyboard
-  starts in uppercase; press **CAPS** to switch to lowercase. A wrong-case
-  login shows as error 144.
-- The program shows the exact URL it opens, with the password masked.
-- The username and password can't contain `@`, `:` or `/` (FujiNet URL
-  limitation).
-- SFTP needs a recent FujiNet firmware. The program shows the firmware
-  version at startup. If SFTP fails to connect, try FTP or update FujiNet.
+  starts in uppercase; press **CAPS** to switch to lowercase.
+- A blank username logs in as `anonymous`.
+- On an error the program shows the server's own reply, for example
+  `530 Login incorrect`.
 - **ESC** at any prompt quits.
 - The startup screen shows `MEMLO`. The program loads at `$3000`. If DOS's
   MEMLO is higher, the loader stops with an error. Let me know your value and

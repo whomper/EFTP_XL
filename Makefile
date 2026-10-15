@@ -10,7 +10,7 @@
 
 CL65       ?= cl65
 PROGRAM    := bin/EFTPXL.XEX
-SRCS       := src/main.c
+SRCS       := src/main.c src/ftp.c
 
 # Load address. Above SpartaDOS 3.x / DOS 2.5 MEMLO with room to spare;
 # lower it to gain RAM once MEMLO on your setup is known.
