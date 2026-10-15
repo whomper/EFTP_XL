@@ -31,15 +31,14 @@ example `/Users/yourname/AtariShare/`.
 
 ### FTP
 
-macOS no longer includes an FTP server. Use `tools/eftp-server.py` from this
-repo. It's a small [pyftpdlib](https://github.com/giampaolo/pyftpdlib) server
-that also accepts FujiNet's directory request (`LIST /path/*`), which plain
-pyftpdlib rejects with "550 No such file or directory".
+Any standard FTP server works: a NAS, vsftpd, pure-ftpd, or pyftpdlib.
+macOS no longer includes one; a quick option is pyftpdlib:
 
 ```sh
 python3 -m venv ~/eftp-venv
 ~/eftp-venv/bin/pip install pyftpdlib
-~/eftp-venv/bin/python tools/eftp-server.py --dir ~/AtariShare --user ATARI --password SECRET
+mkdir -p ~/AtariShare
+~/eftp-venv/bin/python -m pyftpdlib -p 2121 -w -d ~/AtariShare -u ATARI -P SECRET
 ```
 
 On the Atari, pick `F`, enter the Mac's IP address, port `2121`, the same

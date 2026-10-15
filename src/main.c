@@ -125,6 +125,14 @@ static void show_adapter(void)
            ac.ssid);
 }
 
+/* FujiNet lists "dir/" by sending LIST with a "*" wildcard, which FTP
+   servers without wildcard support (pyftpdlib among them) reject.
+   "dir/." lists the same directory on any FTP server. */
+static const char *dir_suffix(void)
+{
+    return strcmp(proto, "FTP") == 0 ? "." : "";
+}
+
 /* Build N1:PROTO://user:pass@host:port/path/ into url. */
 static unsigned char build_url(void)
 {
@@ -159,6 +167,7 @@ static unsigned char build_url(void)
     if (path[0] != '/')
         strcat(url, "/");
     strcat(url, path);
+    strcat(url, dir_suffix());
     return 1;
 }
 
@@ -168,8 +177,8 @@ static void show_url(void)
     printf("Opening N1:%s://", proto);
     if (*user)
         printf("%s%s@", user, *pass ? ":****" : "");
-    printf("%s%s%s%s%s\n", host, *port ? ":" : "", port,
-           path[0] == '/' ? "" : "/", path);
+    printf("%s%s%s%s%s%s\n", host, *port ? ":" : "", port,
+           path[0] == '/' ? "" : "/", path, dir_suffix());
 }
 
 static void list_dir(void)
