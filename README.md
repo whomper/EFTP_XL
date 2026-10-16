@@ -274,8 +274,8 @@ label). Only releases leave the build machine. To release: raise `VERSION`, comm
 then run the Release workflow (Actions > Release > Run workflow, on main)
 with what is new: [`.github/workflows/release.yml`](.github/workflows/release.yml)
 builds ATasm (at a fixed commit) and the program, tags the commit `vX.Y`
-and publishes `EFTPXL.XEX` and the source disk as a GitHub Release (a pre-release while the
-version is 0.x). Pushing a tag made with `git tag -a` does the same, with
+and publishes `EFTPXL.XEX` and the source disk as a GitHub Release, marked
+Latest. Pushing a tag made with `git tag -a` does the same, with
 the tag's message as the notes.
 
 The C version in `C/` uses [fujinet-lib](https://github.com/FujiNetWIFI/fujinet-lib),

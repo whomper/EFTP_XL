@@ -1,8 +1,8 @@
 name: Release
 
 # Builds EFTPXL.XEX and the source disk (EFTPXL-SRC.ATR) and publishes
-# them as a GitHub Release (a pre-release
-# while the version is 0.x). Two ways to start it:
+# them as a GitHub Release, marked Latest (the one the repository's
+# page shows). Two ways to start it:
 # - Actions > Release > Run workflow, on main, with the notes: it tags
 #   main's commit vX.Y, from VERSION in ASM/EFTPXL.ASM;
 # - push a tag vX.Y that matches it: the tag's message (git tag -a) is
@@ -72,7 +72,5 @@ jobs:
           else
             printf '%s\n' "$NOTES" > "$RUNNER_TEMP/notes.md"
           fi
-          pre=""
-          [ "${VERSION%%.*}" = 0 ] && pre=--prerelease
-          gh release create "$TAG" dist/* --target "$GITHUB_SHA" --title "EFTP_XL $VERSION" $pre \
+          gh release create "$TAG" dist/* --target "$GITHUB_SHA" --title "EFTP_XL $VERSION" --latest \
             --notes-file "$RUNNER_TEMP/notes.md"
