@@ -186,10 +186,12 @@ SAVE writes them), ready to LOAD. A release has this disk too.
 
    ```
    LOAD #D:EFTPXL.M65
-   ASM ,,#D:EFTPXL.XEX
+   ASM ,,#D:EFTPXL.PRG
    ```
 
-   `EFTPXL.M65` is the main file; Mac/65 reads the parts it includes
+   This makes `EFTPXL.PRG`, the program (the same as `EFTPXL.XEX`, in
+   Mac/65's smaller segments); run it as `EFTPXL.PRG` at the SpartaDOS
+   prompt. `EFTPXL.M65` is the main file; Mac/65 reads the parts it includes
    from `D:` as it assembles. Load the main file first and give no
    source to `ASM`: on SpartaDOS, Mac/65 1.01 can't assemble a main
    file read from disk (as EDOS found). With SpartaDOS 3.2 it reports
