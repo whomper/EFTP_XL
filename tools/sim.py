@@ -20,7 +20,8 @@ stood in for, the way EDOS's tools/sim.py tests EDOS:
 
 KEYS is what to type: "\\n" RETURN, "\\e" ESC, "\\t" TAB, "\\b" BACKSPACE,
 "\\u" "\\d" up and down, "\\h" HELP, "^X" Ctrl+X, "\\w" waits until the
-program is idle (after a transfer), and "\\s" takes a snapshot of the screen (printed, and PREFIX-N.png with --shots). The run
+program is idle (after a transfer), "\\z" lets one look at the keyboard go
+by (a block of a transfer), and "\\s" takes a snapshot of the screen (printed, and PREFIX-N.png with --shots). The run
 ends when the program waits for a key and the script has none left.
 """
 import argparse
@@ -55,7 +56,7 @@ SCREEN = 0xBC40
 
 EOL = 0x9B
 CLOCK_STEPS = 2000          # RTCLOK is set from the wall clock this often
-HELP, SHOT, WAIT = 'help', 'shot', 'wait'
+HELP, SHOT, WAIT, SKIP = 'help', 'shot', 'wait', 'skip'
 IDLE_GAP = 300             # polls this close together: waiting for a key
 
 
@@ -408,7 +409,10 @@ class Sim:
         """Called when the program looks at CH (kbhit)."""
         idle = self.steps - self.last_poll < IDLE_GAP
         self.last_poll = self.steps
-        while self.keys and self.keys[0] in (WAIT, SHOT):
+        while self.keys and self.keys[0] in (WAIT, SHOT, SKIP):
+            if self.keys[0] == SKIP:
+                self.keys.pop(0)
+                return          # let one more poll (a block of a transfer) go by
             if self.keys[0] == WAIT:
                 if not idle:
                     return          # busy (a transfer): hold the keys back
@@ -538,7 +542,7 @@ def parse_keys(s):
         if c == '\\' and i + 1 < len(s):
             k = s[i + 1]
             out.append(HELP if k == 'h' else SHOT if k == 's' else WAIT if k == 'w'
-                       else named.get(k, ord(k)))
+                       else SKIP if k == 'z' else named.get(k, ord(k)))
             i += 2
         elif c == '^' and i + 1 < len(s):
             out.append(ord(s[i + 1].upper()) & 0x1F)

@@ -1,3 +1,4 @@
+         .OPT NO LIST
 ;
 ; EFTP_XL - file transfer for 8-bit Ataris over FujiNet
 ; Copyright (C) 2026 AERA | Erez Yaary. GPL-2.0-or-later, see COPYING.
@@ -8,7 +9,6 @@
 ; and the MEMLO of DOS 2.5 and SpartaDOS 3, and ends below $9C00, so
 ; BASIC may be on.
 ;
-         .OPT NO LIST
          .INCLUDE #D:EQUATES.M65
 ;
 LOAD     =   $4000

@@ -16,25 +16,30 @@ Works with DOS 2.5 and SpartaDOS 3.x. All local file access goes through CIO,
 so any CIO-compatible DOS should work. Files go as they are, or as text
 with their line ends changed (the site's Files setting).
 
-## Status
+## What it does
 
-**Step 3.** The full-screen program, after EFTP on the ST, in EDOS's
-font and colours: the Atari and the server side by side, and files going
-both ways.
+The full-screen program, after EFTP on the ST, in EDOS's font and
+colours: the Atari on the left, the server on the right, the
+transfers below.
 
-![EFTP_XL connected to a server (tools/sim.py)](docs/design/eftpxl-running.png)
+| | |
+|---|---|
+| ![Connected: the Atari's folder and the server's](docs/screens/1-main.png) | ![A file coming down](docs/screens/3-sending.png) |
+| Connected: the Atari's folder and the server's | A file coming down: the bar, the speed |
+| ![A folder going, with all in it](docs/screens/5-folder.png) | ![The sites](docs/screens/2-sites.png) |
+| A folder coming down with all in it, one file after the other | The sites, saved in `EFTPXL.CFG` |
 
-The design for the finished program, transfers included, is in
-[docs/design](docs/design).
+- Log in to any FTP server with your user and password, over FujiNet
+- Two panes: the Atari (D1:-D8:, SpartaDOS folders) and the server
+- Files both ways, marked ones one after the other, with progress,
+  speed, ESC to stop, and text line ends changed when you want
+- Folders both ways, with everything in them
+- New folder, rename, delete, on both sides
+- Sites, saved on the disk
 
-- [x] Log in and list a remote directory
-- [x] Two panes: browse folders on the Atari (D1:-D8:, SpartaDOS
-      folders) and on the server
-- [x] Sites, saved in `EFTPXL.CFG`
-- [x] Download and upload files, marked ones one after the other, with
-      progress, speed, ESC to stop, and text line ends converted
-- [x] New folder, rename, delete, on both sides
-- [x] Folders with everything in them
+The pictures are of the real program, run by `tools/sim.py` (see
+[Testing](#testing)); `tools/screenshots.py` takes them again. The first
+design is in [docs/design](docs/design).
 
 ## The server
 
@@ -56,8 +61,8 @@ FTP is unencrypted, so only use it on your home network.
 1. Get `EFTPXL.XEX` from the
    [latest release](https://github.com/whomper/EFTP_XL/releases) onto a disk
    the Atari can read, e.g. an ATR on the FujiNet SD card or a TNFS share.
-2. Load it: `L` from the DOS 2.5 menu, or type `EFTPXL` at the SpartaDOS
-   prompt.
+2. Load it: `L` from the DOS 2.5 menu, or type `EFTPXL.XEX` at the
+   SpartaDOS prompt.
 3. Press ^K for the sites, ^N to add one: a name, the server (IP address
    or name), port (21 unless your server uses another), user and
    password, the folder on the server to start in, and the folder on the
@@ -87,7 +92,9 @@ file under the cursor, then the transfers.
 | HELP (or ?)    | the keys                                |
 | ^Q             | quit to DOS                             |
 
-The keys are EFTP's.
+The keys are EFTP's; HELP shows them:
+
+![The keys](docs/screens/7-keys.png)
 
 **New folder, rename, delete.** ^N asks for a folder's name, ^E for a
 new name (the old one to change), and DEL deletes the marked files and
@@ -105,12 +112,16 @@ the one going), the info line the speed, and at the end "3 files, 260K
 in 0:42 (6K/s)". ESC stops; a file stopped on its way to the Atari is
 deleted rather than left half there.
 
+![After: how many, how much, how fast](docs/screens/4-sent.png)
+
 **Sending folders.** Mark a folder with SPACE (or put the cursor on it)
 and ^T sends it with everything in it, folders in folders too (8 deep
 at most). It is made on the other side, or gone into when it is there
 already; files already there are asked about, as at the top. Going to
 the Atari, a folder gets an 8.3 name as files do, which needs
 SpartaDOS: DOS 2.5 has no folders. The summary counts the files.
+
+![A folder sent: MUSIC and the folder in it, 3 files](docs/screens/6-folder-sent.png)
 
 - A file coming to the Atari gets a name DOS takes: up to 8 letters and
   digits and 3 for the extension, in capitals (`STinG 1.26.zip` becomes
@@ -135,7 +146,7 @@ Notes:
 - A blank user logs in as `anonymous`.
 - On an error the info line shows the server's own reply, for example
   `530 Login incorrect`.
-- The program takes `$4000`-`$953F`: above EDOS (`$1E00`-`$3752`) and
+- The program takes `$4000`-`$978F`: above EDOS (`$1E00`-`$3752`) and
   the MEMLO of DOS 2.5 and SpartaDOS 3, and below a cartridge, so BASIC
   can stay on. If a DOS's MEMLO is above `$4000`, the program says so
   and goes back to DOS before loading itself.
@@ -182,7 +193,15 @@ SAVE writes them), ready to LOAD. A release has this disk too.
    from `D:` as it assembles. Load the main file first and give no
    source to `ASM`: on SpartaDOS, Mac/65 1.01 can't assemble a main
    file read from disk (as EDOS found). With SpartaDOS 3.2 it reports
-   `ASSEMBLY ERRORS: 0` with about 16K free.
+   `ASSEMBLY ERRORS: 0` with about 15K free.
+
+| | |
+|---|---|
+| ![The source disk, booted](docs/screens/8-spartados.png) | ![MAC/65 1.01 building EFTP_XL](docs/screens/9-mac65.png) |
+| The source disk booted: SpartaDOS 3.2, the sources, the program | MAC/65 1.01 building EFTP_XL from it |
+
+These two are from the atari800 emulator, running SpartaDOS 3.2 from
+the disk and the MAC/65 1.01 cartridge.
 
 Each `.M65` can be LOADed to read or change it, and SAVEd back.
 `tools/mac65tok.py` (EDOS's, with the tokens EFTP_XL uses as well)
@@ -197,13 +216,16 @@ and digits, `*=*+n` for room (no `.DS`), the font as `.BYTE` lines (no
 builds the same program from the files on that disk, turned back into
 text (`make atr` checks this is so with `tools/atari_src.py --check`).
 
-**Testing without an Atari.** `tools/sim.py` runs the real
-`bin/EFTPXL.XEX` on an emulated 6502 ([py65](https://github.com/mnaberez/py65)),
-the way EDOS is tested. It stands in for the OS calls the program makes:
-the screen (read from screen memory), the keyboard (typed from a
-script), the disks (D1:, D2: are folders here, through CIO) and SIO as a
-FujiNet whose `N1:`/`N2:` TCP connections are real sockets. So the
-program's FTP client talks to a real server:
+## Testing
+
+**The program on an emulated 6502.** `tools/sim.py` runs the real
+`bin/EFTPXL.XEX` on [py65](https://github.com/mnaberez/py65), the way
+EDOS is tested. It stands in for the OS calls the program makes: the
+screen (read from screen memory), the keyboard (typed from a script),
+the disks (D1:, D2: are folders here, through CIO, listed as SpartaDOS
+3 or DOS 2.5 list them) and SIO as a FujiNet whose `N1:`/`N2:` TCP
+connections are real sockets. So the program's FTP client talks to a
+real server:
 
 ```sh
 pip install py65 pillow
@@ -211,17 +233,42 @@ make && tools/sim.py --d1 disk --shots shot '^K^NTest\n192.168.1.20\n21\nATARI\n
 ```
 
 The keys are what you would type (`\n` RETURN, `\e` ESC, `\t` TAB, `\b`
-BACKSPACE, `\u` `\d` up and down, `\h` HELP, `^K` Ctrl+K), and `\s` takes
-a snapshot: the screen as text, and `shot-N.png` as the Atari shows it.
-`--dos dos2` lists D1: as DOS 2.5 does (SpartaDOS 3 otherwise), and
-`--sio-log` shows every FTP command sent.
+BACKSPACE, `\u` `\d` up and down, `\h` HELP, `^K` Ctrl+K); `\s` takes a
+snapshot (the screen as text, and `shot-N.png` as the Atari shows it),
+`\w` waits for a transfer to end and `\z` lets one block of it go by.
+`--dos dos2` lists D1: as DOS 2.5 does, and `--sio-log` shows every FTP
+command sent.
 
-`make test` (`tools/test_sim.py`, with `pip install py65 pyftpdlib`) runs
-the program that way against an FTP server it starts, through 27 checks:
-sites, both panes, downloads and uploads (binary and text), the replace
-question, ESC, new folder, rename and delete on both sides, DOS 2.5.
+**The checks.** `make test` (`tools/test_sim.py`, with `pip install py65
+pyftpdlib`) runs the program that way against an FTP server it starts,
+and looks at the screen and at the files on both sides, 32 checks:
 
-**Versions and releases.** `VERSION` in `ASM/EFTPXL.ASM` holds the last
+| | |
+|---|---|
+| Sites | a site made and saved in `EFTPXL.CFG`; connecting |
+| Panes | both lists, sizes in bytes, the server's folder, into and out of folders on both sides |
+| Files | down and up byte for byte, binary and text (line ends changed), the sums; the replace question; ESC stops and leaves no half file |
+| Folders | a server folder two folders deep down to the Atari, an Atari folder with one in it up to the server, both panes back where they were |
+| New, rename, delete | folders and files on the Atari and on the server |
+| DOS 2.5 | its listing; no folders made, none sent |
+
+CI (`.github/workflows/ci.yml`) builds the program and the source disk
+(checking the disk gives the same program) and runs these on every
+push.
+
+**With the Atari's own software.** Before a release the program also
+runs in the [atari800](https://atari800.github.io) emulator (its
+library, driven by a script), with the Atari's own OS and DOS instead
+of stand-ins: SpartaDOS 3.2 booted from `EFTPXL-SRC.ATR`, EFTP_XL run
+from its prompt, and the MAC/65 1.01 cartridge assembling the disk's
+sources. That is how the SpartaDOS directory fixed in 0.6 was found.
+The cartridge isn't in this repository, so this isn't part of CI.
+
+**On real hardware.** Each release says whether it has been.
+
+## Versions and releases
+
+`VERSION` in `ASM/EFTPXL.ASM` holds the last
 release, and every build shows it at startup (there is no `-dev`
 label). Only releases leave the build machine. To release: raise `VERSION`, commit and push,
 then run the Release workflow (Actions > Release > Run workflow, on main)

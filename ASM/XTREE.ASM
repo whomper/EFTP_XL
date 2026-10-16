@@ -16,7 +16,14 @@ XDEEP    =   8          ; folders in folders at most
 ; XTREE: folder K, with all in it, to the other side; A: EDONE, or
 ; EFAIL when any of it failed
 ;
-XTREE    LDA #0
+XTREE    LDX #1             ; where the cursors are, for after
+XTREEC   LDA PCUR,X
+         STA XCURS,X
+         LDA PTOP,X
+         STA XTOPS,X
+         DEX
+         BPL XTREEC
+         LDA #0
          STA XTFAIL
          STA XDEPTH
          STA XIDX
@@ -27,8 +34,9 @@ XTREE0   STA FSIZEB,X
          BPL XTREE0
          LDX K
          JSR XFOLDER
-         BCS XTREE8
-         LDA #1
+         BCC XTREE0A
+         JMP XTREE8
+XTREE0A  LDA #1
          STA XWALK
 XTREE1   LDA XSTOP          ; ESC: back up and out
          BNE XTREE5
@@ -72,6 +80,13 @@ XTREE5   JSR XUP
          BPL XTREE1
          LDA #0
          STA XWALK
+         LDX #1             ; the cursors back where they were
+XTREE6   LDA XCURS,X
+         STA PCUR,X
+         LDA XTOPS,X
+         STA PTOP,X
+         DEX
+         BPL XTREE6
          LDA XTFAIL
          BNE XTREE8
          LDA #EDONE

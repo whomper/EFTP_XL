@@ -28,6 +28,9 @@
   disk gives the same program. The C version in `C/` is kept for reference only.
 - **Test** with `make test` (tools/test_sim.py, the real XEX on py65
   against pyftpdlib): all its checks pass before a push.
+- **The README's pictures** are the real program in tools/sim.py:
+  `tools/screenshots.py` takes them again (docs/screens); take them
+  again when the screens change. 8 and 9 are from atari800.
 - **The name** reads "AERA | Erez Yaary" wherever it is given: copyright
   lines (`Copyright (C) 2026 AERA | Erez Yaary`), the docs, and as the
   author of every commit:

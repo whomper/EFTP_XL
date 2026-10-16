@@ -38,9 +38,10 @@ class Server:
     """pyftpdlib in a process of its own, so it doesn't wait on the
     emulator for Python's lock"""
 
-    def __init__(self, root):
+    def __init__(self, root, port=0):
         sock = socket.socket()
-        sock.bind(('127.0.0.1', 0))
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(('127.0.0.1', port))
         self.port = sock.getsockname()[1]
         sock.close()
         self.proc = subprocess.Popen(
