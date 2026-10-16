@@ -37,7 +37,7 @@ SRCATR     := bin/EFTPXL-SRC.ATR
 
 atr: $(SRCATR)
 
-$(SRCATR): $(PROGRAM) tools/atari_src.py tools/sparta.py
+$(SRCATR): $(PROGRAM) tools/atari_src.py tools/sparta.py tools/mac65tok.py tools/disk/*
 	rm -rf bin/atr
 	mkdir -p bin/atr
 	$(PYTHON) tools/atari_src.py $@ $(SRCS) $(PROGRAM)

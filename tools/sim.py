@@ -196,12 +196,16 @@ class Disks:
         name = parts.pop() if parts and not rest.endswith('>') else ''
         return os.path.join(self.drives[n], *parts), name
 
-    def _listing(self, folder, pattern):
+    def _listing(self, folder, pattern, long=True):
+        """the directory as DOS lists it: SpartaDOS's long form (bytes,
+        <DIR>) only with aux2 $80; without it, as DOS 2 does, in sectors
+        (256 bytes on SpartaDOS's double density) and no folders"""
         names = sorted(os.listdir(folder))
         lines = []
-        sparta = self.dos == 'sparta'
+        sparta = self.dos == 'sparta' and long
+        secsize = 256 if self.dos == 'sparta' else 125
         if sparta:
-            lines += ['Volume:    EFTPTEST', 'Directory: ' +
+            lines += ['', 'Volume:    EFTPTEST', 'Directory: ' +
                       (os.path.basename(folder).upper() or 'MAIN'), '']
         for n in names:
             full = os.path.join(folder, n)
@@ -218,7 +222,7 @@ class Disks:
             if sparta:
                 lines.append(f'{base[:8]:<8} {ext[:3]:<3} {size:>7} {when}')
             else:
-                lines.append(f'  {base[:8]:<8}{ext[:3]:<3} {(size + 124) // 125:03d}')
+                lines.append(f'  {base[:8]:<8}{ext[:3]:<3} {(size + secsize - 1) // secsize:03d}')
         lines.append(' 1234 FREE SECTORS' if sparta else '609 FREE SECTORS')
         return ''.join(l + '\x9b' for l in lines).encode('latin-1')
 
@@ -237,8 +241,9 @@ class Disks:
             if aux1 == 6:
                 if not os.path.isdir(folder):
                     return 150
-                self.open[x] = dict(data=self._listing(folder, name or '*.*'), pos=0,
-                                    write=False)
+                self.open[x] = dict(data=self._listing(folder, name or '*.*',
+                                                       bool(m[IOCB + x + 11] & 0x80)),
+                                    pos=0, write=False)
                 return 1
             path = os.path.join(folder, name)
             if aux1 & 8:

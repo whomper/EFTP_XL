@@ -40,7 +40,11 @@ CXIO1    STX TMP2
          STY TMP3
          JSR CCLOSE
          LDA #0
-         STA ICAX2
+         LDX ICAX1          ; a directory: SpartaDOS's long one, with
+         CPX #6             ; bytes and <DIR> (aux2 $80; DOS 2 takes
+         BNE CXIO2          ; no notice of it)
+         LDA #$80
+CXIO2    STA ICAX2
          LDA TMP
          LDY TMP3
          JSR IOSPEC
@@ -140,7 +144,6 @@ LREAD    LDA #LOCAL
          JSR PCLEAR
          LDA #0
          STA SPARTA
-         STA LFIRST
          LDA #'>
          JSR LHASDIR
          BCS LREAD1
@@ -168,8 +171,7 @@ LREAD2   LDA #<LLINE
          JSR CGETLN
          BCS LREAD3
          JSR LADD
-         INC LFIRST
-         BNE LREAD2
+         JMP LREAD2
 LREAD3   PHA
          JSR CCLOSE
          JSR PSORT
@@ -203,9 +205,7 @@ LADD     LDA #<LLINE
          STA PTR3
          LDA #>LLINE
          STA PTR3+1
-         LDA LFIRST
-         BNE LADD1
-         JSR PREFIXI
+         JSR PREFIXI        ; SpartaDOS's header, after an empty line
          .BYTE "Volume",0
          BCS LADD1
          INC SPARTA

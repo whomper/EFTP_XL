@@ -115,7 +115,8 @@ deleted rather than left half there.
   ASC, DOC, ME, NFO, DIZ, HTM, HTML, INF) and LST, and sends the rest as
   binary.
 - On DOS 2.5 a file's size is counted in sectors, so the size shown for
-  an Atari file (and its progress) is close, not exact.
+  an Atari file (and its progress) is close, not exact. SpartaDOS gives
+  the size in bytes, and its folders.
 
 Notes:
 
@@ -154,13 +155,15 @@ make atr        # bin/EFTPXL-SRC.ATR: the sources, for the Atari
 
 `bin/` and `dist/` are what make builds; they are never committed.
 
-**On the Atari** with Mac/65. `make atr` puts the sources and the
-program on one SpartaDOS double density disk, `EFTPXL-SRC.ATR`: the
-sources in Mac/65's own tokenized form (`.M65`, as its SAVE writes
-them), ready to LOAD. A release has this disk too.
+**On the Atari** with Mac/65. `make atr` makes `EFTPXL-SRC.ATR`, a
+SpartaDOS double density disk that boots SpartaDOS 3.2 and holds the
+program and its sources in Mac/65's own tokenized form (`.M65`, as its
+SAVE writes them), ready to LOAD. A release has this disk too.
 
-1. Copy the files to D1:, the drive Mac/65's `D:` means (on SpartaDOS,
-   its current folder).
+1. Boot the disk in D1: with the Mac/65 cartridge in (`EFTPXL.XEX` at
+   the SpartaDOS prompt runs the program; `CAR` goes to Mac/65). Mac/65's
+   `D:` is D1:; to work from another disk, copy the files to D1:'s
+   current folder.
 2. In Mac/65:
 
    ```
@@ -207,7 +210,7 @@ a snapshot: the screen as text, and `shot-N.png` as the Atari shows it.
 `--sio-log` shows every FTP command sent.
 
 `make test` (`tools/test_sim.py`, with `pip install py65 pyftpdlib`) runs
-the program that way against an FTP server it starts, through 26 checks:
+the program that way against an FTP server it starts, through 27 checks:
 sites, both panes, downloads and uploads (binary and text), the replace
 question, ESC, new folder, rename and delete on both sides, DOS 2.5.
 
@@ -238,6 +241,7 @@ Copyright (C) 2026 AERA | Erez Yaary.
 The C version, linked with fujinet-lib (GPL-3.0), is distributed as a
 whole under the GPL version 3.
 
-`EFTPXL-SRC.ATR` begins with SpartaDOS 3's boot sectors
-(`tools/disk/SPARTA.BOOT`, from EDOS); they stay under their own terms.
+`EFTPXL-SRC.ATR` carries SpartaDOS 3.2 (`tools/disk/X32G.DOS`) and its
+boot sectors (`tools/disk/SPARTA.BOOT`), as EDOS's disks do; they stay
+under their own terms.
 `tools/sparta.py` and `tools/mac65tok.py` are EDOS's.

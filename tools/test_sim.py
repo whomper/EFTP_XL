@@ -93,6 +93,7 @@ def main():
         check('connected: server pane', 'games' in t and 'readme.txt' in t
               and 'Big File.bin' in t, t)
         check('Atari pane', 'DIGDUG.XEX' in t and 'GAMES' in t, t)
+        check('Atari sizes in bytes', 'DIGDUG.XEX     9K' in t, t)
         check('server folder shown', '|/' in t, t)
 
         # download: binary byte for byte, text with EOL; the summary

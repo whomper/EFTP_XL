@@ -24,7 +24,6 @@ EDMASK   *=  *+1
 ; the Atari's disks
 ;
 SPARTA   *=  *+1        ; the listing is SpartaDOS's
-LFIRST   *=  *+1
 LEXT     *=  *+1
 CGOT     *=  *+2
 XLEN     *=  *+2

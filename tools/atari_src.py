@@ -2,7 +2,7 @@
 # EFTP_XL - the Mac/65 sources on Atari disks
 # Copyright (C) 2026 AERA | Erez Yaary. GPL-2.0-or-later, see COPYING.
 """Put the sources (and the program) on one SpartaDOS double density
-disk, ready for Mac/65: each NAME.ASM as NAME.M65, in the tokenized form
+disk that boots SpartaDOS 3.2, ready for Mac/65: each NAME.ASM as NAME.M65, in the tokenized form
 Mac/65's SAVE writes and LOAD and .INCLUDE read (tools/mac65tok.py).
 The lines are numbered 10, 20, ..., and the spaces that only line
 things up are left out (Mac/65 lays a line out itself). Other files
@@ -24,6 +24,7 @@ import sparta  # noqa: E402
 import mac65tok  # noqa: E402
 
 BOOT = os.path.join(HERE, 'disk', 'SPARTA.BOOT')   # SpartaDOS 3's boot sectors
+DOS = os.path.join(HERE, 'disk', 'X32G.DOS')       # and SpartaDOS 3.2, which they boot
 DD_SECTORS = 720
 EOL = 0x9B
 
@@ -127,9 +128,11 @@ def main():
             text = mac65(data.decode('ascii')).replace(bytes([EOL]), b'\n')
             name, data = name[:-4] + '.M65', mac65tok.tokenize(text.decode('ascii'))
         files.append((name, data))
+    files.insert(0, ('X32G.DOS', open(DOS, 'rb').read()))
     d = new_disk(a.atr, 'EFTPXL')
     for name, data in files:
         d.add(name, data)
+    d.set_boot_file('X32G.DOS')
     d.save()
     got = files_of(a.atr)
     for name, data in files:

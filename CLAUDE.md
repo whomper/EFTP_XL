@@ -27,7 +27,7 @@
   its token checked against Mac/65 the same way. `make atr` checks the
   disk gives the same program. The C version in `C/` is kept for reference only.
 - **Test** with `make test` (tools/test_sim.py, the real XEX on py65
-  against pyftpdlib): all 26 checks pass before a push.
+  against pyftpdlib): all its checks pass before a push.
 - **The name** reads "AERA | Erez Yaary" wherever it is given: copyright
   lines (`Copyright (C) 2026 AERA | Erez Yaary`), the docs, and as the
   author of every commit:
