@@ -3,7 +3,7 @@
 #
 #   make            bin/EFTPXL.XEX
 #   make dist       a release's files in dist/
-#   make atr        bin/EFTPXL1.ATR, 2: the sources as Mac/65 takes them
+#   make atr        bin/EFTPXL-SRC.ATR: the sources as Mac/65 takes them
 #   make test       tools/test_sim.py (pip install py65 pyftpdlib)
 #
 # bin/ and dist/ are what make builds, never committed: releases carry
@@ -31,12 +31,17 @@ $(PROGRAM): Makefile $(SRCS)
 ASM/FONT.ASM: fonts/EFTPXL.FNT tools/font2asm.py
 	$(PYTHON) tools/font2asm.py
 
-# the sources on Atari disks; ATasm must build the same program from them
-atr: $(PROGRAM)
-	rm -rf bin/atr bin/EFTPXL?.ATR
+# the sources (and the program) on an Atari disk, SpartaDOS double
+# density; ATasm must build the same program from what is on it
+SRCATR     := bin/EFTPXL-SRC.ATR
+
+atr: $(SRCATR)
+
+$(SRCATR): $(PROGRAM) tools/atari_src.py tools/sparta.py
+	rm -rf bin/atr
 	mkdir -p bin/atr
-	$(PYTHON) tools/atari_src.py bin/EFTPXL.ATR $(SRCS)
-	$(PYTHON) tools/atari_src.py --check --to bin/atr bin/EFTPXL?.ATR > /dev/null
+	$(PYTHON) tools/atari_src.py $@ $(SRCS) $(PROGRAM)
+	$(PYTHON) tools/atari_src.py --check --to bin/atr $@ > /dev/null
 	sed -e 's/#D:\([A-Z0-9]*\)\.M65/\1.ASM/' \
 	    bin/atr/EFTPXL.ASM > bin/atr/MAIN.ASM
 	cd bin/atr && $(ATASM) -s -mac65 -oCHECK.XEX MAIN.ASM > /dev/null
@@ -49,7 +54,7 @@ test: all
 dist: all atr
 	rm -rf dist
 	mkdir -p dist
-	cp $(PROGRAM) bin/EFTPXL?.ATR dist/
+	cp $(PROGRAM) $(SRCATR) dist/
 
 clean:
 	rm -rf bin dist

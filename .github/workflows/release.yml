@@ -1,7 +1,7 @@
 name: Release
 
-# Builds EFTPXL.XEX and the source disks (EFTPXL1.ATR, EFTPXL2.ATR) and
-# publishes them as a GitHub Release (a pre-release
+# Builds EFTPXL.XEX and the source disk (EFTPXL-SRC.ATR) and publishes
+# them as a GitHub Release (a pre-release
 # while the version is 0.x). Two ways to start it:
 # - Actions > Release > Run workflow, on main, with the notes: it tags
 #   main's commit vX.Y, from VERSION in ASM/EFTPXL.ASM;

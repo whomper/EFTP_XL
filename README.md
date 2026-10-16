@@ -149,17 +149,18 @@ export PATH="$PWD/atasm/src:$PATH"
 git clone https://github.com/whomper/EFTP_XL
 cd EFTP_XL
 make            # bin/EFTPXL.XEX
-make atr        # bin/EFTPXL1.ATR, bin/EFTPXL2.ATR: the sources, for the Atari
+make atr        # bin/EFTPXL-SRC.ATR: the sources, for the Atari
 ```
 
 `bin/` and `dist/` are what make builds; they are never committed.
 
-**On the Atari** with Mac/65. `make atr` puts the sources on two DOS 2
-disks (single density; DOS 2.5 and SpartaDOS read them) as Mac/65 takes
-them: ATASCII, numbered lines. A release has these disks too.
+**On the Atari** with Mac/65. `make atr` puts the sources and the
+program on one SpartaDOS double density disk, `EFTPXL-SRC.ATR`, the
+sources as Mac/65 ENTERs them (ATASCII, numbered lines). A release has
+this disk too.
 
-1. Copy all the files of both disks to one disk, or one SpartaDOS
-   folder, and make it the default drive (`D:`).
+1. Copy the files to a disk or SpartaDOS folder with room for the
+   `.M65` files too, and make it the default drive (`D:`).
 2. In Mac/65, each file but `EFTPXL.ASM` into Mac/65's own form, which
    `.INCLUDE` reads:
 
@@ -179,10 +180,13 @@ them: ATASCII, numbered lines. A release has these disks too.
    ASM ,,#D:EFTPXL.XEX
    ```
 
+   With the main file in memory this works on SpartaDOS too (as EDOS
+   found, Mac/65 1.01 can't assemble a main file read from disk there).
+
 The source keeps to what Mac/65 and ATasm both take: labels of letters
 and digits, `*=*+n` for room (no `.DS`), the font as `.BYTE` lines (no
 `.INCBIN`), `[ ]` around expressions, one level of `.INCLUDE`. ATasm
-builds the same program from the files on those disks (`make atr`
+builds the same program from the files on that disk (`make atr`
 checks this is so with `tools/atari_src.py --check`); Mac/65 itself is
 not run here.
 
@@ -216,7 +220,7 @@ label). Only releases leave the build machine. To release: raise `VERSION`, comm
 then run the Release workflow (Actions > Release > Run workflow, on main)
 with what is new: [`.github/workflows/release.yml`](.github/workflows/release.yml)
 builds ATasm (at a fixed commit) and the program, tags the commit `vX.Y`
-and publishes `EFTPXL.XEX` and the source disks as a GitHub Release (a pre-release while the
+and publishes `EFTPXL.XEX` and the source disk as a GitHub Release (a pre-release while the
 version is 0.x). Pushing a tag made with `git tag -a` does the same, with
 the tag's message as the notes.
 
@@ -236,3 +240,7 @@ Copyright (C) 2026 AERA | Erez Yaary.
 
 The C version, linked with fujinet-lib (GPL-3.0), is distributed as a
 whole under the GPL version 3.
+
+`EFTPXL-SRC.ATR` begins with SpartaDOS 3's boot sectors
+(`tools/disk/SPARTA.BOOT`, from EDOS); they stay under their own terms.
+`tools/sparta.py` is EDOS's.

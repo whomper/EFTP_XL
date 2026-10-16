@@ -1,27 +1,27 @@
 #!/usr/bin/env python3
 # EFTP_XL - the Mac/65 sources on Atari disks
 # Copyright (C) 2026 AERA | Erez Yaary. GPL-2.0-or-later, see COPYING.
-"""Put ASM/*.ASM on DOS 2 disks (single density ATRs, which DOS 2.5
-and SpartaDOS read) the way Mac/65 ENTERs them: ATASCII, numbered
-lines (10, 20, ...), the spaces that only line things up taken out
-(Mac/65 lays a line out itself). Whole files fill the first disk, then
-the next: EFTPXL1.ATR, EFTPXL2.ATR, ...
+"""Put the sources (and the program) on one SpartaDOS double density
+disk, the .ASM files as Mac/65 ENTERs them: ATASCII, numbered lines
+(10, 20, ...), the spaces that only line things up taken out (Mac/65
+lays a line out itself). Other files go as they are.
 
-    tools/atari_src.py OUT.ATR FILE.ASM...    (OUT1.ATR, OUT2.ATR, ...)
-    tools/atari_src.py --check OUT1.ATR ...   the files on the disks
+    tools/atari_src.py OUT.ATR FILE...
+    tools/atari_src.py --check OUT.ATR [--to DIR]
 
---check reads the disks back and writes their files (in ASCII, as
-ATasm takes them) to the folder given with --to.
+--check checks the disk (fsck) and lists it; with --to it writes the
+.ASM files back in ASCII, as ATasm takes them.
 """
 import argparse
 import os
 import sys
 
-SECTOR = 128
-SECTORS = 720
-DATA = 125                       # bytes a DOS 2 sector holds
-VTOC, DIR = 360, 361
-FREE = [s for s in range(4, SECTORS) if not 360 <= s <= 368]   # 707
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import sparta  # noqa: E402
+
+BOOT = os.path.join(HERE, 'disk', 'SPARTA.BOOT')   # SpartaDOS 3's boot sectors
+DD_SECTORS = 720
 EOL = 0x9B
 
 
@@ -71,104 +71,67 @@ def mac65(text):
     return bytes(out)
 
 
-def dos_name(path):
-    base, _, ext = os.path.basename(path).upper().partition('.')
-    assert 1 <= len(base) <= 8 and len(ext) <= 3, path
-    return base.ljust(8).encode() + ext.ljust(3).encode()
+def new_disk(path, volume):
+    """an empty SpartaDOS double density disk (720 sectors of 256 bytes)"""
+    size = 3 * 128 + (DD_SECTORS - 3) * 256
+    paras = size // 16
+    head = bytes([0x96, 0x02, paras & 255, (paras >> 8) & 255, 0, 1, paras >> 16]) + bytes(9)
+    boot = bytearray(open(BOOT, 'rb').read())
+    boot[0x0B], boot[0x0C] = DD_SECTORS & 255, DD_SECTORS >> 8
+    template = path + '.tmp'
+    open(template, 'wb').write(head + bytes(boot) + bytes(size - len(boot)))
+    try:
+        return sparta.new_disk(path, template, volume)
+    finally:
+        os.remove(template)
 
 
-class Disk:
-    def __init__(self):
-        self.img = bytearray(SECTORS * SECTOR)
-        self.free = list(FREE)
-        self.files = 0
-
-    def sector(self, n):
-        return (n - 1) * SECTOR
-
-    def room(self, size):
-        return self.files < 64 and len(self.free) * DATA >= max(size, 1)
-
-    def add(self, name, data):
-        n = self.files
-        self.files += 1
-        chunks = [data[i:i + DATA] for i in range(0, len(data), DATA)] or [b'']
-        secs = [self.free.pop(0) for _ in chunks]
-        for i, (s, chunk) in enumerate(zip(secs, chunks)):
-            nxt = secs[i + 1] if i + 1 < len(secs) else 0
-            o = self.sector(s)
-            self.img[o:o + len(chunk)] = chunk
-            self.img[o + 125] = (n << 2) | (nxt >> 8)
-            self.img[o + 126] = nxt & 255
-            self.img[o + 127] = len(chunk)
-        o = self.sector(DIR + n // 8) + (n % 8) * 16
-        self.img[o] = 0x42
-        self.img[o + 1:o + 3] = len(secs).to_bytes(2, 'little')
-        self.img[o + 3:o + 5] = secs[0].to_bytes(2, 'little')
-        self.img[o + 5:o + 16] = name
-
-    def atr(self):
-        o = self.sector(VTOC)
-        self.img[o] = 2
-        self.img[o + 1:o + 3] = len(FREE).to_bytes(2, 'little')
-        self.img[o + 3:o + 5] = len(self.free).to_bytes(2, 'little')
-        for s in self.free:
-            self.img[o + 10 + s // 8] |= 0x80 >> (s % 8)
-        size = len(self.img) // 16
-        head = bytes([0x96, 0x02, size & 255, (size >> 8) & 255, SECTOR & 255,
-                      SECTOR >> 8, size >> 16]) + bytes(9)
-        return head + bytes(self.img)
-
-
-def read_atr(path):
-    """{name: data} of a DOS 2 single density ATR"""
-    img = open(path, 'rb').read()[16:]
-    files = {}
-    for n in range(64):
-        o = (DIR + n // 8 - 1) * SECTOR + (n % 8) * 16
-        if not img[o] & 0x40 or img[o] & 0x80:
-            continue
-        name = img[o + 5:o + 13].decode().strip()
-        ext = img[o + 13:o + 16].decode().strip()
-        s, data = int.from_bytes(img[o + 3:o + 5], 'little'), bytearray()
-        while s:
-            so = (s - 1) * SECTOR
-            assert img[so + 125] >> 2 == n, f'{name}: sector {s} is not its'
-            data += img[so:so + img[so + 127]]
-            s = (img[so + 125] & 3) << 8 | img[so + 126]
-        files[name + ('.' + ext if ext else '')] = bytes(data)
-    return files
+def files_of(path):
+    """{name: data} of a SpartaDOS disk's root directory"""
+    d = sparta.Disk(path)
+    out = {}
+    for _, e in d.entries():
+        if d.live(e) and not e[0] & 0x20:
+            out[d.name(e)] = d.read_file(d.w(e, 1), e[3] | e[4] << 8 | e[5] << 16)
+    return out
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('--check', action='store_true')
     ap.add_argument('--to')
-    ap.add_argument('out')
+    ap.add_argument('atr')
     ap.add_argument('files', nargs='*')
     a = ap.parse_args()
 
     if a.check:
-        for atr in [a.out] + a.files:
-            for name, data in read_atr(atr).items():
+        d = sparta.Disk(a.atr)
+        problems, lost = d.fsck()
+        if problems or lost:
+            raise SystemExit(f'{a.atr}: {problems} {lost}')
+        for name, data in files_of(a.atr).items():
+            if a.to and name.endswith('.ASM'):
                 text = data.replace(bytes([EOL]), b'\n').decode('ascii')
-                if a.to:
-                    open(os.path.join(a.to, name), 'w').write(text)
-                print(f'{atr}: {name} {len(data)} bytes')
+                open(os.path.join(a.to, name), 'w').write(text)
+            print(f'{name} {len(data)} bytes')
         return 0
 
-    base, ext = os.path.splitext(a.out)
-    disks = [Disk()]
-    for path in sorted(a.files, key=lambda p: (not p.endswith('EFTPXL.ASM'), p)):
-        data = mac65(open(path).read())
-        if not disks[-1].room(len(data)):
-            disks.append(Disk())
-        assert disks[-1].room(len(data)), f'{path} does not fit on a disk'
-        disks[-1].add(dos_name(path), data)
-    for i, d in enumerate(disks):
-        name = f'{base}{i + 1}{ext}'
-        open(name, 'wb').write(d.atr())
-        print(f'{name}: {d.files} files, {len(d.free) * DATA} bytes free')
+    files = []
+    for path in a.files:
+        name = os.path.basename(path).upper()
+        data = open(path, 'rb').read()
+        if name.endswith('.ASM'):
+            data = mac65(data.decode('ascii'))
+        files.append((name, data))
+    d = new_disk(a.atr, 'EFTPXL')
+    for name, data in files:
+        d.add(name, data)
+    d.save()
+    got = files_of(a.atr)
+    for name, data in files:
+        assert got.get(name) == data, f'{name} reads back wrong'
+    free = sparta.Disk(a.atr).w(sparta.Disk(a.atr).read(1), 0x0D)
+    print(f'{a.atr}: {len(files)} files, {free} sectors free')
     return 0
 
 

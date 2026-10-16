@@ -6,7 +6,7 @@
   raise `VERSION`, commit, push, then run the Release workflow on main
   with the notes; `.github/workflows/release.yml` builds ATasm at
   `ATASM_REV` and the program, tags vX.Y and publishes `EFTPXL.XEX` and
-  the source disks. Never reuse a number.
+  the source disk. Never reuse a number.
 - **Only formal releases leave the build machine.** Erez gets vX.Y
   releases made by the Release workflow from `main`, nothing else: no
   test builds, no CI artifacts, no builds from a branch. Work lands on
@@ -21,7 +21,7 @@
   `.REPT`, `%%`, `<<`; `[ ]` around an expression after `<` or `>`;
   only `EFTPXL.ASM` has `.INCLUDE #D:NAME.M65` lines; no TAB or `{ } ~ \``
   (not ATASCII); a file stays under about 14K as `tools/atari_src.py`
-  writes it, so Mac/65 can ENTER it. `make atr` checks the disks give
+  writes it, so Mac/65 can ENTER it. `make atr` checks the disk gives
   the same program. The C version in `C/` is kept for reference only.
 - **Test** with `make test` (tools/test_sim.py, the real XEX on py65
   against pyftpdlib): all 26 checks pass before a push.

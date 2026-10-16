@@ -24,7 +24,7 @@ jobs:
           git -C "$RUNNER_TEMP/atasm" checkout -q FETCH_HEAD
           make -C "$RUNNER_TEMP/atasm/src" -j"$(nproc)" >/dev/null
           echo "$RUNNER_TEMP/atasm/src" >> "$GITHUB_PATH"
-      - name: Build, and the source disks (the same program from them)
+      - name: Build, and the source disk (the same program from it)
         run: make atr
       - name: Test
         run: |
