@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-# EFTP_XL - run EFTPXL.XEX on an emulated 6502 against a real FTP server
+# EFTP_XL - run EFTPXL.PRG on an emulated 6502 against a real FTP server
 # Copyright (C) 2026 AERA | Erez Yaary. GPL-2.0-or-later, see COPYING.
-"""Run the real EFTPXL.XEX on py65 with the Atari OS calls it makes
+"""Run the real EFTPXL.PRG on py65 with the Atari OS calls it makes
 stood in for, the way EDOS's tools/sim.py tests EDOS:
 
 - The XEX is loaded segment by segment as DOS does, running INITAD
@@ -556,7 +556,7 @@ def parse_keys(s):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('keys', help='keys to type (see above)')
-    ap.add_argument('--xex', default=os.path.join(ROOT, 'bin', 'EFTPXL.XEX'))
+    ap.add_argument('--prg', '--xex', dest='xex', default=os.path.join(ROOT, 'bin', 'EFTPXL.PRG'))
     ap.add_argument('--memlo', type=lambda v: int(v, 0), default=0x1F00)
     ap.add_argument('--d1', help='folder for D1:')
     ap.add_argument('--d2', help='folder for D2:')

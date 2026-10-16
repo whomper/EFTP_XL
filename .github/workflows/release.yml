@@ -1,6 +1,6 @@
 name: Release
 
-# Builds EFTPXL.XEX and the source disk (EFTPXL-SRC.ATR) and publishes
+# Builds EFTPXL.PRG and the source disk (EFTPXL-SRC.ATR) and publishes
 # them as a GitHub Release, marked Latest (the one the repository's
 # page shows). Two ways to start it:
 # - Actions > Release > Run workflow, on main, with the notes: it tags

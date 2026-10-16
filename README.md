@@ -58,10 +58,10 @@ FTP is unencrypted, so only use it on your home network.
 
 ## Running on the Atari
 
-1. Get `EFTPXL.XEX` from the
+1. Get `EFTPXL.PRG` from the
    [latest release](https://github.com/whomper/EFTP_XL/releases) onto a disk
    the Atari can read, e.g. an ATR on the FujiNet SD card or a TNFS share.
-2. Load it: `L` from the DOS 2.5 menu, or type `EFTPXL.XEX` at the
+2. Load it: `L` from the DOS 2.5 menu, or type `EFTPXL.PRG` at the
    SpartaDOS prompt.
 3. Press ^K for the sites, ^N to add one: a name, the server (IP address
    or name), port (21 unless your server uses another), user and
@@ -167,7 +167,7 @@ export PATH="$PWD/atasm/src:$PATH"
 
 git clone https://github.com/whomper/EFTP_XL
 cd EFTP_XL
-make            # bin/EFTPXL.XEX
+make            # bin/EFTPXL.PRG
 make atr        # bin/EFTPXL-SRC.ATR: the sources, for the Atari
 ```
 
@@ -178,7 +178,7 @@ SpartaDOS double density disk that boots SpartaDOS 3.2 and holds the
 program and its sources in Mac/65's own tokenized form (`.M65`, as its
 SAVE writes them), ready to LOAD. A release has this disk too.
 
-1. Boot the disk in D1: with the Mac/65 cartridge in (`EFTPXL.XEX` at
+1. Boot the disk in D1: with the Mac/65 cartridge in (`EFTPXL.PRG` at
    the SpartaDOS prompt runs the program; `CAR` goes to Mac/65). Mac/65's
    `D:` is D1:; to work from another disk, copy the files to D1:'s
    current folder.
@@ -189,9 +189,8 @@ SAVE writes them), ready to LOAD. A release has this disk too.
    ASM ,,#D:EFTPXL.PRG
    ```
 
-   This makes `EFTPXL.PRG`, the program (the same as `EFTPXL.XEX`, in
-   Mac/65's smaller segments); run it as `EFTPXL.PRG` at the SpartaDOS
-   prompt. `EFTPXL.M65` is the main file; Mac/65 reads the parts it includes
+   This makes `EFTPXL.PRG`, the program: the same bytes as the release's,
+   in Mac/65's smaller segments. `EFTPXL.M65` is the main file; Mac/65 reads the parts it includes
    from `D:` as it assembles. Load the main file first and give no
    source to `ASM`: on SpartaDOS, Mac/65 1.01 can't assemble a main
    file read from disk (as EDOS found). With SpartaDOS 3.2 it reports
@@ -221,7 +220,7 @@ text (`make atr` checks this is so with `tools/atari_src.py --check`).
 ## Testing
 
 **The program on an emulated 6502.** `tools/sim.py` runs the real
-`bin/EFTPXL.XEX` on [py65](https://github.com/mnaberez/py65), the way
+`bin/EFTPXL.PRG` on [py65](https://github.com/mnaberez/py65), the way
 EDOS is tested. It stands in for the OS calls the program makes: the
 screen (read from screen memory), the keyboard (typed from a script),
 the disks (D1:, D2: are folders here, through CIO, listed as SpartaDOS
@@ -276,7 +275,7 @@ label). Only releases leave the build machine. To release: raise `VERSION`, comm
 then run the Release workflow (Actions > Release > Run workflow, on main)
 with what is new: [`.github/workflows/release.yml`](.github/workflows/release.yml)
 builds ATasm (at a fixed commit) and the program, tags the commit `vX.Y`
-and publishes `EFTPXL.XEX` and the source disk as a GitHub Release, marked
+and publishes `EFTPXL.PRG` and the source disk as a GitHub Release, marked
 Latest. Pushing a tag made with `git tag -a` does the same, with
 the tag's message as the notes.
 

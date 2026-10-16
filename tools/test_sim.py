@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-# EFTP_XL - end-to-end tests: the real EFTPXL.XEX in tools/sim.py
+# EFTP_XL - end-to-end tests: the real EFTPXL.PRG in tools/sim.py
 # Copyright (C) 2026 AERA | Erez Yaary. GPL-2.0-or-later, see COPYING.
-"""Run bin/EFTPXL.XEX on the emulated 6502 against an FTP server started
+"""Run bin/EFTPXL.PRG on the emulated 6502 against an FTP server started
 here (pyftpdlib), with D1: a folder here, and check the screen and the
 files: listing both sides, downloads and uploads (binary and text),
 the replace question, ESC, new folder, rename and delete, DOS 2.5's
@@ -188,7 +188,7 @@ def main():
     return 1 if failures else 0
 
 
-XEX = os.path.join(sim.ROOT, 'bin', 'EFTPXL.XEX')
+XEX = os.path.join(sim.ROOT, 'bin', 'EFTPXL.PRG')
 
 if __name__ == '__main__':
     sys.exit(main())

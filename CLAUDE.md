@@ -5,7 +5,7 @@
   (every build shows `x.y`; there is no -dev label). A release:
   raise `VERSION`, commit, push, then run the Release workflow on main
   with the notes; `.github/workflows/release.yml` builds ATasm at
-  `ATASM_REV` and the program, tags vX.Y and publishes `EFTPXL.XEX` and
+  `ATASM_REV` and the program, tags vX.Y and publishes `EFTPXL.PRG` and
   the source disk. Never reuse a number.
 - **Only formal releases leave the build machine.** Erez gets vX.Y
   releases made by the Release workflow from `main`, nothing else: no
@@ -26,7 +26,7 @@
   MAC/65 1.01 saves); an operator or directive not used before needs
   its token checked against Mac/65 the same way. `make atr` checks the
   disk gives the same program. The C version in `C/` is kept for reference only.
-- **Test** with `make test` (tools/test_sim.py, the real XEX on py65
+- **Test** with `make test` (tools/test_sim.py, the real program on py65
   against pyftpdlib): all its checks pass before a push.
 - **The README's pictures** are the real program in tools/sim.py:
   `tools/screenshots.py` takes them again (docs/screens); take them
