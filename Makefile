@@ -3,7 +3,7 @@
 #
 #   make            bin/EFTPXL.PRG
 #   make dist       a release's files in dist/
-#   make atr        bin/EFTPXL-SRC.ATR: the sources as Mac/65 takes them
+#   make atr        bin/EFTPXL.ATR: the sources as Mac/65 takes them
 #   make test       tools/test_sim.py (pip install py65 pyftpdlib)
 #
 # bin/ and dist/ are what make builds, never committed: releases carry
@@ -33,7 +33,7 @@ ASM/FONT.ASM: fonts/EFTPXL.FNT tools/font2asm.py
 
 # the sources (and the program) on an Atari disk, SpartaDOS double
 # density; ATasm must build the same program from what is on it
-SRCATR     := bin/EFTPXL-SRC.ATR
+SRCATR     := bin/EFTPXL.ATR
 
 atr: $(SRCATR)
 

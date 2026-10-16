@@ -168,12 +168,12 @@ export PATH="$PWD/atasm/src:$PATH"
 git clone https://github.com/whomper/EFTP_XL
 cd EFTP_XL
 make            # bin/EFTPXL.PRG
-make atr        # bin/EFTPXL-SRC.ATR: the sources, for the Atari
+make atr        # bin/EFTPXL.ATR: the sources, for the Atari
 ```
 
 `bin/` and `dist/` are what make builds; they are never committed.
 
-**On the Atari** with Mac/65. `make atr` makes `EFTPXL-SRC.ATR`, a
+**On the Atari** with Mac/65. `make atr` makes `EFTPXL.ATR`, a
 SpartaDOS double density disk that boots SpartaDOS 3.2 and holds the
 program and its sources in Mac/65's own tokenized form (`.M65`, as its
 SAVE writes them), ready to LOAD. A release has this disk too.
@@ -260,7 +260,7 @@ push.
 **With the Atari's own software.** Before a release the program also
 runs in the [atari800](https://atari800.github.io) emulator (its
 library, driven by a script), with the Atari's own OS and DOS instead
-of stand-ins: SpartaDOS 3.2 booted from `EFTPXL-SRC.ATR`, EFTP_XL run
+of stand-ins: SpartaDOS 3.2 booted from `EFTPXL.ATR`, EFTP_XL run
 from its prompt, and the MAC/65 1.01 cartridge assembling the disk's
 sources. That is how the SpartaDOS directory fixed in 0.6 was found.
 The cartridge isn't in this repository, so this isn't part of CI.
@@ -296,7 +296,7 @@ Copyright (C) 2026 AERA | Erez Yaary.
 The C version, linked with fujinet-lib (GPL-3.0), is distributed as a
 whole under the GPL version 3.
 
-`EFTPXL-SRC.ATR` carries SpartaDOS 3.2 (`tools/disk/X32G.DOS`) and its
+`EFTPXL.ATR` carries SpartaDOS 3.2 (`tools/disk/X32G.DOS`) and its
 boot sectors (`tools/disk/SPARTA.BOOT`), as EDOS's disks do; they stay
 under their own terms.
 `tools/sparta.py` and `tools/mac65tok.py` are EDOS's.

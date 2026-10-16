@@ -6,7 +6,8 @@
   raise `VERSION`, commit, push, then run the Release workflow on main
   with the notes; `.github/workflows/release.yml` builds ATasm at
   `ATASM_REV` and the program, tags vX.Y and publishes `EFTPXL.PRG` and
-  the source disk. Never reuse a number.
+  the disk `EFTPXL.ATR` (the sources and the program, so not
+  `-SRC`; always this name). Never reuse a number.
 - **Only formal releases leave the build machine.** Erez gets vX.Y
   releases made by the Release workflow from `main`, nothing else: no
   test builds, no CI artifacts, no builds from a branch. Work lands on
