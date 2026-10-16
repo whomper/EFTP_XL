@@ -155,40 +155,37 @@ make atr        # bin/EFTPXL-SRC.ATR: the sources, for the Atari
 `bin/` and `dist/` are what make builds; they are never committed.
 
 **On the Atari** with Mac/65. `make atr` puts the sources and the
-program on one SpartaDOS double density disk, `EFTPXL-SRC.ATR`, the
-sources as Mac/65 ENTERs them (ATASCII, numbered lines). A release has
-this disk too.
+program on one SpartaDOS double density disk, `EFTPXL-SRC.ATR`: the
+sources in Mac/65's own tokenized form (`.M65`, as its SAVE writes
+them), ready to LOAD. A release has this disk too.
 
-1. Copy the files to a disk or SpartaDOS folder with room for the
-   `.M65` files too, and make it the default drive (`D:`).
-2. In Mac/65, each file but `EFTPXL.ASM` into Mac/65's own form, which
-   `.INCLUDE` reads:
-
-   ```
-   NEW
-   ENTER #D:SCREEN.ASM
-   SAVE #D:SCREEN.M65
-   ```
-
-   for `EQUATES`, `FONT`, `UI`, `CMDS`, `XFER`, `XSHOW`, `SITES`, `FTP`,
-   `REMOTE`, `LOCAL`, `PANE`, `SCREEN`, `TEXT` and `DATA`.
-3. Then the main file, which includes them:
+1. Copy the files to D1:, the drive Mac/65's `D:` means (on SpartaDOS,
+   its current folder).
+2. In Mac/65:
 
    ```
-   NEW
-   ENTER #D:EFTPXL.ASM
+   LOAD #D:EFTPXL.M65
    ASM ,,#D:EFTPXL.XEX
    ```
 
-   With the main file in memory this works on SpartaDOS too (as EDOS
-   found, Mac/65 1.01 can't assemble a main file read from disk there).
+   `EFTPXL.M65` is the main file; Mac/65 reads the parts it includes
+   from `D:` as it assembles. Load the main file first and give no
+   source to `ASM`: on SpartaDOS, Mac/65 1.01 can't assemble a main
+   file read from disk (as EDOS found). With SpartaDOS 3.2 it reports
+   `ASSEMBLY ERRORS: 0` with about 16K free.
+
+Each `.M65` can be LOADed to read or change it, and SAVEd back.
+`tools/mac65tok.py` (EDOS's, with the tokens EFTP_XL uses as well)
+writes them: they are the same, byte for byte, as Mac/65 1.01 saves
+after ENTERing the text, and Mac/65 1.01 builds the same program from
+them as ATasm does. That was checked by running the cartridge in the
+atari800 emulator; the cartridge isn't in this repository.
 
 The source keeps to what Mac/65 and ATasm both take: labels of letters
 and digits, `*=*+n` for room (no `.DS`), the font as `.BYTE` lines (no
 `.INCBIN`), `[ ]` around expressions, one level of `.INCLUDE`. ATasm
-builds the same program from the files on that disk (`make atr`
-checks this is so with `tools/atari_src.py --check`); Mac/65 itself is
-not run here.
+builds the same program from the files on that disk, turned back into
+text (`make atr` checks this is so with `tools/atari_src.py --check`).
 
 **Testing without an Atari.** `tools/sim.py` runs the real
 `bin/EFTPXL.XEX` on an emulated 6502 ([py65](https://github.com/mnaberez/py65)),
@@ -243,4 +240,4 @@ whole under the GPL version 3.
 
 `EFTPXL-SRC.ATR` begins with SpartaDOS 3's boot sectors
 (`tools/disk/SPARTA.BOOT`, from EDOS); they stay under their own terms.
-`tools/sparta.py` is EDOS's.
+`tools/sparta.py` and `tools/mac65tok.py` are EDOS's.

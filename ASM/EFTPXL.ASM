@@ -2,9 +2,9 @@
 ; EFTP_XL - file transfer for 8-bit Ataris over FujiNet
 ; Copyright (C) 2026 AERA | Erez Yaary. GPL-2.0-or-later, see COPYING.
 ;
-; Mac/65 source: on the Atari, ENTER each file and SAVE it as .M65
-; (README.md says how), then ASM this one; on another computer, make
-; (ATasm). The program loads at LOAD, above DOS, EDOS ($1E00-$3752)
+; Mac/65 source: on the Atari, LOAD #D:EFTPXL.M65 from the source
+; disk, then ASM ,,#D:EFTPXL.XEX (README.md says more); on another
+; computer, make (ATasm). The program loads at LOAD, above DOS, EDOS ($1E00-$3752)
 ; and the MEMLO of DOS 2.5 and SpartaDOS 3, and ends below $9C00, so
 ; BASIC may be on.
 ;
@@ -56,7 +56,7 @@ NOROOM   .BYTE "EFTP_XL: not enough memory",EOL
 ;
 ; the last release, which every build shows
 ;
-VERSION  .BYTE "EFTP_XL 0.4",0
+VERSION  .BYTE "EFTP_XL 0.5",0
 ;
          .INCLUDE #D:UI.M65
          .INCLUDE #D:CMDS.M65

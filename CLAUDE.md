@@ -21,8 +21,11 @@
   `.REPT`, `%%`, `<<`; `[ ]` around an expression after `<` or `>`;
   only `EFTPXL.ASM` has `.INCLUDE #D:NAME.M65` lines; no TAB or `{ } ~ \``
   (not ATASCII); a file stays under about 14K as `tools/atari_src.py`
-  writes it, so Mac/65 can ENTER it. `make atr` checks the disk gives
-  the same program. The C version in `C/` is kept for reference only.
+  writes it, so Mac/65 can ENTER it. The source disk carries them
+  tokenized (`tools/mac65tok.py`, checked byte for byte against what
+  MAC/65 1.01 saves); an operator or directive not used before needs
+  its token checked against Mac/65 the same way. `make atr` checks the
+  disk gives the same program. The C version in `C/` is kept for reference only.
 - **Test** with `make test` (tools/test_sim.py, the real XEX on py65
   against pyftpdlib): all 26 checks pass before a push.
 - **The name** reads "AERA | Erez Yaary" wherever it is given: copyright

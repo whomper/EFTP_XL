@@ -2,15 +2,17 @@
 # EFTP_XL - the Mac/65 sources on Atari disks
 # Copyright (C) 2026 AERA | Erez Yaary. GPL-2.0-or-later, see COPYING.
 """Put the sources (and the program) on one SpartaDOS double density
-disk, the .ASM files as Mac/65 ENTERs them: ATASCII, numbered lines
-(10, 20, ...), the spaces that only line things up taken out (Mac/65
-lays a line out itself). Other files go as they are.
+disk, ready for Mac/65: each NAME.ASM as NAME.M65, in the tokenized form
+Mac/65's SAVE writes and LOAD and .INCLUDE read (tools/mac65tok.py).
+The lines are numbered 10, 20, ..., and the spaces that only line
+things up are left out (Mac/65 lays a line out itself). Other files
+go as they are.
 
     tools/atari_src.py OUT.ATR FILE...
     tools/atari_src.py --check OUT.ATR [--to DIR]
 
---check checks the disk (fsck) and lists it; with --to it writes the
-.ASM files back in ASCII, as ATasm takes them.
+--check checks the disk (fsck) and lists it; with --to it writes each
+.M65 back as NAME.ASM text, as ATasm takes it.
 """
 import argparse
 import os
@@ -19,6 +21,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import sparta  # noqa: E402
+import mac65tok  # noqa: E402
 
 BOOT = os.path.join(HERE, 'disk', 'SPARTA.BOOT')   # SpartaDOS 3's boot sectors
 DD_SECTORS = 720
@@ -110,9 +113,9 @@ def main():
         if problems or lost:
             raise SystemExit(f'{a.atr}: {problems} {lost}')
         for name, data in files_of(a.atr).items():
-            if a.to and name.endswith('.ASM'):
-                text = data.replace(bytes([EOL]), b'\n').decode('ascii')
-                open(os.path.join(a.to, name), 'w').write(text)
+            if a.to and name.endswith('.M65'):
+                text = mac65tok.detokenize(data)
+                open(os.path.join(a.to, name[:-4] + '.ASM'), 'w').write(text)
             print(f'{name} {len(data)} bytes')
         return 0
 
@@ -121,7 +124,8 @@ def main():
         name = os.path.basename(path).upper()
         data = open(path, 'rb').read()
         if name.endswith('.ASM'):
-            data = mac65(data.decode('ascii'))
+            text = mac65(data.decode('ascii')).replace(bytes([EOL]), b'\n')
+            name, data = name[:-4] + '.M65', mac65tok.tokenize(text.decode('ascii'))
         files.append((name, data))
     d = new_disk(a.atr, 'EFTPXL')
     for name, data in files:
