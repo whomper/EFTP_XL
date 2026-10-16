@@ -53,15 +53,19 @@ DROW1    JSR PUTCH
          LDA #12
          STA SW
          LDX DRI
+         LDA XQST,X         ; how it went
+         STA DRF
          LDA XQUEUE,X
-         STA DRJ
+         LDY XWALK          ; in a folder: the file going in it
+         BEQ DROW1A
+         CPX XCUR
+         BNE DROW1A
+         LDA K
+DROW1A   STA DRJ
          TAX
          JSR SHOWN
          JSR PUTW
          INC SCOL
-         LDX DRJ
-         LDA EFLAG,X
-         STA DRF
          JSR SIZESTART
          LDA DRI
          CMP XCUR
@@ -121,6 +125,9 @@ DROW7    TXA
          INY
 DROW7A   JSR PUTS
          LDX DRJ
+         LDA EFLAG,X        ; a folder has no size
+         AND #EDIR
+         BNE DROW8
          JSR ESIZE
          JSR SBSIZE
 DROW8    LDA #<SIZEB

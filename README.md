@@ -34,7 +34,7 @@ The design for the finished program, transfers included, is in
 - [x] Download and upload files, marked ones one after the other, with
       progress, speed, ESC to stop, and text line ends converted
 - [x] New folder, rename, delete, on both sides
-- [ ] Folders with everything in them
+- [x] Folders with everything in them
 
 ## The server
 
@@ -72,13 +72,13 @@ file under the cursor, then the transfers.
 |----------------|-----------------------------------------|
 | ^K / ^D        | the sites (connect) / disconnect        |
 | RETURN         | open the folder, send the file          |
-| ^T             | send the marked files                   |
+| ^T             | send the marked files and folders, or the one under the cursor |
 | ESC            | stop the transfer                       |
 | BACKSPACE      | the folder up                           |
 | TAB            | the other pane                          |
 | ↑ ↓ (or - =)   | move; ← → (or + \*) a page              |
 | A-Z            | the next name starting with the letter  |
-| SPACE / ^A     | mark the file and move on / mark all    |
+| SPACE / ^A     | mark and move on / mark all the files   |
 | 1-8            | drive D1:-D8: (in the Atari pane)       |
 | ^N             | new folder                              |
 | ^E             | rename                                  |
@@ -104,6 +104,13 @@ other. The transfers area shows them (Done, Waiting, a progress bar for
 the one going), the info line the speed, and at the end "3 files, 260K
 in 0:42 (6K/s)". ESC stops; a file stopped on its way to the Atari is
 deleted rather than left half there.
+
+**Sending folders.** Mark a folder with SPACE (or put the cursor on it)
+and ^T sends it with everything in it, folders in folders too (8 deep
+at most). It is made on the other side, or gone into when it is there
+already; files already there are asked about, as at the top. Going to
+the Atari, a folder gets an 8.3 name as files do, which needs
+SpartaDOS: DOS 2.5 has no folders. The summary counts the files.
 
 - A file coming to the Atari gets a name DOS takes: up to 8 letters and
   digits and 3 for the extension, in capitals (`STinG 1.26.zip` becomes

@@ -56,12 +56,13 @@ NOROOM   .BYTE "EFTP_XL: not enough memory",EOL
 ;
 ; the last release, which every build shows
 ;
-VERSION  .BYTE "EFTP_XL 0.6",0
+VERSION  .BYTE "EFTP_XL 0.7",0
 ;
          .INCLUDE #D:UI.M65
          .INCLUDE #D:CMDS.M65
          .INCLUDE #D:XFER.M65
          .INCLUDE #D:XSHOW.M65
+         .INCLUDE #D:XTREE.M65
          .INCLUDE #D:SITES.M65
          .INCLUDE #D:FTP.M65
          .INCLUDE #D:REMOTE.M65

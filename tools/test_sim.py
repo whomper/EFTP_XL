@@ -147,10 +147,38 @@ def main():
         check('server folder out', 'Big File.bin' in shots[1], shots[1])
         check('Atari folder in', 'D1:>GAMES>' in shots[2], shots[2])
 
+        # a folder with all in it: down, two folders deep, and up
+        tree = os.path.join(srv_root, 'tree')
+        os.makedirs(os.path.join(tree, 'sub', 'deep'))
+        open(os.path.join(tree, 'a.txt'), 'wb').write(b'hi\n')
+        open(os.path.join(tree, 'sub', 'b.bin'), 'wb').write(BIG[:3000])
+        open(os.path.join(tree, 'sub', 'deep', 'c.dat'), 'wb').write(BIG[:700])
+        shots = run('^K\\n\\wt^T\\w\\s^Q', d1)
+        got = lambda *p: open(os.path.join(d1, *p), 'rb').read() \
+            if os.path.exists(os.path.join(d1, *p)) else None
+        check('folder down', got('TREE', 'A.TXT') == b'hi\x9b'
+              and got('TREE', 'SUB', 'B.BIN') == BIG[:3000]
+              and got('TREE', 'SUB', 'DEEP', 'C.DAT') == BIG[:700], str(os.listdir(d1)))
+        check('folder down summary', '3 files' in shots[0], shots[0][:200])
+        tools = os.path.join(d1, 'TOOLS')
+        os.makedirs(os.path.join(tools, 'SUB'))
+        open(os.path.join(tools, 'X.COM'), 'wb').write(BIG[:500])
+        open(os.path.join(tools, 'SUB', 'Y.DAT'), 'wb').write(BIG[:1500])
+        shots = run('^K\\n\\w\\tT^T\\w\\s^Q', d1)
+        up = os.path.join(srv_root, 'TOOLS')
+        check('folder up', os.path.exists(os.path.join(up, 'SUB', 'Y.DAT'))
+              and open(os.path.join(up, 'X.COM'), 'rb').read() == BIG[:500]
+              and open(os.path.join(up, 'SUB', 'Y.DAT'), 'rb').read() == BIG[:1500],
+              shots[0][:300])
+        check('panes back where they were', '|/' in shots[0] and 'D1:   ' in shots[0],
+              shots[0][:300])
+
         # DOS 2.5: its listing, and no folders
         shots = run('^NX\\n\\s^Q', d1, dos='dos2')
         check('DOS 2.5 listing', 'DIGDUG.XEX' in shots[0], shots[0])
         check('DOS 2.5 has no folders', 'this DOS has no folders' in shots[0])
+        shots = run('^K\\n\\wt^T\\w\\s^Q', d1, dos='dos2')
+        check('DOS 2.5: no folder sent', 'error 146' in shots[0], shots[0][:200])
     finally:
         server.close()
         shutil.rmtree(tmp)

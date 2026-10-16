@@ -706,9 +706,9 @@ MKEYS    .BYTE "^K",0,"Sites",0,"^T",0,"Send",0,"TAB",0,"Pane",0
 HTITLE   .BYTE "Keys",0
 HKEYS    .BYTE "^K ^D",0,"sites / disconnect",0
          .BYTE "RETURN",0,"open folder, send file",0
-         .BYTE "SPACE",0,"mark file and move on",0
+         .BYTE "SPACE",0,"mark and move on",0
          .BYTE "^A",0,"mark all",0
-         .BYTE "^T",0,"send what is marked",0
+         .BYTE "^T",0,"send marked, folders too",0
          .BYTE "BKSP",0,"folder up",0
          .BYTE "TAB",0,"other pane",0
          .BYTE "^N ^E",0,"new folder / rename",0

@@ -10,9 +10,10 @@
 ; changed (CR LF on the server, EOL on the Atari) when the site says
 ; Text, or By type and the name ends in one of EFTP's text types.
 ;
-; XSEND: from the active pane to the other; XONLY not 0: only the file
-; under the cursor. The carry set when something was sent (the panes
-; need reading again).
+; XSEND: from the active pane to the other, the marked files and folders
+; (a folder with all in it, XTREE); XONLY not 0: only the one under the
+; cursor. The carry set when something was sent (the panes need reading
+; again).
 ;
 XSEND    LDA ACTIVE
          STA XDOWN
@@ -28,7 +29,13 @@ XSEND    LDA ACTIVE
          STA XCUR
          STA XSTOP
          STA XOK
+         STA XNF
+         STA XWALK
          STA XERROR
+         LDX #MAXE-1
+XSEND0   STA XQST,X
+         DEX
+         BPL XSEND0
          JSR PEND
          LDA XONLY
          BNE XSEND2
@@ -36,9 +43,8 @@ XSEND    LDA ACTIVE
 XSEND1   CPX TMP4
          BCS XSEND2
          LDA EFLAG,X
-         AND #EMARK+EDIR
-         CMP #EMARK
-         BNE XSEND1A
+         AND #EMARK
+         BEQ XSEND1A
          TXA
          LDY XCOUNT
          STA XQUEUE,Y
@@ -50,7 +56,7 @@ XSEND2   LDA XCOUNT
          JSR CURENT         ; none marked: the one under the cursor
          BEQ XSEND2A
          LDA EFLAG,X
-         AND #EDIR+EUP
+         AND #EUP
          BNE XSEND2A
          STX XQUEUE
          INC XCOUNT
@@ -77,36 +83,44 @@ XSEND4   LDA XCUR
          LDA XQUEUE,X
          STA K
          TAX
+         JSR DQUEUE
+         LDX K
+         LDA EFLAG,X
+         AND #EDIR
+         BEQ XSEND4A
+         JSR XTREE
+         JMP XSEND5
+XSEND4A  JSR XFILE
+XSEND5   LDX XCUR
+         STA XQST,X
+         JSR DQUEUE
+         INC XCUR
+         JMP XSEND4
+;
+; XFILE: file K to the other side; A: EDONE, EFAIL or ESKIP
+;
+XFILE    LDX K
          JSR ESIZE
          LDA #<FSIZEB
          LDY #>FSIZEB
          JSR PUTL
          LDX #3
          LDA #0
-XSEND4A  STA FDONEB,X
+XFILE1   STA FDONEB,X
          DEX
-         BPL XSEND4A
+         BPL XFILE1
          JSR ISTEXT
-         JSR DQUEUE
          JSR XPROG
+         INC XNF
          LDA XDOWN
-         BEQ XSEND4B
+         BEQ XFILE2
          JSR GETF
-         JMP XSEND5
-XSEND4B  JSR PUTF
-XSEND5   STA XRES
-         LDX K
-         LDA EFLAG,X
-         AND #255-EMARK
-         ORA XRES
-         STA EFLAG,X
-         LDA XRES
-         CMP #EDONE
-         BNE XSEND5A
+         JMP XFILE3
+XFILE2   JSR PUTF
+XFILE3   CMP #EDONE
+         BNE XFILE4
          INC XOK
-XSEND5A  JSR DQUEUE
-         INC XCUR
-         JMP XSEND4
+XFILE4   RTS
 ;
 ; "2 of 3 files, 260K in 0:42 (6K/s)"
 ;
@@ -125,12 +139,12 @@ XSEND6   JSR ELAPSED
          LDY #>SUMMARY
          JSR SBSTART
          LDA XOK
-         CMP XCOUNT
+         CMP XNF
          BEQ XSEND7
          JSR SBBYTE
          JSR SBI
          .BYTE " of ",0
-XSEND7   LDA XCOUNT
+XSEND7   LDA XNF
          PHA
          JSR SBBYTE
          JSR SBI
@@ -296,11 +310,11 @@ ISTEXT4  TXA
 ;
 TTYPES   .BYTE " TXT ASC DOC ME NFO DIZ HTM HTML INF LST ",0
 ;
-; LASTDOT: PTR = entry X's name, Y where its last "." is (carry clear)
-; or the carry set when it has none
+; LASTDOT: PTR = entry X's name (LASTDS: the name A/Y), Y where its
+; last "." is (carry clear) or the carry set when it has none
 ;
 LASTDOT  JSR ENAME
-         STA PTR
+LASTDS   STA PTR
          STY PTR+1
          LDA #$FF
          STA ADOT
@@ -320,10 +334,12 @@ LASTD2   LDY ADOT
 LASTD3   SEC
          RTS
 ;
-; ANAMEX: ANAME = a name DOS takes for entry X: up to 8 letters and
-; digits, a letter first, and up to 3 for the extension, in capitals
+; ANAMEX: ANAME = a name DOS takes for entry X (ANAMES: for the name
+; A/Y): up to 8 letters and digits, a letter first, and up to 3 for the
+; extension, in capitals
 ;
-ANAMEX   JSR LASTDOT
+ANAMEX   JSR ENAME
+ANAMES   JSR LASTDS
          LDX #0
          LDY #0
          LDA (PTR),Y
