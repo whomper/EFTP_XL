@@ -6,19 +6,9 @@ so it can be built on the Atari as well. Connects to any FTP server (a
 Mac, a NAS, a Linux box) and moves files between it and your Atari
 drives.
 
-EFTP_XL has its own FTP client. It talks to the server over plain FujiNet
-TCP connections (`N1:` for commands, `N2:` for data in passive mode), so it
-works on FujiNet firmware 1.3 and later and logs in with your username and
-password. FujiNet's built-in FTP protocol is not used: up to firmware 1.6.1
-it always logs in as `anonymous` on port 21.
+## Highlights
 
-Works with DOS 2.5 and SpartaDOS 3.x. All local file access goes through CIO,
-so any CIO-compatible DOS should work. Files go as they are, or as text
-with their line ends changed (the site's Files setting).
-
-## What it does
-
-The full-screen program, after EFTP on the ST, in EDOS's font and
+The full-screen program, after EFTP on the ST, in the AERA font and
 colours: the Atari on the left, the server on the right, the
 transfers below.
 
@@ -36,37 +26,32 @@ transfers below.
 - Folders both ways, with everything in them
 - New folder, rename, delete, on both sides
 - Sites, saved on the disk
+- RESET comes back to the main screen (disconnected), never to DOS
+- Works with DOS 2.5 and SpartaDOS 3.x; all file access goes through
+  CIO, so any CIO-compatible DOS should work
 
 The pictures are of the real program, run by `tools/sim.py` (see
-[Testing](#testing)); `tools/screenshots.py` takes them again. The first
+[Tests](#tests)); `tools/screenshots.py` takes them again. The first
 design is in [docs/design](docs/design).
 
-## The server
+## Getting started
 
-Any standard FTP server with passive mode works; tested with pure-ftpd and
-pyftpdlib. On a Mac, pure-ftpd from Homebrew is a good choice. For a quick
-test, pyftpdlib:
-
-```sh
-python3 -m venv ~/eftp-venv
-~/eftp-venv/bin/pip install pyftpdlib
-mkdir -p ~/AtariShare
-~/eftp-venv/bin/python -m pyftpdlib -p 2121 -w -d ~/AtariShare -u ATARI -P SECRET
-```
-
-FTP is unencrypted, so only use it on your home network.
-
-## Running on the Atari
-
-1. Get `EFTPXL.PRG` from the
-   [latest release](https://github.com/whomper/EFTP_XL/releases) onto a disk
-   the Atari can read, e.g. an ATR on the FujiNet SD card or a TNFS share.
+1. Get `EFTPXL.PRG` and `AERA.FNT` from the
+   [latest release](https://github.com/whomper/EFTP_XL/releases) onto a
+   disk the Atari can read, e.g. an ATR on the FujiNet SD card or a TNFS
+   share. `EFTPXL.ATR`, also in the release, is a bootable SpartaDOS 3.2
+   disk with both on it (and the sources).
 2. Load it: `L` from the DOS 2.5 menu, or type `EFTPXL.PRG` at the
    SpartaDOS prompt.
 3. Press ^K for the sites, ^N to add one: a name, the server (IP address
    or name), port (21 unless your server uses another), user and
    password, the folder on the server to start in, and the folder on the
    Atari (e.g. `D1:>DOWNLOAD>`). RETURN on a site connects.
+
+**The font.** `AERA.FNT` is the font the AERA 8-bit programs share.
+When it is on the drive (and SpartaDOS folder) you start EFTP_XL from,
+EFTP_XL reads it; without it, EFTP_XL uses its own copy of the same
+font, so the file is only needed to try a newer one.
 
 The screen, after EFTP: the Atari on the left, the server on the right,
 the folder you are in above each, and the pane with the keyboard has its
@@ -89,7 +74,8 @@ file under the cursor, then the transfers.
 | ^E             | rename                                  |
 | DEL            | delete (the marked ones, or the one under the cursor) |
 | ^R             | read both lists again                   |
-| HELP (or ?)    | the keys                                |
+| HELP (or ?)    | the keys, and what EFTP_XL is           |
+| RESET          | back to the main screen, disconnected   |
 | ^Q             | quit to DOS                             |
 
 The keys are EFTP's; HELP shows them:
@@ -144,39 +130,65 @@ Notes:
 - Usernames, passwords and paths are case-sensitive. The Atari keyboard
   starts in uppercase; press **CAPS** to switch to lowercase.
 - A blank user logs in as `anonymous`.
-- On an error the info line shows the server's own reply, for example
-  `530 Login incorrect`.
-- The program takes `$4000`-`$978F`: above EDOS (`$1E00`-`$3752`) and
-  the MEMLO of DOS 2.5 and SpartaDOS 3, and below a cartridge, so BASIC
-  can stay on. If a DOS's MEMLO is above `$4000`, the program says so
-  and goes back to DOS before loading itself.
+- On an error the info line says what went wrong: the server's own
+  reply (`530 Login incorrect`), or the Atari's own error with its text
+  (`NOTES.TXT: Disk full`).
+- The program takes `$4000`-`$9B41` (the font, the program, its
+  variables): above EDOS and the MEMLO of DOS 2.5 and SpartaDOS 3, and
+  below the screen, so BASIC can stay on. If a DOS's MEMLO is above
+  `$4000`, or there isn't room, the program says so and goes back to DOS
+  before loading itself.
+
+## How it reaches the servers
+
+EFTP_XL has its own FTP client. It talks to the server over plain FujiNet
+TCP connections (`N1:` for commands, `N2:` for data in passive mode), so it
+works on FujiNet firmware 1.3 and later and logs in with your username and
+password. FujiNet's built-in FTP protocol is not used: up to firmware 1.6.1
+it always logs in as `anonymous` on port 21.
+
+Any standard FTP server with passive mode works; tested with pure-ftpd and
+pyftpdlib. On a Mac, pure-ftpd from Homebrew is a good choice. For a quick
+test, pyftpdlib:
+
+```sh
+python3 -m venv ~/eftp-venv
+~/eftp-venv/bin/pip install pyftpdlib
+mkdir -p ~/AtariShare
+~/eftp-venv/bin/python -m pyftpdlib -p 2121 -w -d ~/AtariShare -u ATARI -P SECRET
+```
+
+FTP is unencrypted: the user, the password and the files go across in
+plain text, so only use it on your home network.
 
 ## Building
 
 The program is 6502 assembly in Mac/65's form, in [ASM](ASM):
-`EFTPXL.ASM` is the main file and includes the others. It is 13.8K, the
+`EFTPXL.M65` is the main file and includes the others. It is 15.2K, the
 font included; the first version, in C with cc65, was 27K (it is in
 the git history, up to v0.2).
 
-**On another computer** with [ATasm](https://github.com/CycoPH/atasm), a
-cross-assembler that takes Mac/65's source:
+**On another computer** with Python 3. The cross-assembler is
+`xl/tools/mac65.py`, from the AERA 8-bit shared tools (`xl/`, below),
+which makes the same program as Mac/65 1.01, byte for byte:
 
 ```sh
-git clone https://github.com/CycoPH/atasm && make -C atasm/src
-export PATH="$PWD/atasm/src:$PATH"
-
 git clone https://github.com/whomper/EFTP_XL
 cd EFTP_XL
+pip install -r xl/requirements.txt -r requirements.txt
 make            # bin/EFTPXL.PRG
-make atr        # bin/EFTPXL.ATR: the sources, for the Atari
+make atr        # bin/EFTPXL.ATR: the disk, with the sources for the Atari
+make test       # all the checks (Tests, below)
+make dist       # a release's files in dist/
 ```
 
 `bin/` and `dist/` are what make builds; they are never committed.
 
-**On the Atari** with Mac/65. `make atr` makes `EFTPXL.ATR`, a
-SpartaDOS double density disk that boots SpartaDOS 3.2 and holds the
-program and its sources in Mac/65's own tokenized form (`.M65`, as its
-SAVE writes them), ready to LOAD. A release has this disk too.
+**On the Atari** with Mac/65. `EFTPXL.ATR` is a SpartaDOS double density
+disk that boots SpartaDOS 3.2 and holds the program, `AERA.FNT` and the
+sources in Mac/65's own tokenized form, with line numbers (`.M65`, as
+its SAVE writes them), ready to LOAD: EFTP_XL's own files and the
+shared `AX*.M65` it includes. A release has this disk.
 
 1. Boot the disk in D1: with the Mac/65 cartridge in (`EFTPXL.PRG` at
    the SpartaDOS prompt runs the program; `CAR` goes to Mac/65). Mac/65's
@@ -189,12 +201,15 @@ SAVE writes them), ready to LOAD. A release has this disk too.
    ASM ,,#D:EFTPXL.PRG
    ```
 
-   This makes `EFTPXL.PRG`, the program: the same bytes as the release's,
-   in Mac/65's smaller segments. `EFTPXL.M65` is the main file; Mac/65 reads the parts it includes
+   This makes `EFTPXL.PRG`, the program, over the one on the disk: the
+   same bytes as the release's, in Mac/65's smaller segments.
+   `EFTPXL.M65` is the main file; Mac/65 reads the parts it includes
    from `D:` as it assembles. Load the main file first and give no
    source to `ASM`: on SpartaDOS, Mac/65 1.01 can't assemble a main
    file read from disk (as EDOS found). With SpartaDOS 3.2 it reports
-   `ASSEMBLY ERRORS: 0` with about 15K free.
+   `ASSEMBLY ERRORS: 0` with about 14K free. Write the program over
+   `EFTPXL.PRG` (or to another disk): the disk has no room for a second
+   copy.
 
 | | |
 |---|---|
@@ -204,45 +219,63 @@ SAVE writes them), ready to LOAD. A release has this disk too.
 These two are from the atari800 emulator, running SpartaDOS 3.2 from
 the disk and the MAC/65 1.01 cartridge.
 
-Each `.M65` can be LOADed to read or change it, and SAVEd back.
-`tools/mac65tok.py` (EDOS's, with the tokens EFTP_XL uses as well)
-writes them: they are the same, byte for byte, as Mac/65 1.01 saves
-after ENTERing the text, and Mac/65 1.01 builds the same program from
-them as ATasm does. That was checked by running the cartridge in the
-atari800 emulator; the cartridge isn't in this repository.
+Each `.M65` can be LOADed to read or change it, and SAVEd back;
+`xl/tools/atari_src.py import` brings a file saved on the Atari back
+into git's form, without the line numbers. `make atr` writes the disk
+with `xl/tools/atari_src.py`: the files are the same, byte for byte, as
+Mac/65 1.01 saves after ENTERing the text, and `make atr` checks that
+the sources on the disk give the same program. That was also checked by
+running the cartridge in the atari800 emulator; the cartridge isn't in
+this repository.
 
-The source keeps to what Mac/65 and ATasm both take: labels of letters
-and digits, `*=*+n` for room (no `.DS`), the font as `.BYTE` lines (no
-`.INCBIN`), `[ ]` around expressions, one level of `.INCLUDE`. ATasm
-builds the same program from the files on that disk, turned back into
-text (`make atr` checks this is so with `tools/atari_src.py --check`).
+## Source
 
-## Testing
+```
+ASM/        the program: EFTPXL.M65, the main file, and its parts
+            (FONT.M65 is made by make font, from xl/'s font)
+xl/         the AERA 8-bit shared code and tools, from AERA-Atari
+            (read-only here; tools/sync-xl.sh brings it up to date)
+  src/      AX*.M65: the OS's names, RESET, AERA.FNT, CIO's error texts
+  tools/    mac65.py (the assembler), atari_src.py (the disk), font.py
+  workflows/ release.yml and withdraw.yml, copied to .github/workflows
+tools/      sim.py (the program on an emulated 6502), test_sim.py,
+            screenshots.py, sync-xl.sh
+docs/       the pictures, the first design
+```
+
+The source keeps to what Mac/65 1.01 takes: labels of letters and
+digits, `*=*+n` for room (no `.DS`), the font as `.BYTE` lines (no
+`.INCBIN`), `[ ]` around expressions, one level of `.INCLUDE`, and a
+zero-page name defined before it is used. Each file starts with a header
+naming it and the version; each routine has a few lines on what it
+does, what it takes and what it gives back.
+
+## Tests
 
 **The program on an emulated 6502.** `tools/sim.py` runs the real
 `bin/EFTPXL.PRG` on [py65](https://github.com/mnaberez/py65), the way
 EDOS is tested. It stands in for the OS calls the program makes: the
 screen (read from screen memory), the keyboard (typed from a script),
-the disks (D1:, D2: are folders here, through CIO, listed as SpartaDOS
-3 or DOS 2.5 list them) and SIO as a FujiNet whose `N1:`/`N2:` TCP
-connections are real sockets. So the program's FTP client talks to a
-real server:
+RESET, the disks (D1:, D2: are folders here, through CIO, listed as
+SpartaDOS 3 or DOS 2.5 list them) and SIO as a FujiNet whose `N1:`/`N2:`
+TCP connections are real sockets, taking only the frame lengths a real
+FujiNet takes. So the program's FTP client talks to a real server:
 
 ```sh
-pip install py65 pillow
 make && tools/sim.py --d1 disk --shots shot '^K^NTest\n192.168.1.20\n21\nATARI\nSECRET\n/\n\n\n\n\s'
 ```
 
 The keys are what you would type (`\n` RETURN, `\e` ESC, `\t` TAB, `\b`
-BACKSPACE, `\u` `\d` up and down, `\h` HELP, `^K` Ctrl+K); `\s` takes a
-snapshot (the screen as text, and `shot-N.png` as the Atari shows it),
-`\w` waits for a transfer to end and `\z` lets one block of it go by.
-`--dos dos2` lists D1: as DOS 2.5 does, and `--sio-log` shows every FTP
-command sent.
+BACKSPACE, `\u` `\d` up and down, `\h` HELP, `\!` RESET, `^K` Ctrl+K);
+`\s` takes a snapshot (the screen as text, and `shot-N.png` as the Atari
+shows it), `\w` waits for a transfer to end and `\z` lets one block of
+it go by. `--dos dos2` lists D1: as DOS 2.5 does, and `--sio-log` shows
+every FTP command sent.
 
-**The checks.** `make test` (`tools/test_sim.py`, with `pip install py65
-pyftpdlib`) runs the program that way against an FTP server it starts,
-and looks at the screen and at the files on both sides, 32 checks:
+**The checks.** `make test` runs xl's own tests, then
+`tools/test_sim.py`: the program that way against an FTP server it
+starts, looking at the screen, at memory and at the files on both
+sides, 40 checks:
 
 | | |
 |---|---|
@@ -251,9 +284,11 @@ and looks at the screen and at the files on both sides, 32 checks:
 | Files | down and up byte for byte, binary and text (line ends changed), the sums; the replace question; ESC stops and leaves no half file |
 | Folders | a server folder two folders deep down to the Atari, an Atari folder with one in it up to the server, both panes back where they were |
 | New, rename, delete | folders and files on the Atari and on the server |
-| DOS 2.5 | its listing; no folders made, none sent |
+| DOS 2.5 | its listing; no folders made, none sent, and the error's text |
+| RESET | back to the main screen, disconnected, `N1:` and `N2:` closed, the keys working; ^Q still back to DOS |
+| HELP, AERA.FNT | the About lines; the font read from the disk, or the built-in one |
 
-CI (`.github/workflows/ci.yml`) builds the program and the source disk
+CI (`.github/workflows/ci.yml`) builds the program and the disk
 (checking the disk gives the same program) and runs these on every
 push.
 
@@ -261,28 +296,28 @@ push.
 runs in the [atari800](https://atari800.github.io) emulator (its
 library, driven by a script), with the Atari's own OS and DOS instead
 of stand-ins: SpartaDOS 3.2 booted from `EFTPXL.ATR`, EFTP_XL run
-from its prompt, and the MAC/65 1.01 cartridge assembling the disk's
-sources. That is how the SpartaDOS directory fixed in 0.6 was found.
-The cartridge isn't in this repository, so this isn't part of CI.
+from its prompt and RESET pressed, and the MAC/65 1.01 cartridge
+assembling the disk's sources. That is how the SpartaDOS directory fixed
+in 0.6 was found. The cartridge isn't in this repository, so this isn't
+part of CI.
 
 **On real hardware.** Each release says whether it has been.
 
-## Versions and releases
+## Releases
 
-`VERSION` in `ASM/EFTPXL.ASM` holds the last
-release, and every build shows it at startup (there is no `-dev`
-label). Only releases leave the build machine. To release: raise `VERSION`, commit and push,
-then run the Release workflow (Actions > Release > Run workflow, on main)
-with what is new: [`.github/workflows/release.yml`](.github/workflows/release.yml)
-builds ATasm (at a fixed commit) and the program, tags the commit `vX.Y`
-and publishes `EFTPXL.PRG` and the source disk as a GitHub Release, marked
-Latest. Pushing a tag made with `git tag -a` does the same, with
-the tag's message as the notes. A release that must not be used is
-marked with the Withdraw workflow
+`VERSION` in `ASM/EFTPXL.M65` holds the last release, and every build
+shows it at startup (there is no `-dev` label); every source file's
+header repeats it. Only releases leave the build machine. To release:
+raise the version, commit and push, then run the Release workflow
+(Actions > Release > Run workflow, on main) with what is new:
+[`.github/workflows/release.yml`](.github/workflows/release.yml) (the
+AERA 8-bit one, from `xl/`) runs `make test` and `make dist`, tags the
+commit `vX.Y` and publishes `EFTPXL.PRG`, `EFTPXL.ATR` and `AERA.FNT` as
+a GitHub Release, marked Latest. Pushing a tag made with `git tag -a`
+does the same, with the tag's message as the notes. A release that must
+not be used is marked with the Withdraw workflow
 ([`.github/workflows/withdraw.yml`](.github/workflows/withdraw.yml)):
 a notice at the top of its notes names the release to use instead.
-
-The program uses no library.
 
 ## Licence
 
@@ -295,7 +330,10 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See [COPYING](COPYING).
 
 Copyright (C) 2026 AERA | Erez Yaary.
 
-`EFTPXL.ATR` carries SpartaDOS 3.2 (`tools/disk/X32G.DOS`) and its
-boot sectors (`tools/disk/SPARTA.BOOT`), as EDOS's disks do; they stay
-under their own terms.
-`tools/sparta.py` and `tools/mac65tok.py` are EDOS's.
+`EFTPXL.ATR` carries SpartaDOS 3.2 and its boot sectors
+(`xl/tools/disk/`), as EDOS's disks do; they stay under their own
+terms.
+
+---
+
+Part of **AERA** for Atari: [ECal](https://github.com/whomper/ECal) · [EContact](https://github.com/whomper/EContact) · [EMail](https://github.com/whomper/EMail) · [EFTP](https://github.com/whomper/EFTP) · [EHypView](https://github.com/whomper/EHypView) · [ClaudeST](https://github.com/whomper/ClaudeST) · 8-bit: [EDOS](https://github.com/whomper/EDOS) · [EFTP_XL](https://github.com/whomper/EFTP_XL)

@@ -60,9 +60,13 @@ class Server:
         self.proc.wait()
 
 
+LAST = None     # the last run's Sim, for what the screen doesn't show
+
+
 def run(keys, d1, dos='sparta'):
-    s = sim.Sim(XEX, sim.parse_keys(keys), 0x1D00, sim.FujiNet(),
-                sim.Disks({1: d1}, dos))
+    global LAST
+    s = LAST = sim.Sim(XEX, sim.parse_keys(keys), 0x1D00, sim.FujiNet(),
+                       sim.Disks({1: d1}, dos))
     shots = []
     s.snapshot = lambda: shots.append(s.screen_text())
     s.run()
@@ -179,7 +183,37 @@ def main():
         check('DOS 2.5 listing', 'DIGDUG.XEX' in shots[0], shots[0])
         check('DOS 2.5 has no folders', 'this DOS has no folders' in shots[0])
         shots = run('^K\\n\\wt^T\\w\\s^Q', d1, dos='dos2')
-        check('DOS 2.5: no folder sent', 'error 146' in shots[0], shots[0][:200])
+        check('DOS 2.5: no folder sent', 'Function not supported' in shots[0],
+              shots[0][:200])
+
+        # RESET: back to the main screen, disconnected, N1: and N2:
+        # closed; then on as usual, and ^Q still back to DOS
+        shots = run('^K\\n\\w\\s\\!\\w\\s\\h\\s\\e^Q', d1)
+        s = LAST
+        check('RESET: was connected', 'readme.txt' in shots[0] or 'games' in shots[0],
+              shots[0][:200])
+        check('RESET: main screen again', s.resets == 1 and 'EFTP_XL' in shots[1]
+              and 'DIGDUG.XEX' in shots[1] and 'games' not in shots[1], shots[1])
+        check('RESET: N1: and N2: closed', not s.fujinet.conn, str(s.fujinet.conn))
+        check('RESET: keys work after', 'Keys' in shots[2], shots[2])
+        check('RESET: ^Q back to DOS, DOSINI DOS\'s', s.to_dos
+              and s.word(sim.DOSINI) == sim.DOSINI_TRAP, hex(s.word(sim.DOSINI)))
+
+        # HELP: the keys, then About
+        t = shots[2]
+        check('About in HELP', 'EFTP_XL ' in t and 'Erez Yaary' in t
+              and 'GPL-2.0-or-later' in t and 'github.com/whomper/EFTP_XL' in t, t)
+
+        # AERA.FNT on D1: is read over the built-in font
+        fnt = bytes((i * 29 + 3) & 255 for i in range(1024))
+        open(os.path.join(d1, 'AERA.FNT'), 'wb').write(fnt)
+        run('^Q', d1)
+        check('AERA.FNT read', bytes(LAST.mem[0x4000:0x4400]) == fnt)
+        os.remove(os.path.join(d1, 'AERA.FNT'))
+        run('^Q', d1)
+        check('no AERA.FNT: the built-in font',
+              bytes(LAST.mem[0x4000:0x4400]) == open(BUILTIN, 'rb').read()
+              if os.path.exists(BUILTIN) else True)
     finally:
         server.close()
         shutil.rmtree(tmp)
@@ -189,6 +223,7 @@ def main():
 
 
 XEX = os.path.join(sim.ROOT, 'bin', 'EFTPXL.PRG')
+BUILTIN = os.path.join(sim.ROOT, 'bin', 'AERA.FNT')    # make's, the same font
 
 if __name__ == '__main__':
     sys.exit(main())

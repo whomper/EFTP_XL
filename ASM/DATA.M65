@@ -111,7 +111,6 @@ SPEC     =   BUF        ; N: spec, 256 bytes
 ;
 ; The main screen and its commands
 ;
-SAVESP   *=  *+1        ; stack, for ^Q
 KEY      *=  *+1
 SITE     *=  *+1        ; the site; NO: none
 CONNECTD *=  *+1        ; not 0: connected

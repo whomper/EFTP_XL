@@ -24,8 +24,10 @@ START1   TYA                ; A=Y=0
          STY CONN           ; Y=0: ZP ones too
          STY ACTIVE
          STY SINV
-         TSX                ; for ^Q: back to DOS
-         STX SAVESP
+         JSR AXSTART        ; RESET: AXWARM
+         LDA #>FONT         ; AERA.FNT, if it is
+         LDX #IOCB          ; there, over the
+         JSR AXFONT         ; built-in font
          JSR FTOUT          ; 20 s timeout
          LDA #NO            ; no site yet
          STA SITE
@@ -44,6 +46,20 @@ MAIN     JSR KEYGET         ; main loop
          JSR PUSE
          JSR DISP
          JMP MAIN
+;
+; AXWARM - RESET, after DOS's own
+; init (xl's AXRESET): close N2:
+; and N1: (the FujiNet keeps them
+; open), then start again, so
+; disconnected
+;
+AXWARM   LDX #$FF           ; a fresh stack
+         TXS
+         JSR DCLOSE         ; N2:
+         LDA #0
+         STA CONN
+         JSR NCLOSE         ; N1:
+         JMP START
 ;
 ; DISP - run the routine for KEY;
 ; it is pushed as address-1, so RTS
@@ -155,9 +171,8 @@ HREAD    JSR READLOC        ; read both again
 HREAD1   JMP DALL
 HQUIT    JSR DISC
          JSR SCRDONE
-         LDX SAVESP         ; stack as at START
-         TXS
-         RTS                ; back to DOS
+         JSR AXQUIT         ; DOSINI DOS's again
+         JMP (DOSVEC)       ; back to DOS
 HSEND    LDA #0             ; marked, or cursor
          JMP SENDF
 ;

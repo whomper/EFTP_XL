@@ -69,10 +69,10 @@ SCRDONE  LDA OCHBAS
 ; PUT BYTES of length 0: CIO sends
 ; the one byte in A, to E: (IOCB 0)
 ;
-         STA ICBLL0
-         STA ICBLH0
+         STA ICBLL
+         STA ICBLH
          LDA #11            ; PUT BYTES
-         STA ICCOM0
+         STA ICCOM
          LDX #0
          LDA #$7D           ; clear screen
          JMP CIOV

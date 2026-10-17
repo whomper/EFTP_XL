@@ -8,6 +8,7 @@
 ; Mac/65: LOAD #D:EFTPXL.M65, then
 ; ASM ,,#D:EFTPXL.PRG
 ;
+         .INCLUDE #D:AXEQU.M65
          .INCLUDE #D:EQUATES.M65
 ;
 LOAD     =   $4000      ; above DOS and EDOS
@@ -38,14 +39,14 @@ CHECK1   LDA MEMTOP         ; room up to BSSEND?
          BNE CHECK4         ; always
 CHECK2   LDA #<LOW          ; DOS too big
          LDY #>LOW
-CHECK4   STA ICBAL0         ; print it on E:
-         STY ICBAH0
+CHECK4   STA ICBAL          ; print it on E:
+         STY ICBAH
          LDA #$FF           ; up to 255 bytes,
-         STA ICBLL0         ; to the EOL
+         STA ICBLL          ; to the EOL
          LDA #0
-         STA ICBLH0
+         STA ICBLH
          LDA #9             ; PUT RECORD
-         STA ICCOM0
+         STA ICCOM
          LDX #0             ; IOCB 0
          JSR CIOV
          JMP (DOSVEC)       ; back to DOS
@@ -78,6 +79,16 @@ VERSION  .BYTE "EFTP_XL 1.1",0
          .INCLUDE #D:PANE.M65
          .INCLUDE #D:SCREEN.M65
          .INCLUDE #D:TEXT.M65
+;
+; xl's shared code: RESET back into
+; the program, AERA.FNT, the texts
+; of CIO's and DOS's errors
+;
+AXPTR    =   PTR        ; lent to AXERR
+AXERRS   =   2          ; CIO's and DOS's
+         .INCLUDE #D:AXRESET.M65
+         .INCLUDE #D:AXFONT.M65
+         .INCLUDE #D:AXERR.M65
          .INCLUDE #D:DATA.M65
 ;
          *=  RUNAD

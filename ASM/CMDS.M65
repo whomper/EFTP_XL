@@ -735,21 +735,39 @@ HELP1    LDY #0
          JSR KEYB2          ; what it does
          INC HROW
          JMP HELP1
-HELP2    LDX #18
-         LDY #SCRL+2
+;
+; About: rows 17-21, from column
+; SCRL+1 (the copyright line is the
+; box's full inside width)
+;
+HELP2    LDX #17
+         LDY #SCRL+1
          JSR AT
-         JSR PUTSI
-         .BYTE "The same keys as EFTP on the ST.",0
-         LDX #21
-         LDY #SCRL+2
+         LDA #<VERSION      ; "EFTP_XL x.y"
+         LDY #>VERSION
+         JSR PUTS
+         LDA #<ABOUT        ; PTR3 walks ABOUT
+         STA PTR3
+         LDA #>ABOUT
+         STA PTR3+1
+         LDA #17
+         STA HROW
+HELP3    INC HROW           ; rows 18 on
+         LDY #0
+         LDA (PTR3),Y
+         BEQ HELP4          ; end of list
+         LDX HROW
+         LDY #SCRL+1
          JSR AT
+         JSR KEYB2
+         JMP HELP3
+HELP4    LDX #22            ; on the bottom
+         LDY #SCRL+2        ; line, as the
+         JSR AT             ; title on the top
          JSR INVON
          JSR PUTSI
-         .BYTE "Any key",0
+         .BYTE " Any key: back ",0
          JSR INVOFF
-         INC SCOL           ; a space
-         JSR PUTSI
-         .BYTE "back",0
          JSR KEYGET
          JMP DALL
 ;
@@ -780,6 +798,10 @@ HKEYS    .BYTE "^K ^D",0,"sites / disconnect",0
          .BYTE "1-8",0,"drive D1:-D8:",0
          .BYTE "ESC",0,"stop transfer",0
          .BYTE "^Q",0,"quit to DOS",0,0
+ABOUT    .BYTE "File transfer over FujiNet",0
+         .BYTE "Copyright (C) 2026 AERA | Erez Yaary",0
+         .BYTE "GPL-2.0-or-later",0
+         .BYTE "github.com/whomper/EFTP_XL",0,0
 ;
 ; FTP commands
 ;

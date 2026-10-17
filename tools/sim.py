@@ -19,7 +19,7 @@ stood in for, the way EDOS's tools/sim.py tests EDOS:
     sim.py [--d1 DIR] [--dos sparta|dos2] [--shots PREFIX] [--sio-log] KEYS
 
 KEYS is what to type: "\\n" RETURN, "\\e" ESC, "\\t" TAB, "\\b" BACKSPACE,
-"\\u" "\\d" up and down, "\\h" HELP, "^X" Ctrl+X, "\\w" waits until the
+"\\u" "\\d" up and down, "\\h" HELP, "\\!" RESET, "^X" Ctrl+X, "\\w" waits until the
 program is idle (after a transfer), "\\z" lets one look at the keyboard go
 by (a block of a transfer), and "\\s" takes a snapshot of the screen (printed, and PREFIX-N.png with --shots). The run
 ends when the program waits for a key and the script has none left.
@@ -50,13 +50,14 @@ KEYBDV = 0xE420
 SIOV, CIOV = 0xE459, 0xE456
 KEY_TRAP = 0xE700           # KEYBDV's get-byte routine points here
 DOS_TRAP = 0xE710           # DOSVEC: back to DOS ends the run
-DOSVEC = 0x0A
+DOSINI_TRAP = 0xE720        # DOSINI: DOS's own init, an RTS
+DOSVEC, DOSINI = 0x0A, 0x0C
 RETURN_TRAP = 0xFFF0        # fake return address ending a call
 SCREEN = 0xBC40
 
 EOL = 0x9B
 CLOCK_STEPS = 2000          # RTCLOK is set from the wall clock this often
-HELP, SHOT, WAIT, SKIP = 'help', 'shot', 'wait', 'skip'
+HELP, SHOT, WAIT, SKIP, RESET = 'help', 'shot', 'wait', 'skip', 'reset'
 IDLE_GAP = 300             # polls this close together: waiting for a key
 
 
@@ -187,6 +188,12 @@ class FujiNet:
         return 1
 
 
+def cio_name(m, buf):
+    """a file name given to CIO (OPEN, XIO): CIO takes no length, the name
+    ends at its EOL, or at a 0, where DOS's name parsing stops too"""
+    return bytes(m[buf:buf + 128]).split(b'\x9b')[0].split(b'\0')[0].decode('latin-1')
+
+
 class Disks:
     """D1:..D4: as folders on this machine, through CIO."""
 
@@ -242,7 +249,7 @@ class Disks:
         aux1 = m[IOCB + x + 10]
         f = self.open.get(x)
         if cmd == 3:                                        # OPEN
-            spec = bytes(m[buf:buf + n]).split(b'\x9b')[0].decode('latin-1')
+            spec = cio_name(m, buf)
             folder, name = self._resolve(spec)
             if folder is None:
                 return 130                                  # no such device
@@ -264,7 +271,7 @@ class Disks:
         if cmd in (42, 43):                                 # XIO MKDIR / RMDIR
             if self.dos != 'sparta':
                 return 146                                  # not on DOS 2
-            spec = bytes(m[buf:buf + n]).split(b'\x9b')[0].decode('latin-1')
+            spec = cio_name(m, buf)
             folder, name = self._resolve(spec)
             if folder is None:
                 return 130
@@ -277,7 +284,7 @@ class Disks:
                 return 167 if cmd == 43 and os.path.isdir(path) else 170
             return 1
         if cmd in (32, 33):                                 # XIO RENAME / DELETE
-            spec = bytes(m[buf:buf + n]).split(b'\x9b')[0].decode('latin-1')
+            spec = cio_name(m, buf)
             folder, name = self._resolve(spec.split(',')[0])
             if folder is None:
                 return 130
@@ -338,7 +345,10 @@ class Sim:
         self.poke_word(MEMLO, memlo)
         self.poke_word(KEYBDV + 4, KEY_TRAP - 1)
         self.poke_word(DOSVEC, DOS_TRAP)
+        self.poke_word(DOSINI, DOSINI_TRAP)
         self.to_dos = False
+        self.reset_pending = False
+        self.resets = 0
         self.poke(COLOR1, [0xCA])
         self.poke(COLOR2, [0x94])
         self.poke(CHBAS, [0xE0])
@@ -409,6 +419,8 @@ class Sim:
         elif pc == DOS_TRAP:
             self.to_dos = True
             raise Stop()
+        elif pc == DOSINI_TRAP:
+            self._rts()
         else:
             raise RuntimeError(f'unhandled OS call at ${pc:04X}')
 
@@ -427,6 +439,10 @@ class Sim:
             else:
                 self.keys.pop(0)
                 self.snapshot()
+        if self.keys and self.keys[0] == RESET:
+            self.keys.pop(0)
+            self.reset_pending = True       # once this instruction is done
+            return
         if self.keys and self.keys[0] == HELP:
             if not self.mem[HELPFG]:
                 self.keys.pop(0)
@@ -461,7 +477,26 @@ class Sim:
             self.steps += 1
             if self.steps % CLOCK_STEPS == 0:
                 self._clock()
+            if self.reset_pending:
+                self._reset()
         raise RuntimeError(f'no return from ${addr:04X} (pc=${mpu.pc:04X})')
+
+    def _reset(self):
+        """RESET, as the OS's warm start: CIO's files closed, the ROM font
+        and colours back, a fresh stack, JSR (DOSINI); if that returns,
+        JMP (DOSVEC). Memory is kept; the FujiNet keeps its connections."""
+        self.reset_pending = False
+        self.resets += 1
+        self.disks.open.clear()
+        self.poke(CHBAS, [0xE0])
+        self.poke(COLOR1, [0xCA])
+        self.poke(COLOR2, [0x94])
+        self.poke(COLOR4, [0x00])
+        m, mpu = self.mem, self.mpu
+        ret = DOS_TRAP - 1
+        m[0x1FF], m[0x1FE] = ret >> 8, ret & 255
+        mpu.sp = 0xFD
+        mpu.pc = self.word(DOSINI)
 
     def run(self):
         """Load the XEX as DOS does, then run it until the keys run out."""
@@ -549,7 +584,8 @@ def parse_keys(s):
         if c == '\\' and i + 1 < len(s):
             k = s[i + 1]
             out.append(HELP if k == 'h' else SHOT if k == 's' else WAIT if k == 'w'
-                       else SKIP if k == 'z' else named.get(k, ord(k)))
+                       else SKIP if k == 'z' else RESET if k == '!'
+                       else named.get(k, ord(k)))
             i += 2
         elif c == '^' and i + 1 < len(s):
             out.append(ord(s[i + 1].upper()) & 0x1F)

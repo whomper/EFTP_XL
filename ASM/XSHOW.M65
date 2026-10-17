@@ -336,9 +336,10 @@ XERR3    LDA #<XERROR
          LDY #>XERROR
          JMP INFO
 ;
-; SAYCIO - XERROR = "NAME.EXT: error
-; 144" on the info line: CIO status
-; XST, name from FSPEC
+; SAYCIO - XERROR = "NAME.EXT: Disk
+; full" on the info line: CIO status
+; XST (its text from xl's AXERR, or
+; "error 144"), name from FSPEC
 ;
 SAYCIO   LDA #<XERROR
          LDY #>XERROR
@@ -369,10 +370,24 @@ SAYCIO5  INY                ; just past it
          TXA
          JSR SBADD
          JSR SBI
-         .BYTE ": error ",0
+         .BYTE ": ",0
+         LDY XST
+         JSR AXERRT         ; its text?
+         BCS SAYCIO7        ; none: the number
+         STA PTR            ; A/Y: the text,
+         STY PTR+1          ; up to its EOL
+         LDY #0
+SAYCIO6  LDA (PTR),Y
+         CMP #EOL
+         BEQ SAYCIO8
+         JSR SBCH           ; keeps Y
+         INY
+         BNE SAYCIO6        ; always
+SAYCIO7  JSR SBI
+         .BYTE "error ",0
          LDA XST
          JSR SBBYTE         ; "144"
-         JMP XERR3          ; show XERROR
+SAYCIO8  JMP XERR3          ; show XERROR
 ;
 ; MAYREP - if A/Y is in pane X, ask to
 ; replace it (ESC also stops it all)

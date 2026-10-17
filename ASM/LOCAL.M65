@@ -8,12 +8,12 @@
 ; IOLEN - buffer length = A
 ; Exit: PTR=string (IOSPEC)
 ;
-IOSPEC   STA ICBAL
-         STY ICBAH
+IOSPEC   STA ICBAL+IOCB
+         STY ICBAH+IOCB
          JSR STRLEN
-IOLEN    STA ICBLL          ; A = length
+IOLEN    STA ICBLL+IOCB      ; A = length
          LDA #0             ; under 256
-         STA ICBLH
+         STA ICBLH+IOCB
          RTS
 ;
 ; CCLOSE - close IOCB 5
@@ -21,7 +21,7 @@ IOLEN    STA ICBLL          ; A = length
 ; Exit: A=status, C=1 on error (128+)
 ;
 CCLOSE   LDA #12            ; CLOSE
-IOCMD    STA ICCOM
+IOCMD    STA ICCOM+IOCB
          LDX #IOCB          ; X = 5*16
          JSR CIOV
          TYA                ; CIO's status in Y
@@ -32,7 +32,7 @@ IOCMD    STA ICCOM
 ; 4 read, 8 write, 6 directory
 ; Exit: C=1 on error, A=status
 ;
-COPEN    STX ICAX1
+COPEN    STX ICAX1+IOCB
          LDX #3             ; OPEN
          BNE CXIO1          ; always
 ;
@@ -42,18 +42,18 @@ COPEN    STX ICAX1
 ;
 CXIO     PHA                ; A kept over
          LDA #0             ; aux1 0
-         STA ICAX1
+         STA ICAX1+IOCB
          PLA
 CXIO1    STX TMP2           ; the command,
          STA TMP            ; and A/Y, kept
          STY TMP3           ; over the CLOSE
          JSR CCLOSE         ; IOCB 5 free first
          LDA #0
-         LDX ICAX1          ; directory: aux2
+         LDX ICAX1+IOCB      ; directory: aux2
          CPX #6             ; $80 asks SpartaDOS
          BNE CXIO2          ; for the long one;
          LDA #$80           ; DOS 2 ignores it
-CXIO2    STA ICAX2
+CXIO2    STA ICAX2+IOCB
          LDA TMP
          LDY TMP3
          JSR IOSPEC         ; buffer: the spec
@@ -65,9 +65,9 @@ CXIO2    STA ICAX2
 ; Exit: C=1 on error, A=status;
 ;       EOL replaced by a 0
 ;
-CGETLN   STA ICBAL
+CGETLN   STA ICBAL+IOCB
          STA PTR            ; PTR too, for the 0
-         STY ICBAH
+         STY ICBAH+IOCB
          STY PTR+1
          DEX                ; room for the 0
          TXA
@@ -76,7 +76,7 @@ CGETLN   STA ICBAL
          JSR IOCMD
          PHP                ; C and status kept
          PHA                ; for the caller
-         LDY ICBLL          ; bytes read
+         LDY ICBLL+IOCB      ; bytes read
          BEQ CGETL1
          DEY                ; on the last one
          LDA (PTR),Y
@@ -94,7 +94,7 @@ CGETL1   LDA #0
 ; Exit: C=1 on error, A=status
 ;
 CPUTLN   JSR IOSPEC         ; PTR on it
-         LDY ICBLL          ; Y = its length
+         LDY ICBLL+IOCB      ; Y = its length
          STY TMP4
          LDA #EOL           ; EOL over the 0
          STA (PTR),Y
@@ -116,28 +116,28 @@ CPUTLN   JSR IOSPEC         ; PTR on it
 ; Exit: C=1 on error, A=status;
 ;       CGOT=bytes read (136 too)
 ;
-CREAD    STA ICBAL
-         STY ICBAH
-         STX ICBLH          ; X*256 bytes
+CREAD    STA ICBAL+IOCB
+         STY ICBAH+IOCB
+         STX ICBLH+IOCB      ; X*256 bytes
          LDA #0
-         STA ICBLL
+         STA ICBLL+IOCB
          LDA #7             ; GET BYTES
          JSR IOCMD
-         LDX ICBLL          ; CIO leaves the
+         LDX ICBLL+IOCB      ; CIO leaves the
          STX CGOT           ; count read here;
-         LDX ICBLH          ; LDX: A and C kept
+         LDX ICBLH+IOCB      ; LDX: A and C kept
          STX CGOT+1
          RTS
 ;
 ; CWRITE - write XLEN bytes from A/Y
 ; Exit: C=1 on error, A=status
 ;
-CWRITE   STA ICBAL
-         STY ICBAH
+CWRITE   STA ICBAL+IOCB
+         STY ICBAH+IOCB
          LDA XLEN
-         STA ICBLL
+         STA ICBLL+IOCB
          LDA XLEN+1
-         STA ICBLH
+         STA ICBLH+IOCB
          LDA #11            ; PUT BYTES
          JMP IOCMD
 ;
