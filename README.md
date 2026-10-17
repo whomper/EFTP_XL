@@ -45,8 +45,8 @@ as MAC/65's two passes need. No shared file includes another.
 | `font.py` | `AERA.FNT`, from Erez's `font/EREZ.FNT`: as a file, or as `.BYTE` lines for a program that carries it |
 | `disk/` | SpartaDOS 3.2's boot sectors and `X32G.DOS`, for the bootable disks |
 | `atari800/` | The release checks in atari800 with its own OS ROM (guidelines 8, level 2), from EFTP_XL's build machine. `build.sh DIR` builds `a8run`, which drives libatari800 from a script. `a8check.py start` checks that the disk boots and the program starts. `a8check.py mac65` checks that MAC/65 on the Atari assembles the disk's sources to the same program; it needs Erez's MAC/65 cartridge image, which never goes in git. |
-
-Coming next: the 6502 simulator's core, from EDOS's and EFTP_XL's `sim.py`.
+| `mac65real/` | The real MAC/65 1.01 cartridge on py65, no OS ROM needed (EDOS's): `asm.py CAR SRCDIR RUNDIR MEMLO 'LOAD #D:MAIN.M65' 'ASM ,,#D:OUT'`, with the 091M banking, a small CIO (E:, K:, D: as a folder) and the OS floating point MAC/65 calls (`fp.py`). Lighter than atari800; the same cartridge image, never in git. |
+| `a8sim/` | The real program on an emulated 6502 (py65), from EFTP_XL's and EDOS's simulators. `Machine` has 64K or 130XE banks, a binary load with INITAD, `call('LABEL')` by mac65.py's symbols, traps and watchers, and RESET as the OS's warm start. `CIO` follows CIO's rules, with `E`, `K` and `Disks` (host folders, both DOS listings, XIO). `SIO` dispatches by DDEVIC to the program's own devices. `Keys` runs the key script; `screen_text`, `screen_png` and `raw2png` draw in the README palette; `install_fp` gives the FP ROM for whole numbers. |
 
 ## The workflows (`workflows/`)
 
@@ -62,6 +62,8 @@ into place. The release asks the program's Makefile for three targets:
 pip install -r xl/requirements.txt
 python3 xl/tests/test_tools.py    # the assembler, the tokeniser, the disk, the font
 python3 xl/tests/test_ax.py       # the AX includes on py65, with CIO and DOS stood in
+python3 xl/tests/test_sim.py      # a8sim: SIMTEST.M65 through E:, K:, D:, both listings,
+                                  # a CIO error, RESET, the load check; symbols, banks, SIO
 xl/tests/test_atari800.sh DIR     # end to end in atari800: HELLO.M65 boots and runs on
                                   # SpartaDOS 3.2; built too low, AXLOAD refuses it
 ```
