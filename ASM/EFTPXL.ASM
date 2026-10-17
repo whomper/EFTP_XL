@@ -1,6 +1,6 @@
          .OPT NO LIST
 ;
-; EFTPXL.M65 - EFTP_XL 0.9
+; EFTPXL.M65 - EFTP_XL 1.0
 ; FTP client for FujiNet
 ; Copyright (C) 2026 AERA | Erez Yaary
 ; GPL-2.0-or-later, see COPYING
@@ -60,7 +60,7 @@ NOROOM   .BYTE "EFTP_XL: not enough memory",EOL
 ; The last release; every build
 ; shows it
 ;
-VERSION  .BYTE "EFTP_XL 0.9",0
+VERSION  .BYTE "EFTP_XL 1.0",0
 ;
          .INCLUDE #D:UI.M65
          .INCLUDE #D:CMDS.M65

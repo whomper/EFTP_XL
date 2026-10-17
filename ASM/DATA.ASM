@@ -1,5 +1,5 @@
 ;
-; DATA.M65 - EFTP_XL 0.9
+; DATA.M65 - EFTP_XL 1.0
 ; The variables
 ; Copyright (C) 2026 AERA | Erez Yaary
 ;

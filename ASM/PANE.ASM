@@ -1,5 +1,5 @@
 ;
-; PANE.M65 - EFTP_XL 0.9
+; PANE.M65 - EFTP_XL 1.0
 ; The panes' entries
 ; Copyright (C) 2026 AERA | Erez Yaary
 ;

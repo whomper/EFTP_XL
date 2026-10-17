@@ -1,5 +1,5 @@
 ;
-; UI.M65 - EFTP_XL 0.9
+; UI.M65 - EFTP_XL 1.0
 ; The main screen and its keys
 ; Copyright (C) 2026 AERA | Erez Yaary
 ;

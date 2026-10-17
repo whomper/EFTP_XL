@@ -1,5 +1,5 @@
 ;
-; XSHOW.M65 - EFTP_XL 0.9
+; XSHOW.M65 - EFTP_XL 1.0
 ; Transfers area, progress, each file
 ; Copyright (C) 2026 AERA | Erez Yaary
 ;

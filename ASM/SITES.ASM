@@ -1,5 +1,5 @@
 ;
-; SITES.M65 - EFTP_XL 0.9
+; SITES.M65 - EFTP_XL 1.0
 ; The Sites screen and EFTPXL.CFG
 ; Copyright (C) 2026 AERA | Erez Yaary
 ;

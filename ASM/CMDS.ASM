@@ -1,5 +1,5 @@
 ;
-; CMDS.M65 - EFTP_XL 0.9
+; CMDS.M65 - EFTP_XL 1.0
 ; Main screen commands
 ; Copyright (C) 2026 AERA | Erez Yaary
 ;

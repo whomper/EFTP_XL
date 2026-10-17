@@ -1,5 +1,5 @@
 ;
-; XTREE.M65 - EFTP_XL 0.9
+; XTREE.M65 - EFTP_XL 1.0
 ; Folder transfers, depth first
 ; Copyright (C) 2026 AERA | Erez Yaary
 ;

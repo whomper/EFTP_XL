@@ -1,5 +1,5 @@
 ;
-; EQUATES.M65 - EFTP_XL 0.9
+; EQUATES.M65 - EFTP_XL 1.0
 ; OS addresses, zero page, constants
 ; Copyright (C) 2026 AERA | Erez Yaary
 ;

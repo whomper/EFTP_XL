@@ -1,5 +1,5 @@
 ;
-; FONT.M65 - EFTP_XL 0.9
+; FONT.M65 - EFTP_XL 1.0
 ; The font: EDOS's, plus EFTP_XL's own
 ; Copyright (C) 2026 AERA | Erez Yaary
 ;

@@ -1,5 +1,5 @@
 ;
-; LOCAL.M65 - EFTP_XL 0.9
+; LOCAL.M65 - EFTP_XL 1.0
 ; Atari files and folders, by CIO
 ; Copyright (C) 2026 AERA | Erez Yaary
 ;
