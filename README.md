@@ -277,7 +277,10 @@ with what is new: [`.github/workflows/release.yml`](.github/workflows/release.ym
 builds ATasm (at a fixed commit) and the program, tags the commit `vX.Y`
 and publishes `EFTPXL.PRG` and the source disk as a GitHub Release, marked
 Latest. Pushing a tag made with `git tag -a` does the same, with
-the tag's message as the notes.
+the tag's message as the notes. A release that must not be used is
+marked with the Withdraw workflow
+([`.github/workflows/withdraw.yml`](.github/workflows/withdraw.yml)):
+a notice at the top of its notes names the release to use instead.
 
 The C version in `C/` uses [fujinet-lib](https://github.com/FujiNetWIFI/fujinet-lib),
 a submodule (GPL-3.0); the program in assembly uses no library.

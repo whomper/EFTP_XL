@@ -14,8 +14,9 @@
   test builds, no CI artifacts, no builds from a branch. Work lands on
   `main`; to try a fix on real hardware, release it. If a release
   doesn't work, roll back with a release: revert on `main`, release the
-  next number, and say in the bad release's notes that it is withdrawn
-  and which one to use.
+  next number, and run the Withdraw workflow
+  (`.github/workflows/withdraw.yml`) on the bad ones: it puts a
+  "Withdrawn: use vX.Y" notice at the top of their notes.
 - **The program is Mac/65 source** in `ASM/`, built here with ATasm
   (`-mac65`) and on the Atari with Mac/65. Keep to what both take:
   labels of letters and digits only, unique across all files (no
