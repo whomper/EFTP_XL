@@ -1,5 +1,5 @@
 ;
-; XFER.M65 - EFTP_XL 1.0
+; XFER.M65 - EFTP_XL 1.1
 ; Sending files, one after another
 ; Copyright (C) 2026 AERA | Erez Yaary
 ;

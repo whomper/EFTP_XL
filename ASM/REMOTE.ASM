@@ -1,5 +1,5 @@
 ;
-; REMOTE.M65 - EFTP_XL 1.0
+; REMOTE.M65 - EFTP_XL 1.1
 ; The server's pane, from LIST
 ; Copyright (C) 2026 AERA | Erez Yaary
 ;

@@ -1,5 +1,5 @@
 ;
-; SCREEN.M65 - EFTP_XL 1.0
+; SCREEN.M65 - EFTP_XL 1.1
 ; Screen output and keyboard input
 ; Copyright (C) 2026 AERA | Erez Yaary
 ;

@@ -1,5 +1,5 @@
 ;
-; TEXT.M65 - EFTP_XL 1.0
+; TEXT.M65 - EFTP_XL 1.1
 ; Strings, lines and 32-bit numbers
 ; Copyright (C) 2026 AERA | Erez Yaary
 ;

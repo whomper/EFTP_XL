@@ -1,5 +1,5 @@
 ;
-; FTP.M65 - EFTP_XL 1.0
+; FTP.M65 - EFTP_XL 1.1
 ; FTP over FujiNet TCP connections
 ; Copyright (C) 2026 AERA | Erez Yaary
 ;
