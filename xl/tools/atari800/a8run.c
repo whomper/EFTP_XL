@@ -8,6 +8,7 @@
      until TEXT N   run until TEXT is on the screen (checked every 10 frames,
                     at most N times; else exit 2)
      clear          press Shift+< (clear the screen)
+     reset          press RESET (a warm start)
      dump FILE      write the 384x240 screen buffer
      screen         print the screen
 */
@@ -81,6 +82,12 @@ int main(int argc, char **argv) {
         } else if (!strcmp(line, "clear")) {
             libatari800_clear_input_array(&in);
             in.keycode = AKEY_LESS | 0x40;
+            frames(2);
+            libatari800_clear_input_array(&in);
+            frames(2);
+        } else if (!strcmp(line, "reset")) {
+            libatari800_clear_input_array(&in);
+            in.special = 2;     /* AKEY_WARMSTART, EFTP_XL's */
             frames(2);
             libatari800_clear_input_array(&in);
             frames(2);
