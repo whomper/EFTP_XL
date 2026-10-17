@@ -95,6 +95,7 @@ class Machine:
         self.poke_word(DOSINI, DOSINI_TRAP)
         self.os_colours()
         self.poke(CH, [0xFF])
+        self.poke(0x11, [0x80])             # BRKKEY: BREAK not pressed
 
     # -- memory
     def peek(self, addr):
@@ -187,7 +188,7 @@ class Machine:
         Memory is kept."""
         self.reset_pending = False
         self.resets += 1
-        if self.cio:
+        if self.cio and hasattr(self.cio, 'reset'):
             self.cio.reset()
         for f in self.on_reset:
             f(self)

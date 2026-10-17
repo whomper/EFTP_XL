@@ -144,7 +144,10 @@ class K:
         return 1, None
 
     def get(self, h, n, record):
-        return 1, bytes([self.keys.next_key()])
+        k = self.keys.next_key()
+        if k is None:
+            return 128, b''                 # BREAK
+        return 1, bytes([k])
 
     def put(self, h, data, record):
         return 135

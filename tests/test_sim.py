@@ -153,6 +153,32 @@ class TestParts(unittest.TestCase):
     def test_keys(self):
         self.assertEqual(parse_keys('^K\\nA\\s\\!'), [11, 0x9B, 65, 'shot', 'reset'])
 
+    def test_break(self):
+        # \k: BRKKEY goes to 0; K: says 128 and takes it, as the OS does
+        self.assertEqual(parse_keys('A\\kB'), [65, 'break', 66])
+        m = Machine()
+        self.assertEqual(m.peek(0x11), 0x80)
+        keys = Keys(parse_keys('A\\kB'))
+        keys.install(m, scan=False)
+        m.cio = CIO(e=E(), k=K(keys))
+        m.poke(0x2100, b'K:\x9b')
+        m.poke(0x2000, [0xA2, 0x10, 0xA9, 0x03, 0x9D, 0x42, 0x03, 0xA9, 0x04, 0x9D, 0x4A, 0x03,
+                        0xA9, 0x00, 0x9D, 0x44, 0x03, 0xA9, 0x21, 0x9D, 0x45, 0x03,
+                        0x20, 0x56, 0xE4, 0x60])                 # OPEN #1,4,0,"K:"
+        m.call(0x2000)
+        m.poke(0x2000, [0xA2, 0x10, 0xA9, 0x07, 0x9D, 0x42, 0x03, 0xA9, 0x00, 0x9D, 0x48, 0x03,
+                        0x9D, 0x49, 0x03, 0x20, 0x56, 0xE4, 0x60])   # GET #1
+        got = [(mpu.y, mpu.a if mpu.y == 1 else None)
+               for mpu in (m.call(0x2000) for _ in range(3))]
+        self.assertEqual(got, [(1, 65), (128, None), (1, 66)])
+        self.assertEqual(m.peek(0x11), 0xFF)
+        # a program that looks at CH sees BRKKEY 0 itself
+        keys = Keys(parse_keys('\\kA'))
+        keys.install(m, scan=False)
+        m.poke(0x11, [0x80])
+        keys._look(m)
+        self.assertEqual(m.peek(0x11), 0)
+
     def test_screen_text(self):
         m = Machine()
         base = m.word(0x58)

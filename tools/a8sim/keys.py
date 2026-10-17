@@ -5,7 +5,7 @@ get-byte (KEYBDV+4, or a K: GET) takes it; HELP through HELPFG; RESET.
 
     parse_keys(r'^K\\nTEST\\n\\s')
   \\n RETURN  \\e ESC  \\t TAB  \\b BACKSPACE  \\u \\d \\l \\r arrows
-  \\x DELETE LINE  \\h HELP  \\! RESET  ^X Ctrl+X
+  \\x DELETE LINE  \\h HELP  \\! RESET  \\k BREAK  ^X Ctrl+X
   \\s a snapshot (on_shot)  \\w wait until the program is idle (a transfer
   ended)  \\z let one more look at the keyboard go by
 The run ends (Stop) when the program waits for a key and none is left."""
@@ -14,12 +14,13 @@ from .core import Stop, CH
 KEYBDV = 0xE420
 KEY_TRAP = 0xE700           # KEYBDV's get-byte points here
 HELPFG = 0x2DC
-HELP, SHOT, WAIT, SKIP, RESET = 'help', 'shot', 'wait', 'skip', 'reset'
+HELP, SHOT, WAIT, SKIP, RESET, BREAK = 'help', 'shot', 'wait', 'skip', 'reset', 'break'
+BRKKEY = 0x11               # 0 after BREAK (the OS's BREAK interrupt)
 IDLE_GAP = 300              # looks this close together: waiting for a key
 IDLE_STOP = 200             # this many with no key left: the run ends
 NAMED = {'n': 0x9B, 'e': 0x1B, 't': 0x7F, 'b': 0x7E, 'u': 0x1C, 'd': 0x1D,
          'l': 0x1E, 'r': 0x1F, 'x': 0x9C}
-TOKENS = {'h': HELP, 's': SHOT, 'w': WAIT, 'z': SKIP, '!': RESET}
+TOKENS = {'h': HELP, 's': SHOT, 'w': WAIT, 'z': SKIP, '!': RESET, 'k': BREAK}
 
 
 def parse_keys(s):
@@ -66,13 +67,26 @@ class Keys:
                 m.watch[a] = self._look
 
     def _get_byte(self, m):
-        m.rts(a=self.next_key(), y=1)
+        k = self.next_key()
+        if k is None:
+            m.rts(a=0x9B, y=128)            # BREAK: K: says 128
+        else:
+            m.rts(a=k, y=1)
 
     def next_key(self):
+        """the next key, for K:; None for BREAK (K:'s status 128)"""
         while self.keys and not isinstance(self.keys[0], int):
+            if self.keys[0] == BREAK:
+                self.keys.pop(0)
+                self.m.mem[BRKKEY] = 0
+            if not self.m.mem[BRKKEY]:
+                break
             self._look(self.m)
             if self.m.reset_pending:
                 raise Stop('RESET while a key was read')
+        if not self.m.mem[BRKKEY]:
+            self.m.mem[BRKKEY] = 0xFF       # K: takes it (the OS's DEC BRKKEY)
+            return None
         if not self.keys:
             raise Stop('no keys left')
         k = self.keys.pop(0)
@@ -95,6 +109,11 @@ class Keys:
                 self.keys.pop(0)
                 if self.on_shot:
                     self.on_shot(m)
+        if self.keys and self.keys[0] == BREAK:
+            self.keys.pop(0)
+            m.mem[BRKKEY] = 0           # seen when the program looks at BRKKEY
+            self.polls = 0
+            return
         if self.keys and self.keys[0] == RESET:
             self.keys.pop(0)
             m.reset()

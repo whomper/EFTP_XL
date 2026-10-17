@@ -6,6 +6,8 @@
   sparta.py get   DISK.ATR NAME.EXT OUT     extract a file
   sparta.py put   DISK.ATR FILE [NAME.EXT]  add or replace a file (root dir)
   sparta.py rm    DISK.ATR NAME.EXT         delete a file
+  sparta.py mkdir DISK.ATR TREE>SUB         make a folder
+  NAME.EXT may be a path: TREE>SUB>NAME.EXT
   sparta.py fsck  DISK.ATR                  check maps, bitmap and directory
 
 Layout (boot sector 1): $09 root directory sector map, $0B total sectors,
@@ -19,8 +21,13 @@ use, $10 deleted, $20 subdirectory, $01 protected), first map sector,
 header (its length field is the directory length). Bitmap: 1 = free,
 sector n at byte n>>3, bit 7-(n&7).
 
+Folders (subdirectories), as SpartaDOS 3.2's MD makes them: the parent's
+entry has status $28, the folder's first map sector and length 0; the
+folder's own entry 0 has status 0, the parent's map sector at 1-2, the
+folder's length at 3-5 and its name. A path names a file in a folder with
+'>' (TREE>SUB>C.DAT), as SpartaDOS does.
+
 Writing bumps the volume sequence number so SpartaDOS notices the change.
-Only the root directory is written to; subdirectories are not supported.
 new_disk() makes an empty disk using another disk's boot code, and
 set_boot_file() points the boot sector ($28) at the DOS file to load.
 """
@@ -118,7 +125,7 @@ class Disk:
     def chain(self, first_map, length):
         """(map sectors, data sectors) needed to hold length bytes"""
         maps, data, m, need = [], [], first_map, (length + self.ss - 1) // self.ss
-        while m and len(data) < need:
+        while m and (len(data) < need or not maps):    # an empty file has its map too
             if m in maps:
                 raise SpartaError(f"sector map loop at {m}")
             maps.append(m)
@@ -136,15 +143,46 @@ class Disk:
     def root(self):
         return self.w(self.read(1), 0x09)
 
-    def dir_bytes(self):
-        m = self.root()
+    def dir_bytes(self, m=None):
+        """the directory whose first map sector is m (the root's by default)"""
+        m = m or self.root()
         hdr = self.read_file(m, ENT)
         return bytearray(self.read_file(m, hdr[3] | hdr[4] << 8 | hdr[5] << 16))
 
-    def entries(self):
-        d = self.dir_bytes()
+    def entries(self, m=None):
+        d = self.dir_bytes(m)
         for i in range(ENT, len(d) - ENT + 1, ENT):
             yield i, d[i:i + ENT]
+
+    @staticmethod
+    def split(path):
+        """'TREE>SUB>C.DAT' -> (['TREE', 'SUB'], 'C.DAT')"""
+        parts = [x for x in path.upper().replace('\\', '>').split('>') if x]
+        if not parts:
+            raise SpartaError(f"no name in {path!r}")
+        return parts[:-1], parts[-1]
+
+    def folder(self, names):
+        """the first map sector of the folder down names from the root"""
+        m = self.root()
+        for n in names:
+            f = self.find(n, m)
+            if not f or not f[1][0] & 0x20:
+                raise SpartaError(f"{n}: no such folder")
+            m = self.w(f[1], 1)
+        return m
+
+    def walk(self, m=None, prefix=''):
+        """(path, entry, is_folder) of everything, folders before what is in them"""
+        for _, e in self.entries(m):
+            if not self.live(e):
+                continue
+            path = prefix + self.name(e)
+            if e[0] & 0x20:
+                yield path, e, True
+                yield from self.walk(self.w(e, 1), path + '>')
+            else:
+                yield path, e, False
 
     @staticmethod
     def name(e):
@@ -156,14 +194,19 @@ class Disk:
     def live(e):
         return e[0] & 0x08 and not e[0] & 0x10
 
-    def find(self, name):
-        for i, e in self.entries():
+    def find(self, name, m=None):
+        """(offset, entry) of name in the directory at m, or of a path
+        (TREE>SUB>C.DAT) from the root"""
+        if m is None and ('>' in name or '\\' in name):
+            names, leaf = self.split(name)
+            return self.find(leaf, self.folder(names))
+        for i, e in self.entries(m):
             if self.live(e) and self.name(e) == name.upper():
                 return i, e
         return None
 
-    def write_dir(self, d):
-        m = self.root()
+    def write_dir(self, d, m=None):
+        m = m or self.root()
         maps, data = self.chain(m, len(d))
         for k, s in enumerate(data):
             self.write(s, d[k * self.ss:(k + 1) * self.ss])
@@ -179,9 +222,9 @@ class Disk:
             self.set_free(bm, s, False)
         return got
 
-    def grow_dir(self, length):
-        """make sure the root directory's sectors can hold length bytes"""
-        m = self.root()
+    def grow_dir(self, length, m=None):
+        """make sure the directory's sectors can hold length bytes"""
+        m = m or self.root()
         x = self.read(m)
         have = [self.w(x, i) for i in range(4, self.ss, 2)]
         n = sum(1 for v in have if v)
@@ -208,7 +251,9 @@ class Disk:
         self.write(1, boot)
 
     def remove(self, name):
-        f = self.find(name)
+        names, leaf = self.split(name)
+        m = self.folder(names)
+        f = self.find(leaf, m)
         if not f:
             raise SpartaError(f"{name}: not found")
         i, e = f
@@ -220,36 +265,78 @@ class Disk:
         for s in maps + [s for s in data if s]:
             self.set_free(bm, s, True)
         self.put_bitmap(bm)
-        d = self.dir_bytes()
+        d = self.dir_bytes(m)
         d[i] = (d[i] | 0x10) & ~0x08 & 0xFF
-        self.write_dir(d)
+        self.write_dir(d, m)
+
+    def _slot(self, m):
+        """(directory bytes, offset of a free entry), growing it if need be"""
+        d = self.dir_bytes(m)
+        slot = next((i for i, e in self.entries(m) if not self.live(e)), None)
+        if slot is None:
+            slot = len(d)
+            d += bytes(ENT)
+            self.grow_dir(len(d), m)
+            d[3], d[4], d[5] = len(d) & 0xFF, len(d) >> 8 & 0xFF, len(d) >> 16
+        return d, slot
+
+    def mkdir(self, path, when=None):
+        """a folder, as SpartaDOS's MD makes it; its first map sector"""
+        names, leaf = self.split(path)
+        base, _, ext = leaf.partition('.')
+        if not (1 <= len(base) <= 8 and len(ext) <= 3):
+            raise SpartaError(f"invalid name {leaf}")
+        parent = self.folder(names)
+        if self.find(leaf, parent):
+            raise SpartaError(f"{path}: there already")
+        bm = self.bitmap()
+        mp, ds = self.alloc(bm, 2)
+        self.put_bitmap(bm)
+        t = when or datetime.datetime.now()
+        stamp = bytes([t.day, t.month, t.year % 100, t.hour, t.minute, t.second])
+        x = bytearray(self.ss)
+        x[4], x[5] = ds & 0xFF, ds >> 8
+        self.write(mp, x)
+        h = bytearray(ENT)                               # its own entry 0
+        h[1], h[2] = parent & 0xFF, parent >> 8
+        h[3] = ENT
+        h[6:14] = base.ljust(8).encode()
+        h[14:17] = ext.ljust(3).encode()
+        h[17:23] = stamp
+        self.write(ds, h)
+        d, slot = self._slot(parent)
+        e = bytearray(ENT)                               # the parent's entry: length 0
+        e[0] = 0x28
+        e[1], e[2] = mp & 0xFF, mp >> 8
+        e[6:14] = base.ljust(8).encode()
+        e[14:17] = ext.ljust(3).encode()
+        e[17:23] = stamp
+        d[slot:slot + ENT] = e
+        self.write_dir(d, parent)
+        return mp
 
     def add(self, name, data, when=None, stamp=None):
+        names, name = self.split(name)
+        m = self.folder(names)
         base, _, ext = name.upper().partition('.')
         if not (1 <= len(base) <= 8 and len(ext) <= 3):
             raise SpartaError(f"invalid name {name}")
-        if self.find(name):
-            self.remove(name)
-        d = self.dir_bytes()
-        slot = next((i for i, e in self.entries() if not self.live(e)), None)
-        if slot is None:                                 # grow the directory
-            slot = len(d)
-            d += bytes(ENT)
-            self.grow_dir(len(d))
-            d[3], d[4], d[5] = len(d) & 0xFF, len(d) >> 8 & 0xFF, len(d) >> 16
+        if self.find(name, m):
+            self.remove('>'.join(names + [name]))
+        d, slot = self._slot(m)
         bm = self.bitmap()
         nsec = (len(data) + self.ss - 1) // self.ss
         nmap = max(1, (nsec + self.per_map - 1) // self.per_map)
         secs = self.alloc(bm, nmap + nsec)
         maps, dsecs = secs[:nmap], secs[nmap:]
-        for k, m in enumerate(maps):
+        for k, mp in enumerate(maps):
             x = bytearray(self.ss)
             nxt = maps[k + 1] if k + 1 < len(maps) else 0
             prv = maps[k - 1] if k else 0
             x[0:4] = bytes([nxt & 0xFF, nxt >> 8, prv & 0xFF, prv >> 8])
             for j, s in enumerate(dsecs[k * self.per_map:(k + 1) * self.per_map]):
                 x[4 + 2 * j], x[5 + 2 * j] = s & 0xFF, s >> 8
-            self.write(m, x)
+            self.write(mp, x)
         for k, s in enumerate(dsecs):
             self.write(s, data[k * self.ss:(k + 1) * self.ss])
         self.put_bitmap(bm)
@@ -265,7 +352,7 @@ class Disk:
         if stamp:                                        # keep a file's own date/time
             e[17:23] = stamp
         d[slot:slot + ENT] = e
-        self.write_dir(d)
+        self.write_dir(d, m)
 
     def fsck(self):
         """return a list of problems (empty if consistent)"""
@@ -279,21 +366,34 @@ class Disk:
             if s in owner:
                 problems.append(f"sector {s} used by {owner[s]} and {who}")
             owner[s] = who
-        d = self.dir_bytes()
-        maps, data = self.chain(self.root(), len(d))
-        for s in maps + data:
-            claim(s, 'root directory')
-        for i, e in self.entries():
-            if not self.live(e):
-                continue
-            n, length = self.name(e), e[3] | e[4] << 8 | e[5] << 16
-            try:
-                maps, data = self.chain(self.w(e, 1), length)
-            except SpartaError as x:
-                problems.append(f"{n}: {x.code}")
-                continue
-            for s in maps + [s for s in data if s]:
-                claim(s, n)
+        def walk(m, label, seen):
+            if m in seen:
+                problems.append(f"{label}: a folder inside itself")
+                return
+            seen = seen | {m}
+            d = self.dir_bytes(m)
+            maps, data = self.chain(m, len(d))
+            for s in maps + data:
+                claim(s, label)
+            for i, e in self.entries(m):
+                if not self.live(e):
+                    continue
+                n = (label + '>' if label != 'root directory' else '') + self.name(e)
+                if e[0] & 0x20:
+                    sub = self.w(e, 1)
+                    if self.w(self.read_file(sub, ENT), 1) != m:
+                        problems.append(f"{n}: its header names another parent")
+                    walk(sub, n, seen)
+                    continue
+                length = e[3] | e[4] << 8 | e[5] << 16
+                try:
+                    maps, data = self.chain(self.w(e, 1), length)
+                except SpartaError as x:
+                    problems.append(f"{n}: {x.code}")
+                    continue
+                for s in maps + [s for s in data if s]:
+                    claim(s, n)
+        walk(self.root(), 'root directory', set())
         bm = self.bitmap()
         for s in range(1, self.total + 1):
             if s in owner and self.is_free(bm, s):
@@ -349,16 +449,15 @@ def new_disk(path, template, volume):
 
 def main():
     a = sys.argv[1:]
-    if len(a) < 2 or a[0] not in ('ls', 'get', 'put', 'rm', 'fsck'):
+    if len(a) < 2 or a[0] not in ('ls', 'get', 'put', 'rm', 'mkdir', 'fsck'):
         print(__doc__)
         return 1
     d = Disk(a[1])
     if a[0] == 'ls':
-        for i, e in d.entries():
-            if d.live(e):
-                kind = '<DIR>' if e[0] & 0x20 else f"{e[3] | e[4] << 8 | e[5] << 16:7d}"
-                print(f"{'*' if e[0] & 1 else ' '} {d.name(e):<12} {kind}  "
-                      f"{e[17]:02d}-{e[18]:02d}-{e[19]:02d} {e[20]:02d}:{e[21]:02d}")
+        for path, e, folder in d.walk():
+            kind = '<DIR>' if folder else f"{e[3] | e[4] << 8 | e[5] << 16:7d}"
+            print(f"{'*' if e[0] & 1 else ' '} {path:<24} {kind}  "
+                  f"{e[17]:02d}-{e[18]:02d}-{e[19]:02d} {e[20]:02d}:{e[21]:02d}")
         print(f"{d.w(d.read(1), 0x0D)} free sectors")
     elif a[0] == 'get':
         f = d.find(a[2])
@@ -374,6 +473,9 @@ def main():
         print(f"{a[1]}: {name} {len(data)} bytes, {d.w(d.read(1), 0x0D)} free sectors")
     elif a[0] == 'rm':
         d.remove(a[2])
+        d.save()
+    elif a[0] == 'mkdir':
+        d.mkdir(a[2])
         d.save()
     elif a[0] == 'fsck':
         problems, lost = d.fsck()

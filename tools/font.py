@@ -76,7 +76,8 @@ def shifted(font):
 
 
 def aera_font():
-    font = shifted(open(EREZ, 'rb').read())
+    with open(EREZ, 'rb') as f:
+        font = shifted(f.read())
     for a, rows in GLYPHS.items():
         i = internal(a) * 8
         font[i:i + 8] = bytes(int(r.replace('.', '0').replace('#', '1'), 2) for r in rows)
@@ -102,9 +103,11 @@ def as_m65(data, name, program, version, label='FONT'):
 def main():
     a = sys.argv[1:]
     if len(a) == 2 and a[0] == 'fnt':
-        open(a[1], 'wb').write(aera_font())
+        with open(a[1], 'wb') as f:
+            f.write(aera_font())
     elif len(a) in (4, 5) and a[0] == 'm65':
-        open(a[1], 'w').write(as_m65(aera_font(), os.path.basename(a[1]).upper(), *a[2:]))
+        with open(a[1], 'w') as f:
+            f.write(as_m65(aera_font(), os.path.basename(a[1]).upper(), *a[2:]))
     else:
         print(__doc__)
         return 1
