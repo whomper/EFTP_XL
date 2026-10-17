@@ -19,7 +19,7 @@ PYTHON     ?= python3
 MAC65      := $(PYTHON) xl/tools/mac65.py
 SRC        := $(PYTHON) xl/tools/atari_src.py
 PROGRAM    := bin/EFTPXL.PRG
-FONTFILE   := bin/AERA.FNT
+FONTFILE   := xl/font/AERA.FNT
 DISK       := bin/EFTPXL.ATR
 TESTDISK   := bin/EFTPTEST.ATR
 SRCS       := $(wildcard ASM/*.M65)
@@ -39,10 +39,6 @@ $(PROGRAM): Makefile $(SRCS) $(AXSRCS) xl/tools/mac65.py
 	mkdir -p bin/src
 	cp $(SRCS) $(AXSRCS) bin/src/
 	$(MAC65) bin/src/EFTPXL.M65 -o $@ -l bin/EFTPXL.LST > /dev/null
-
-$(FONTFILE): xl/tools/font.py xl/font/*
-	mkdir -p bin
-	$(PYTHON) xl/tools/font.py fnt $@
 
 # the disk: SpartaDOS 3.2, the sources numbered and tokenized, the
 # program and the font; what is on it must build the same program

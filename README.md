@@ -51,11 +51,11 @@ design is in [docs/design](docs/design).
 **The font.** `AERA.FNT` is the font the AERA 8-bit programs share. It
 isn't in the program: when it is on the drive (and SpartaDOS folder)
 you start EFTP_XL from, EFTP_XL reads it into the 1K just below the
-screen, as EDOS does; without it, EFTP_XL copies the font in use (the
-ROM's). Either way EFTP_XL puts its own four icons on it, on characters
-text hardly uses: a folder, a file, the "..." of a name cut short and
-the empty part of a progress bar (the heart, the club, Ctrl+F and the
-spade). `AERA.FNT` has the same icons in the same places.
+screen, as EDOS does, and uses its icons: a folder, a file, the "..."
+of a name cut short and the empty part of a progress bar. Without it
+EFTP_XL runs in the Atari's own font, with characters of that font for
+the icons: a folder is `▶`, the "..." is `→`, a file has none and the
+bar is drawn with `─`.
 
 The screen, after EFTP: the Atari on the left, the server on the right,
 the folder you are in above each, and the pane with the keyboard has its
@@ -137,7 +137,7 @@ Notes:
 - On an error the info line says what went wrong: the server's own
   reply (`530 Login incorrect`), or the Atari's own error with its text
   (`NOTES.TXT: Disk full`).
-- The program takes `$4000`-`$94D0` (the program and its variables),
+- The program takes `$4000`-`$94A6` (the program and its variables),
   and the font the 1K just below the screen (`$9800` with BASIC on):
   above EDOS and the MEMLO of DOS 2.5 and SpartaDOS 3, so BASIC can
   stay on. If a DOS's MEMLO is above `$4000`, or there isn't room for
@@ -251,10 +251,10 @@ docs/       the pictures, the first design
 ```
 
 The source keeps to what Mac/65 1.01 takes: labels of letters and
-digits, `*=*+n` for room (no `.DS`), the font as `.BYTE` lines (no
-`.INCBIN`), `[ ]` around expressions, one level of `.INCLUDE`, and a
-zero-page name defined before it is used. Each file starts with a header
-naming it and the version; each routine has a few lines on what it
+digits, `*=*+n` for room (no `.DS`), no `.INCBIN`, `[ ]` around
+expressions, one level of `.INCLUDE`, and a zero-page name defined
+before it is used. Each file starts with a header naming it and the
+version; each routine has a few lines on what it
 does, what it takes and what it gives back.
 
 ## Tests
@@ -284,7 +284,7 @@ every FTP command sent.
 **The checks.** `make test` runs xl's own tests, then
 `tools/test_sim.py`: the program that way against an FTP server it
 starts, looking at the screen, at memory and at the files on both
-sides, 74 checks:
+sides, 75 checks:
 
 | | |
 |---|---|
@@ -295,7 +295,7 @@ sides, 74 checks:
 | New, rename, delete | folders and files on the Atari and on the server |
 | DOS 2.5 | its listing; no folders made, none sent, and the error's text |
 | RESET | back to the main screen, disconnected, `N1:` and `N2:` closed, the keys working; ^Q still back to DOS |
-| HELP, the font | the About lines; `AERA.FNT` read below the screen, or the font in use copied there, the icons on it either way; no font in the program |
+| HELP, the font | the About lines; `AERA.FNT` read below the screen and its icons used, set again after RESET without reading it again, DOS's font back on quit; without it the ROM font and its icons; no font in the program |
 | ESC and BREAK | each cancels as "no": new folder, rename, delete, HELP, the Sites screen, a site's edit, delete and new, the replace question, the password question; each stops a transfer |
 | The test disk | `EFTPTEST.ATR` clean, with the files the test plan needs |
 | Loading | the load check refuses a DOS whose MEMLO is above $4000, says so and goes back to DOS |

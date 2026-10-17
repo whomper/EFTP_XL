@@ -25,7 +25,10 @@ ON THE DISK
     pane.
 [ ] With BASIC on, the same.
 [ ] RENAME AERA.FNT AERA.OFF, start
-    it: the same font (its own copy).
+    it: the Atari's own font, folders
+    as a right triangle, cut names
+    ending in a right arrow, the bar
+    of a transfer drawn with lines.
     RENAME AERA.OFF AERA.FNT after.
 
 2 HELP

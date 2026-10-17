@@ -57,7 +57,7 @@ def main():
                'AUTORUN.SYS': 1800})
     # the family font, as on a real disk: without it the simulator's
     # (empty) ROM font would draw nothing but the icons
-    shutil.copy(os.path.join(sim.ROOT, 'bin', 'AERA.FNT'), d1)
+    shutil.copy(os.path.join(sim.ROOT, 'xl', 'font', 'AERA.FNT'), d1)
     server = Server(srv, 2121)
     try:
         site = (f'^K^NMac\\n127.0.0.1\\n{server.port}\\n{USER}\\n{PASSWORD}\\n/\\n'

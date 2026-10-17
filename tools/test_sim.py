@@ -349,7 +349,7 @@ def main():
 
 
 XEX = os.path.join(sim.ROOT, 'bin', 'EFTPXL.PRG')
-BUILTIN = os.path.join(sim.ROOT, 'bin', 'AERA.FNT')    # make's, the same font
+BUILTIN = os.path.join(sim.ROOT, 'xl', 'font', 'AERA.FNT')    # make's, the same font
 
 if __name__ == '__main__':
     sys.exit(main())
