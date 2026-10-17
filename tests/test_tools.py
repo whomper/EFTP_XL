@@ -80,7 +80,7 @@ class TestAssembler(unittest.TestCase):
         files = {n: open(os.path.join(XL, 'src', n), encoding='utf-8').read()
                  for n in os.listdir(os.path.join(XL, 'src'))}
         files['MAIN.M65'] = (' .INCLUDE #D:AXEQU.M65\nAXPTR = $80\nAXERRS = 2\nAXLOW = $2000\n'
-                             'AXHIGH = $3000\nAXWARM = $2000\nAXFMIN = $80\n *= $2F00\nAXLOWM .BYTE EOL\n'
+                             'AXHIGH = $3000\nAXWARM = $2000\nAXFMIN = $80\nAXFCOPY = 1\n *= $2F00\nAXLOWM .BYTE EOL\n'
                              'AXROOMM .BYTE EOL\n .INCLUDE #D:AXLOAD.M65\n *= $2000\n'
                              ' .INCLUDE #D:AXRESET.M65\n .INCLUDE #D:AXFONT.M65\n'
                              ' .INCLUDE #D:AXERR.M65\n')
@@ -301,10 +301,11 @@ class TestFont(unittest.TestCase):
                          'f6da49bbf4c49a08a41f7f5f7e1e30544987fc19b7564b29254d109483990b77')
         self.assertEqual(f[font.internal(0x7B) * 8], 0b10101010)
 
-    def test_m65(self):
-        text = font.as_m65(font.aera_font(), 'FONT.M65', 'TEST', '1.0')
-        self.assertIn('; FONT.M65 - TEST 1.0', text.split('\n')[:4])
-        self.assertEqual(text.count('.BYTE'), 128)
+    def test_kept_font_up_to_date(self):
+        # xl/font/AERA.FNT, which programs carry, is the font built here
+        with open(font.AERA, 'rb') as f:
+            self.assertEqual(f.read(), font.aera_font())
+        self.assertEqual(font.ICONS, tuple(font.internal(a) for a in (0x00, 0x06, 0x10, 0x7B)))
 
 
 if __name__ == '__main__':

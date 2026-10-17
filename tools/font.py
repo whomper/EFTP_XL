@@ -4,23 +4,27 @@
 """AERA.FNT (the 8-bit guidelines, 5.3) is Erez's EREZ.FNT (xl/font/),
 moved one pixel right where its glyph leaves column 7 empty, so inverse
 characters show as solid blocks as the ROM font's do (EDOS's font), with
-four glyphs EFTP_XL draws:
+the family's four icons in the places kept for them (5.3; a program may
+put its own there):
 
-    ATASCII $00 (heart)  a folder
-    ATASCII $10 (club)   a file
-    ATASCII $06 (/)      "..." for names that are cut off
-    ATASCII $7B (spade)  the empty part of a progress bar
+    ATASCII $00 (heart, screen code $40)  a folder
+    ATASCII $10 (club, $50)               a file
+    ATASCII $06 (/, $46)                  "..." for names that are cut off
+    ATASCII $7B (spade, $7B)              the empty part of a progress bar
 
-  font.py fnt OUT.FNT                         the font
-  font.py m65 OUT.M65 PROGRAM VERSION [LABEL] the font as .BYTE lines, for a
-                                              program that carries it (MAC/65
-                                              has no .INCBIN); 1K aligned
+The built font is kept as xl/font/AERA.FNT, so a program carries it on its
+disk and in its release without building it; `check` says it is up to date.
+
+  font.py fnt OUT.FNT    the font
+  font.py check          xl/font/AERA.FNT is the font built from EREZ.FNT
 """
 import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 EREZ = os.path.join(HERE, '..', 'font', 'EREZ.FNT')
+AERA = os.path.join(HERE, '..', 'font', 'AERA.FNT')
+ICONS = (0x40, 0x46, 0x50, 0x7B)        # screen codes kept for icons
 
 GLYPHS = {
     0x00: ['........',
@@ -84,30 +88,16 @@ def aera_font():
     return bytes(font)
 
 
-def as_m65(data, name, program, version, label='FONT'):
-    out = [';',
-           f'; {name} - {program} {version}',
-           '; The font: AERA.FNT, built in',
-           '; Copyright (C) 2026 AERA | Erez Yaary',
-           ';',
-           '; Made by xl/tools/font.py; it',
-           '; must be 1K aligned',
-           ';']
-    for c in range(128):
-        row = data[c * 8:c * 8 + 8]
-        lab = label.ljust(9) if c == 0 else ' ' * 9
-        out.append(lab + '.BYTE ' + ','.join(f'${b:02X}' for b in row))
-    return '\n'.join(out) + '\n'
-
-
 def main():
     a = sys.argv[1:]
     if len(a) == 2 and a[0] == 'fnt':
         with open(a[1], 'wb') as f:
             f.write(aera_font())
-    elif len(a) in (4, 5) and a[0] == 'm65':
-        with open(a[1], 'w') as f:
-            f.write(as_m65(aera_font(), os.path.basename(a[1]).upper(), *a[2:]))
+    elif a == ['check']:
+        with open(AERA, 'rb') as f:
+            if f.read() != aera_font():
+                print(f'{AERA}: out of date; font.py fnt {AERA}')
+                return 1
     else:
         print(__doc__)
         return 1

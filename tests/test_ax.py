@@ -33,6 +33,7 @@ AXLOW    =   $2000
 AXHIGH   =   $3000
 AXWARM   =   ${warm:04X}
 AXFMIN   =   $80
+AXFCOPY  =   {fcopy}
          *=  $2F00
 AXLOWM   .BYTE "low",EOL
 AXROOMM  .BYTE "room",EOL
@@ -168,14 +169,14 @@ class Atari:
 
 
 class Program:
-    def __init__(self, errs=2):
+    def __init__(self, errs=2, fcopy=0):
         tmp = tempfile.mkdtemp()
         try:
             for f in os.listdir(os.path.join(XL, 'src')):
                 shutil.copy(os.path.join(XL, 'src', f), tmp)
             main = os.path.join(tmp, 'TEST.M65')
             with open(main, "w") as f:
-                f.write(TEST.format(errs=errs, warm=WARM))
+                f.write(TEST.format(errs=errs, warm=WARM, fcopy=fcopy))
             asm = mac65.Assembler()
             asm.assemble(main)
         finally:
@@ -186,6 +187,7 @@ class Program:
 
 
 PROGRAM = Program()
+COPYING = Program(fcopy=1)             # AXFCOPY 1: no file, the font in use copied
 
 
 class TestLoad(unittest.TestCase):
@@ -252,8 +254,8 @@ class TestReset(unittest.TestCase):
 class TestFont(unittest.TestCase):
     FONT = bytes(range(256)) * 4
 
-    def font(self, files, ramtop=0xC0):
-        a = Atari(PROGRAM, files)
+    def font(self, files, ramtop=0xC0, program=PROGRAM):
+        a = Atari(program, files)
         a.load()
         a.mem[0x6A] = ramtop
         a.mem[0x2F4] = 0xE0
@@ -300,6 +302,26 @@ class TestFont(unittest.TestCase):
         self.assertEqual(bytes(a.mem[0x7C00:0x8000]), bytes(1024))
         a = self.font({'AERA.FNT': self.FONT}, ramtop=0x88)  # $80 itself is room
         self.assertEqual(self.run_font(a), (0, 0x80, 0x80))
+
+    def test_copy_without_the_file(self):
+        # AXFCOPY 1: the font in use goes to the page, for the program's icons
+        rom = bytes((i * 7) & 255 for i in range(1024))
+        for files in ({}, {'AERA.FNT': self.FONT[:100]}):
+            a = self.font(files, program=COPYING)
+            a.mem[0xE000:0xE400] = rom
+            self.assertEqual(self.run_font(a), (1, 0xB8, 0xB8))
+            self.assertEqual(bytes(a.mem[0xB800:0xBC00]), rom)
+            self.assertEqual(a.iocb, {})
+            self.assertEqual(bytes(a.mem[0xBC00:0xBC10]), bytes(16))   # 4 pages only
+            a.mem[0x2F4] = 0xE0                                         # RESET
+            self.assertEqual(self.run_font(a), (1, 0xB8, 0xB8))
+
+    def test_copy_with_the_file_or_no_room(self):
+        a = self.font({'AERA.FNT': self.FONT}, program=COPYING)
+        self.assertEqual(self.run_font(a), (0, 0xB8, 0xB8))
+        self.assertEqual(bytes(a.mem[0xB800:0xBC00]), self.FONT)
+        a = self.font({}, ramtop=0x84, program=COPYING)
+        self.assertEqual(self.run_font(a), (1, 0xE0, 0xE0))
 
     def test_rom_to_quit(self):
         a = self.font({'AERA.FNT': self.FONT})

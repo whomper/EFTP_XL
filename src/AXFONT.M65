@@ -9,24 +9,39 @@
 ; (1K) to the page below the screen,
 ; (RAMTOP-8) AND $FC; later calls
 ; (after RESET) only set CHBAS. No
-; file, a short one, or no room (the
-; page under AXFMIN) keep the ROM
-; font. A short or bad file may leave
-; the page part-written.
+; file or a short one: with AXFCOPY
+; 1 the font in use is copied to the
+; page (a program puts its own icons
+; there, 5.3), with 0 the ROM font
+; stays. No room (the page under
+; AXFMIN): the ROM font.
 ; X: the IOCB to use, times 16
-; Exit: C=0 AERA.FNT, C=1 ROM font;
-;       AXFPG its page; the IOCB is
+; Exit: C=0 AERA.FNT, C=1 not;
+;       AXFPG the page in CHBAS ($E0:
+;       the ROM's); the IOCB is
 ;       closed; A, Y changed
 ;
 AXFONT   LDA AXFPG          ; tried already
-         BNE AXFSET
-         LDA RAMTOP
+         BEQ AXFLOAD
+;
+; AXFSET - CHBAS to AXFPG; C=1 when
+; it isn't AERA.FNT
+;
+AXFSET   LDA AXFNOT
+         ASL A
+         LDA AXFPG
+         STA CHBAS
+         RTS
+;
+; The first call: the page, the file
+;
+AXFLOAD  LDA RAMTOP
          SEC
          SBC #8             ; 4 pages screen
          AND #$FC           ; 1K aligned
          CMP #AXFMIN
          BCC AXFONT2        ; no room
-         PHA                ; the page
+         STA AXFPG
          LDA #<AXFNAME
          STA ICBAL,X
          LDA #>AXFNAME
@@ -37,11 +52,9 @@ AXFONT   LDA AXFPG          ; tried already
          STA ICAX2,X
          LDA #AXOPEN
          JSR AXFCIO
-         PLA
-         CPY #$80           ; C=1: not there
-         BCS AXFONT1
-         PHA
-         STA ICBAH,X        ; 1K to the page
+         BMI AXFONT1        ; not there
+         LDA AXFPG          ; 1K to the page
+         STA ICBAH,X
          LDA #0
          STA ICBAL,X
          STA ICBLL,X
@@ -49,26 +62,40 @@ AXFONT   LDA AXFPG          ; tried already
          STA ICBLH,X
          LDA #AXGETCHR
          JSR AXFCIO
-         PLA
-AXFONT1  STA AXFPG          ; read or not
-         TYA                ; keep the status
+AXFONT1  TYA                ; keep the status
          PHA
          LDA #AXCLOSE
          JSR AXFCIO
          PLA
-         TAY
-         CPY #$80
-         BCC AXFSET         ; read: the page
+         AND #$80           ; $80: not read
+         STA AXFNOT
+         BPL AXFSET         ; read: the page
+         .IF AXFCOPY
+;
+; Not read: the font in use, 4
+; pages, copied to the page
+;
+         LDA CHBAS
+         STA AXFC1+2
+         LDA AXFPG
+         STA AXFC2+2
+         LDY #0
+AXFC1    LDA $E000,Y        ; from CHBAS's page
+AXFC2    STA $E000,Y        ; to AXFPG's
+         INY
+         BNE AXFC1
+         INC AXFC1+2
+         INC AXFC2+2
+         LDA AXFC2+2
+         AND #3             ; 4 pages done
+         BNE AXFC1
+         JMP AXFSET
+         .ENDIF
 AXFONT2  LDA #$E0           ; the ROM font
          STA AXFPG
-;
-; AXFSET - CHBAS to AXFPG; C=1 for
-; the ROM's ($E0)
-;
-AXFSET   LDA AXFPG
-         STA CHBAS
-         CMP #$E0           ; C=1: ROM
-         RTS
+         LDA #$80
+         STA AXFNOT
+         JMP AXFSET
 ;
 ; AXFROM - the ROM font, before the
 ; program goes back to DOS
@@ -79,4 +106,5 @@ AXFROM   LDA #$E0
 AXFCIO   STA ICCOM,X        ; CIO command A
          JMP CIOV
 AXFPG    .BYTE 0            ; 0: not tried yet
+AXFNOT   .BYTE 0            ; $80: not AERA.FNT
 AXFNAME  .BYTE "D:AERA.FNT",EOL
