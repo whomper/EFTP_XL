@@ -2,7 +2,8 @@
 ; HELLO.M65 - HELLO 1.0
 ; A program for the atari800 check:
 ; it says so on E:, then waits; after
-; RESET it says so again
+; RESET it says so again, and it says
+; when HELP or BREAK is pressed
 ; Copyright (C) 2026 AERA | Erez Yaary
 ;
          .INCLUDE #D:AXEQU.M65
@@ -31,8 +32,27 @@ AXHSAY   STA ICBAL
          STA ICCOM
          LDX #0
          JSR CIOV
-AXHWAIT  JMP AXHWAIT        ; for ever
+;
+; Wait for ever: HELP (HELPFG) and
+; BREAK (BRKKEY 0) are said and taken
+;
+AXHWAIT  LDA HELPFG
+         BEQ AXHW1
+         LDA #0             ; taken
+         STA HELPFG
+         LDA #<AXHHMSG
+         LDY #>AXHHMSG
+         BNE AXHSAY         ; always
+AXHW1    LDA BRKKEY
+         BNE AXHWAIT
+         LDA #$80           ; taken
+         STA BRKKEY
+         LDA #<AXHBMSG
+         LDY #>AXHBMSG
+         BNE AXHSAY         ; always
 AXHMSG   .BYTE "AERA XL OK",EOL
 AXHRMSG  .BYTE "AERA XL RESET",EOL
+AXHHMSG  .BYTE "AERA XL HELP",EOL
+AXHBMSG  .BYTE "AERA XL BREAK",EOL
          *=  RUNAD
          .WORD AXHELLO

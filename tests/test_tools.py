@@ -80,7 +80,7 @@ class TestAssembler(unittest.TestCase):
         files = {n: open(os.path.join(XL, 'src', n), encoding='utf-8').read()
                  for n in os.listdir(os.path.join(XL, 'src'))}
         files['MAIN.M65'] = (' .INCLUDE #D:AXEQU.M65\nAXPTR = $80\nAXERRS = 2\nAXLOW = $2000\n'
-                             'AXHIGH = $3000\nAXWARM = $2000\n *= $2F00\nAXLOWM .BYTE EOL\n'
+                             'AXHIGH = $3000\nAXWARM = $2000\nAXFMIN = $80\n *= $2F00\nAXLOWM .BYTE EOL\n'
                              'AXROOMM .BYTE EOL\n .INCLUDE #D:AXLOAD.M65\n *= $2000\n'
                              ' .INCLUDE #D:AXRESET.M65\n .INCLUDE #D:AXFONT.M65\n'
                              ' .INCLUDE #D:AXERR.M65\n')
