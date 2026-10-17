@@ -24,4 +24,18 @@ python3 "$XL/tools/atari_src.py" disk "$W/T.ATR" --program HELLO --version 1.0 \
 python3 "$XL/tools/atari800/a8check.py" start "$A8" "$W/T.ATR" HELLO.PRG "AERA XL OK"
 python3 "$XL/tools/atari800/a8check.py" start "$A8" "$W/T.ATR" LOW.PRG "HELLO: DOS too big"
 printf 'until D1: 400\nwait 60\ntype HELLO.PRG\\n\nuntil AERA XL OK 300\nreset\nuntil AERA XL RESET 300\nscreen\n' > "$W/reset.txt"
-"$A8" "$W/reset.txt" -- -xl -nobasic "$W/T.ATR" | grep -q 'AERA XL RESET' && echo "RESET: PASS" || { echo "RESET: FAIL"; exit 1; }
+# a8run's script: PASS when every until is met (a TIMEOUT line names the
+# text it waited for, so grep for that, not for the text)
+run() {
+    out=$("$A8" "$2" -- -xl -nobasic "$3") || true
+    if echo "$out" | grep -q TIMEOUT; then echo "$out"; echo "$1: FAIL"; exit 1; fi
+    echo "$1: PASS"
+}
+run RESET "$W/reset.txt" "$W/T.ATR"
+# --tree: a folder made by sparta.py, as SpartaDOS 3.2 reads it
+mkdir -p "$W/tree/SUB"
+printf 'IN SUB\233' > "$W/tree/SUB/C.TXT"
+python3 "$XL/tools/atari_src.py" disk "$W/F.ATR" --program HELLO --version 1.0 \
+    --tree "$W/tree" "$XL/tests/HELLO.M65"
+printf 'until D1: 400\nwait 60\ntype TYPE >SUB>C.TXT\\n\nuntil IN SUB 300\nscreen\n' > "$W/tree.txt"
+run FOLDERS "$W/tree.txt" "$W/F.ATR"

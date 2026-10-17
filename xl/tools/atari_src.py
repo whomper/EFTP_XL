@@ -10,13 +10,15 @@ real Atari. Coming back, a file SAVEd (or LISTed) on the Atari loses
 its numbers again and keeps the layout of every line that didn't change.
 
   atari_src.py disk OUT.ATR --program EFTP_XL --version 1.1 FILE...
-        [--volume NAME] [--base BASE.ATR]
+        [--volume NAME] [--base BASE.ATR] [--tree DIR]
       A bootable SpartaDOS 3.2 double density disk with the files:
       each .M65 tokenised, anything else as it is. Each .M65 must start
       with "; NAME.M65 - PROGRAM x.y" (xl/src's AXNAME.M65: "; AXNAME.M65 -
       AERA XL shared code") in its first 4 lines and be at most MAXTOK
       bytes tokenised. --base starts from a copy of a
-      SpartaDOS disk (its boot sectors, DOS and files) instead.
+      SpartaDOS disk (its boot sectors, DOS and files) instead. --tree
+      copies a folder of this machine in as well, its folders as SpartaDOS
+      folders (names in capitals, 8.3), its files as they are.
   atari_src.py check DISK.ATR [--to DIR]
       fsck and list the disk; with --to, each .M65 into DIR in git's
       form (as import does, against DIR's file when there is one).
@@ -230,6 +232,8 @@ def cmd_disk(a):
         if d.find(name):
             d.remove(name)
         d.add(name, data)
+    if a.tree:
+        add_tree(d, a.tree)
     d.save()
     got = files_of(a.atr)
     for name, data in files:
@@ -238,7 +242,20 @@ def cmd_disk(a):
     problems, lost = sparta.Disk(a.atr).fsck()
     if problems or lost:
         raise SrcError(f'{a.atr}: {problems} {lost}')
-    print(f'{a.atr}: {len(files)} files')
+    print(f'{a.atr}: {len(files)} files' + (f' and {a.tree}' if a.tree else ''))
+
+
+def add_tree(d, top, inside=''):
+    """a host folder's files and folders onto disk d, under folder inside"""
+    for n in sorted(os.listdir(top)):
+        full = os.path.join(top, n)
+        path = inside + n.upper()
+        if os.path.isdir(full):
+            d.mkdir(path)
+            add_tree(d, full, path + '>')
+        else:
+            with open(full, 'rb') as f:
+                d.add(path, f.read())
 
 
 def cmd_check(a):
@@ -285,6 +302,7 @@ def main():
     p.add_argument('--version', required=True)
     p.add_argument('--volume')
     p.add_argument('--base')
+    p.add_argument('--tree')
     p = sub.add_parser('check')
     p.add_argument('atr')
     p.add_argument('--to')

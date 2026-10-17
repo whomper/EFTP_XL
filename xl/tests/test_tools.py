@@ -193,7 +193,7 @@ class TestSourceDisk(unittest.TestCase):
             f.write(b'\xff\xff\x00\x20\x00\x20\x60')
         atr = os.path.join(self.tmp, 'TEST.ATR')
         a = type('A', (), dict(atr=atr, files=[src, prg], program='TEST', version='1.0',
-                               volume=None, base=None))
+                               volume=None, base=None, tree=None))
         atari_src.cmd_disk(a)
         problems, lost = sparta.Disk(atr).fsck()
         self.assertFalse(problems or lost)
@@ -213,6 +213,64 @@ class TestSourceDisk(unittest.TestCase):
         atari_src.cmd_layout(type('A', (), dict(files=[path])))
         self.assertEqual(open(path).read(), ';OLD\nSTART    LDA #1             ;ONE\n'
                                             '         STA $80\nLOOP\n')
+
+    def test_empty_file(self):
+        # an empty file owns its sector map, so nothing is lost (EDOS found it)
+        atr = os.path.join(self.tmp, 'E.ATR')
+        d = atari_src.new_disk(atr, 'EMPTY')
+        d.add('EMPTY.TXT', b'')
+        d.save()
+        d = sparta.Disk(atr)
+        problems, lost = d.fsck()
+        self.assertFalse(problems or lost, (problems, lost))
+        self.assertEqual(atari_src.files_of(atr)['EMPTY.TXT'], b'')
+        d.remove('EMPTY.TXT')
+        d.save()
+        problems, lost = sparta.Disk(atr).fsck()
+        self.assertFalse(problems or lost, (problems, lost))
+
+    def test_folders(self):
+        # as SpartaDOS 3.2's MD makes them (checked in atari800): the parent's
+        # entry $28 with length 0; the folder's entry 0 the parent's map and its length
+        atr = os.path.join(self.tmp, 'F.ATR')
+        d = atari_src.new_disk(atr, 'FOLDERS')
+        tree = os.path.join(self.tmp, 'tree')
+        os.makedirs(os.path.join(tree, 'sub'))
+        with open(os.path.join(tree, 'a.txt'), 'wb') as f:
+            f.write(b'A' * 300)
+        with open(os.path.join(tree, 'sub', 'c.txt'), 'wb') as f:
+            f.write(b'IN SUB')
+        d.mkdir('DOCS')
+        d.add('DOCS>NOTE.TXT', b'NOTE')
+        atari_src.add_tree(d, tree, 'DOCS>')
+        d.save()
+        d = sparta.Disk(atr)
+        self.assertFalse(any(d.fsck()), d.fsck())
+        self.assertEqual([(p, f) for p, e, f in d.walk() if p != 'X32G.DOS'],
+                         [('DOCS', True), ('DOCS>NOTE.TXT', False), ('DOCS>A.TXT', False),
+                          ('DOCS>SUB', True), ('DOCS>SUB>C.TXT', False)])
+        i, e = d.find('DOCS')
+        self.assertEqual((e[0], e[3:6]), (0x28, bytes(3)))
+        h = d.dir_bytes(d.w(e, 1))
+        self.assertEqual((h[0], d.w(h, 1), h[3], h[6:14]), (0, d.root(), len(h), b'DOCS    '))
+        self.assertEqual(len(h), 4 * 23)
+        i, e = d.find('DOCS>SUB>C.TXT')
+        self.assertEqual(d.read_file(d.w(e, 1), 6), b'IN SUB')
+        self.assertEqual(d.w(d.dir_bytes(d.folder(['DOCS', 'SUB'])), 1), d.folder(['DOCS']))
+        d.remove('DOCS>A.TXT')
+        d.add('docs>sub>c.txt', b'NEW')                 # replaced
+        d.save()
+        d = sparta.Disk(atr)
+        self.assertFalse(any(d.fsck()), d.fsck())
+        self.assertIsNone(d.find('DOCS>A.TXT'))
+        i, e = d.find('DOCS>SUB>C.TXT')
+        self.assertEqual(d.read_file(d.w(e, 1), e[3]), b'NEW')
+        with self.assertRaises(sparta.SpartaError):
+            d.add('NONE>X.TXT', b'')
+        with self.assertRaises(sparta.SpartaError):
+            d.mkdir('DOCS')
+        with self.assertRaises(sparta.SpartaError):
+            d.remove('DOCS>SUB')
 
     def test_shared_files_round_trip(self):
         for name in os.listdir(os.path.join(XL, 'src')):

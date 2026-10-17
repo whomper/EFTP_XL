@@ -19,10 +19,10 @@ from EFTP_XL's tools/sim.py and EDOS's.
 from .core import Machine, BankedMemory, Stop
 from .cio import CIO, E, K, Disks, cio_name
 from .sio import SIO, strict_length
-from .keys import Keys, parse_keys, HELP, SHOT, WAIT, SKIP, RESET
+from .keys import Keys, parse_keys, HELP, SHOT, WAIT, SKIP, RESET, BREAK
 from .screen import screen_text, screen_png, atari_rgb, raw2png
 from .fp import install_fp
 
 __all__ = ['Machine', 'BankedMemory', 'Stop', 'CIO', 'E', 'K', 'Disks', 'cio_name', 'SIO',
-           'strict_length', 'Keys', 'parse_keys', 'HELP', 'SHOT', 'WAIT', 'SKIP', 'RESET',
+           'strict_length', 'Keys', 'parse_keys', 'HELP', 'SHOT', 'WAIT', 'SKIP', 'RESET', 'BREAK',
            'screen_text', 'screen_png', 'atari_rgb', 'raw2png', 'install_fp']
