@@ -484,9 +484,11 @@ GETF4A   JSR XMOVED
 GETF5    JSR CCLOSE         ; all of it came
          BCS GETF7A         ; close failed
          JSR FDONE          ; 226 or 250?
-         BCS GETF8
+         BCS GETF5B
          LDA #EDONE
          RTS
+GETF5B   STA FERR           ; for XERRI
+         BCS GETF8          ; always
 GETF6    STA FERR           ; the connection failed
          JSR CCLOSE
          JSR FABORT

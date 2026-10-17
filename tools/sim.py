@@ -87,6 +87,13 @@ class FujiNet:
             return self._adapter_config(sim, buf, size)
         if 0x71 <= dev <= 0x78:
             unit = dev - 0x70
+            # the FujiNet reads a fixed frame for each command; any other
+            # length puts the checksum in the wrong place
+            want = {0x4F: 256, 0x53: 4, 0x52: aux1 | aux2 << 8,
+                    0x57: aux1 | aux2 << 8}.get(cmd)
+            if want is not None and size != want:
+                self._say(f'N{unit}: command ${cmd:02X} with {size} bytes, not {want}')
+                return 143      # data frame checksum error
             if cmd == 0x4F:
                 return self._open(sim, unit, buf, size)
             if cmd == 0x53:

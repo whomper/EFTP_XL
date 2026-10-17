@@ -132,8 +132,9 @@ CONO1    STA SPEC,X         ; 256 bytes, zeroed
          STA CLEN,X
          LDA #<SPEC
          LDY #>SPEC
-         JSR NSETB          ; NLEN=X, still CONN
-         INC NLEN+1         ; NLEN=X+256
+         LDX #0             ; X was CONN:
+         JSR NSETB          ; N2: sent 257
+         INC NLEN+1         ; NLEN=256
          LDA #'O
          LDY #$80
          JMP NETCALL
