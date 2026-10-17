@@ -63,6 +63,7 @@ $(DISK): $(PROGRAM) $(FONTFILE) $(SRCS) $(AXSRCS) xl/tools/*.py
 test: $(PROGRAM) $(DISK)
 	$(PYTHON) xl/tests/test_tools.py
 	$(PYTHON) xl/tests/test_ax.py
+	$(PYTHON) xl/tests/test_sim.py
 	$(PYTHON) tools/test_sim.py
 
 dist: $(PROGRAM) $(DISK) $(FONTFILE)

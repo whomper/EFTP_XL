@@ -236,10 +236,11 @@ ASM/        the program: EFTPXL.M65, the main file, and its parts
 xl/         the AERA 8-bit shared code and tools, from AERA-Atari
             (read-only here; tools/sync-xl.sh brings it up to date)
   src/      AX*.M65: the OS's names, RESET, AERA.FNT, CIO's error texts
-  tools/    mac65.py (the assembler), atari_src.py (the disk), font.py
+  tools/    mac65.py (the assembler), atari_src.py (the disk), font.py,
+            a8sim (the simulator), atari800/ (the checks in atari800)
   workflows/ release.yml and withdraw.yml, copied to .github/workflows
-tools/      sim.py (the program on an emulated 6502), test_sim.py,
-            screenshots.py, sync-xl.sh
+tools/      sim.py (the program on xl's a8sim), fujinet.py (its FujiNet),
+            test_sim.py, screenshots.py, sync-xl.sh
 docs/       the pictures, the first design
 ```
 
@@ -253,8 +254,10 @@ does, what it takes and what it gives back.
 ## Tests
 
 **The program on an emulated 6502.** `tools/sim.py` runs the real
-`bin/EFTPXL.PRG` on [py65](https://github.com/mnaberez/py65), the way
-EDOS is tested. It stands in for the OS calls the program makes: the
+`bin/EFTPXL.PRG` on xl's `a8sim` (`xl/tools/a8sim`, on
+[py65](https://github.com/mnaberez/py65)), the simulator EDOS's tests
+use too, with EFTP_XL's FujiNet (`tools/fujinet.py`). It stands in for
+the OS calls the program makes: the
 screen (read from screen memory), the keyboard (typed from a script),
 RESET, the disks (D1:, D2: are folders here, through CIO, listed as
 SpartaDOS 3 or DOS 2.5 list them) and SIO as a FujiNet whose `N1:`/`N2:`
