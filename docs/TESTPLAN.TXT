@@ -20,7 +20,7 @@ ON THE DISK
 
 1 START
 [ ] EFTPXL.PRG at the D1: prompt:
-    the title "EFTP_XL 1.3 ... (C)
+    the title "EFTP_XL @VERSION@ ... (C)
     AERA 2026", the disk in the left
     pane.
 [ ] With BASIC on, the same.
@@ -30,7 +30,7 @@ ON THE DISK
 
 2 HELP
 [ ] HELP (or ?): the keys, then
-    EFTP_XL 1.3, File transfer over
+    EFTP_XL @VERSION@, File transfer over
     FujiNet, the copyright line,
     GPL-2.0-or-later, the GitHub page.
 [ ] Any key: back.
