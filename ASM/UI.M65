@@ -3,11 +3,13 @@
 ; The main screen and its keys
 ; Copyright (C) 2026 AERA | Erez Yaary
 ;
-; START - run address: clear the
-; variables, draw the screen, read
-; the disk, then the key loop
+; START - run address: the font, then
+; clear the variables, draw the
+; screen, read the disk, the key loop
+; (RESET comes in at START0)
 ;
-START    LDA #<BSS          ; zero BSS..BSSEND
+START    JSR FONTLD         ; below the screen
+START0   LDA #<BSS          ; zero BSS..BSSEND
          STA PTR
          LDA #>BSS
          STA PTR+1
@@ -25,9 +27,6 @@ START1   TYA                ; A=Y=0
          STY ACTIVE
          STY SINV
          JSR AXSTART        ; RESET: AXWARM
-         LDA #>FONT         ; AERA.FNT, if it is
-         LDX #IOCB          ; there, over the
-         JSR AXFONT         ; built-in font
          JSR FTOUT          ; 20 s timeout
          LDA #NO            ; no site yet
          STA SITE
@@ -51,7 +50,8 @@ MAIN     JSR KEYGET         ; main loop
 ; init (xl's AXRESET): close N2:
 ; and N1: (the FujiNet keeps them
 ; open), then start again, so
-; disconnected
+; disconnected; the font is still
+; in its page
 ;
 AXWARM   LDX #$FF           ; a fresh stack
          TXS
@@ -59,7 +59,7 @@ AXWARM   LDX #$FF           ; a fresh stack
          LDA #0
          STA CONN
          JSR NCLOSE         ; N1:
-         JMP START
+         JMP START0
 ;
 ; DISP - run the routine for KEY;
 ; it is pushed as address-1, so RTS

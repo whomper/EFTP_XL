@@ -3,7 +3,8 @@
 ; The Sites screen and EFTPXL.CFG
 ; Copyright (C) 2026 AERA | Erez Yaary
 ;
-SITESZ   =   159        ; bytes a site
+SITESZ   =   159        ; bytes SREC holds
+SPOOLSZ  =   640        ; the sites' lines
 SMODE    =   158        ; its mode, last
 SLROW    =   4          ; the list
 SEPROW   =   SLROW+MAXSITES ; line under it
@@ -19,22 +20,84 @@ VALW     =   SCRR-VALCOL ; this wide
 FOFF     .BYTE 0,16,48,54,74,94,134
 FSIZE    .BYTE 16,32,6,20,20,40,24
 ;
-; Each site's address, low and high
+; The sites are kept as their lines
+; of EFTPXL.CFG, each with its 0, one
+; after the other in SPOOL (SPEND:
+; the end); SSEL unpacks one into
+; SREC, in the fields above
 ;
-SITEL    .BYTE <SITES,<[SITES+SITESZ],<[SITES+SITESZ*2]
-         .BYTE <[SITES+SITESZ*3],<[SITES+SITESZ*4],<[SITES+SITESZ*5]
-         .BYTE <[SITES+SITESZ*6],<[SITES+SITESZ*7]
-SITEH    .BYTE >SITES,>[SITES+SITESZ],>[SITES+SITESZ*2]
-         .BYTE >[SITES+SITESZ*3],>[SITES+SITESZ*4],>[SITES+SITESZ*5]
-         .BYTE >[SITES+SITESZ*6],>[SITES+SITESZ*7]
+; SLINEX - PTR3 = site X's line
 ;
-; SSEL - SITEP = site X
+SLINEX   LDA #<SPOOL
+         STA PTR3
+         LDA #>SPOOL
+         STA PTR3+1
+SLINEX1  DEX                ; X lines to skip
+         BMI SLINEX3
+SLINEX2  LDY #0
+         LDA (PTR3),Y
+         INC PTR3
+         BNE SLINEX4
+         INC PTR3+1
+SLINEX4  TAY                ; Z: it was the 0
+         BNE SLINEX2
+         BEQ SLINEX1        ; always
+SLINEX3  RTS
 ;
-SSEL     LDA SITEL,X
-         STA SITEP
-         LDA SITEH,X
-         STA SITEP+1
-         RTS
+; SSEL - SITEP = SREC, site X
+; unpacked from its line; X at
+; SCOUNT or more: a new one, all 0
+; Exit: PTR, PTR3 changed
+;
+SSEL     JSR SCLEAR
+         CPX SCOUNT
+         BCS SLINEX3        ; new: blank
+         JSR SLINEX
+         LDA PTR3
+         STA PTR
+         LDA PTR3+1
+         STA PTR+1
+;
+; The 7 fields, each to its '|':
+; "Home|ftp.x.org|21|erez||/|D1:|0"
+; PTR walks the line, TMP is where
+; in the site, TMP2 the room left
+;
+         LDA #0
+         STA SFI
+SSEL2    LDX SFI            ; next field
+         CPX #7
+         BEQ SSEL6          ; all 7: the mode
+         LDA FOFF,X
+         STA TMP            ; where it goes
+         LDA FSIZE,X
+         STA TMP2
+         DEC TMP2           ; room left, less 0
+SSEL3    LDY #0
+         LDA (PTR),Y
+         BEQ SSEL8          ; ended early: kept
+         CMP #'|
+         BEQ SSEL5
+         LDX TMP2
+         BEQ SSEL4          ; full: drop it
+         DEC TMP2
+         LDY TMP
+         STA (SITEP),Y      ; its 0 is there
+         INC TMP            ; from SCLEAR
+SSEL4    JSR INCPTR
+         JMP SSEL3
+SSEL5    JSR INCPTR         ; past the '|'
+         INC SFI
+         JMP SSEL2
+SSEL6    LDY #0             ; mode digit
+         LDA (PTR),Y
+         AND #$0F           ; '0'-'2' to 0-2
+         CMP #MODETYPE+1
+         BCC SSEL7
+         LDA #MODEBIN       ; bad: binary
+SSEL7    LDY #SMODE
+         STA (SITEP),Y
+SSEL8    RTS
 ;
 ; SFIELD - A/Y = field X of SITEP
 ;
@@ -48,9 +111,13 @@ SFIELD   LDA FOFF,X
          PLA
          RTS
 ;
-; SCLEAR - site X all 0, SITEP on it
+; SCLEAR - SREC all 0, SITEP on it
+; Exit: X kept
 ;
-SCLEAR   JSR SSEL
+SCLEAR   LDA #<SREC
+         STA SITEP
+         LDA #>SREC
+         STA SITEP+1
          LDY #0
          TYA                ; A = 0 too
 SCLEAR1  STA (SITEP),Y
@@ -59,15 +126,42 @@ SCLEAR1  STA (SITEP),Y
          BNE SCLEAR1
          RTS
 ;
+; SPACK - BUF = SITEP as a line: the
+; 7 fields, a '|' after each, then
+; the mode digit
+;
+SPACK    LDA #<BUF
+         LDY #>BUF
+         JSR SBSTART
+         LDA #0
+         STA SFI
+SPACK1   LDX SFI            ; field, then '|'
+         JSR SFIELD
+         JSR SBADD
+         LDA #'|
+         JSR SBCH
+         INC SFI
+         LDA SFI
+         CMP #7
+         BNE SPACK1
+         LDY #SMODE
+         LDA (SITEP),Y
+         ORA #'0            ; mode as a digit
+         JMP SBCH
+;
 ; SLOAD - read the sites from
-; D:EFTPXL.CFG, a line each:
-; name|server|port|user|password|
-; folder|Atari folder|mode
-; D: is where EFTP_XL was run from
+; D:EFTPXL.CFG into SPOOL, a line
+; each (empty lines and notes, ;,
+; skipped); D: is where EFTP_XL was
+; run from
 ; Exit: SCOUNT = sites read
 ;
 SLOAD    LDA #0
          STA SCOUNT
+         LDA #<SPOOL
+         STA SPEND
+         LDA #>SPOOL
+         STA SPEND+1
          LDA #<CFG
          LDY #>CFG
          LDX #4             ; read
@@ -76,74 +170,55 @@ SLOAD    LDA #0
 SLOAD1   LDA SCOUNT
          CMP #MAXSITES
          BEQ SLOAD9         ; full
-         LDA #<SLINE
-         LDY #>SLINE
-         LDX #200           ; SLINE's size
-         JSR CGETLN
+;
+; X = the room left in SPOOL, 255
+; at most; a line too long for it
+; ends the reading (CIO: 137)
+;
+         LDA #<[SPOOL+SPOOLSZ]
+         SEC
+         SBC SPEND
+         TAX
+         LDA #>[SPOOL+SPOOLSZ]
+         SBC SPEND+1
+         BEQ SLOAD2         ; under 256
+         LDX #255
+SLOAD2   CPX #8
+         BCC SLOAD9         ; no room
+         LDA SPEND
+         LDY SPEND+1
+         JSR CGETLN         ; Y = its length
          BCS SLOAD9         ; end of file
-         LDA SLINE
-         BEQ SLOAD1         ; skip empty lines
-         CMP #';            ; and the notes
-         BEQ SLOAD1
-         LDX SCOUNT         ; a new site, all 0
-         JSR SCLEAR
-         INC SCOUNT
-;
-; The 7 fields, each to its '|':
-; "Home|ftp.x.org|21|erez||/|D1:|0"
-; PTR walks the line, TMP is where
-; in the site, TMP2 the room left
-;
-         LDA #<SLINE
-         STA PTR
-         LDA #>SLINE
-         STA PTR+1
-         LDA #0
-         STA SFI
-SLOAD2   LDX SFI            ; next field
-         CPX #7
-         BEQ SLOAD6         ; all 7: the mode
-         LDA FOFF,X
-         STA TMP            ; where it goes
-         LDA FSIZE,X
-         STA TMP2
-         DEC TMP2           ; room left, less 0
-SLOAD3   LDY #0
+         STY TMP
+         TYA
+         BEQ SLOAD1         ; empty: dropped
+         LDY #0
          LDA (PTR),Y
-         BEQ SLOAD1         ; ended early: kept
-         CMP #'|
-         BEQ SLOAD5
-         LDX TMP2
-         BEQ SLOAD4         ; full: drop it
-         DEC TMP2
-         LDY TMP
-         STA (SITEP),Y      ; its 0 is there
-         INC TMP            ; from SCLEAR
-SLOAD4   JSR INCPTR
-         JMP SLOAD3
-SLOAD5   JSR INCPTR         ; past the '|'
-         INC SFI
-         JMP SLOAD2
-SLOAD6   LDY #0             ; mode digit
-         LDA (PTR),Y
-         AND #$0F           ; '0'-'2' to 0-2
-         CMP #MODETYPE+1
-         BCC SLOAD7
-         LDA #MODEBIN       ; bad: binary
-SLOAD7   LDY #SMODE
-         STA (SITEP),Y
-         JMP SLOAD1
+         CMP #';
+         BEQ SLOAD1         ; a note: dropped
+         LDA SPEND          ; kept: SPEND past
+         SEC                ; it and its 0
+         ADC TMP
+         STA SPEND
+         BCC SLOAD3
+         INC SPEND+1
+SLOAD3   INC SCOUNT
+         BNE SLOAD1         ; always
 SLOAD9   JMP CCLOSE
 ;
 ; SSAVE - write the sites to the file,
-; after the note on what it is
+; after the note on what it is, with
+; site SEDI changed: A=0 BUF in its
+; place (SEDI=SCOUNT: added at the
+; end), A=$80 left out (deleted)
 ; Exit: C=1 on error, A=CIO code
 ;
-SSAVE    LDA #<CFG
+SSAVE    STA SOP
+         LDA #<CFG
          LDY #>CFG
          LDX #8             ; write: a new file
          JSR COPEN
-         BCS SSAVE4
+         BCS SSAVE5
          LDA #CFGNOTEN      ; the note first
          STA XLEN
          LDA #0
@@ -151,47 +226,75 @@ SSAVE    LDA #<CFG
          LDA #<CFGNOTE
          LDY #>CFGNOTE
          JSR CWRITE
-         BCS SSAVE4
+         BCS SSAVE5
+         LDA #<SPOOL        ; PTR3 walks SPOOL
+         STA PTR3           ; (CPUTLN takes PTR)
+         LDA #>SPOOL
+         STA PTR3+1
          LDA #0
          STA SSI
 SSAVE1   LDA SSI            ; next site
-         CMP SCOUNT
-         BCS SSAVE3         ; all written
-         TAX
-         JSR SSEL
-;
-; SLINE = the 7 fields, a '|' after
-; each, then the mode digit
-;
-         LDA #<SLINE
-         LDY #>SLINE
-         JSR SBSTART
-         LDA #0
-         STA SFI
-SSAVE2   LDX SFI            ; field, then '|'
-         JSR SFIELD
-         JSR SBADD
-         LDA #'|
-         JSR SBCH
-         INC SFI
-         LDA SFI
-         CMP #7
+         CMP SEDI
          BNE SSAVE2
-         LDY #SMODE
-         LDA (SITEP),Y
-         ORA #'0            ; mode as a digit
-         JSR SBCH
-         LDA #<SLINE
-         LDY #>SLINE
+         BIT SOP            ; the one changed
+         BMI SSAVE3         ; deleted: left out
+         LDA #<BUF          ; the new line
+         LDY #>BUF
          JSR CPUTLN
-         BCS SSAVE4
+         BCS SSAVE5
+         BCC SSAVE3         ; always
+SSAVE2   CMP SCOUNT
+         BCS SSAVE4         ; all written
+         LDA PTR3           ; as it was
+         LDY PTR3+1
+         JSR CPUTLN
+         BCS SSAVE5
+SSAVE3   LDA SSI
+         CMP SCOUNT
+         BCS SSAVE4         ; added: the last
+         LDX #1             ; PTR3 to the next
+         JSR SLINEX1
          INC SSI
          JMP SSAVE1
-SSAVE3   JMP CCLOSE         ; C from the CLOSE
-SSAVE4   PHA                ; keep the error
+SSAVE4   JMP CCLOSE         ; C from the CLOSE
+SSAVE5   PHA                ; keep the error
          JSR CCLOSE
          PLA
          SEC
+         RTS
+;
+; SROOM - does BUF fit in SPOOL as
+; site SEDI (over its old line)?
+; Exit: C=1 it fits
+;
+SROOM    LDA #<BUF          ; TMP/TMP2 = SPEND
+         LDY #>BUF          ; + the new line
+         JSR STRLEN         ; and its 0
+         SEC
+         ADC SPEND
+         STA TMP
+         LDA SPEND+1
+         ADC #0
+         STA TMP2
+         LDX SEDI
+         CPX SCOUNT
+         BCS SROOM1         ; a new one
+         JSR SLINEX         ; less the old line
+         LDA PTR3
+         LDY PTR3+1
+         JSR STRLEN
+         STA TMP3
+         LDA TMP            ; C=0: less 1 more,
+         CLC                ; for its 0
+         SBC TMP3
+         STA TMP
+         LDA TMP2
+         SBC #0
+         STA TMP2
+SROOM1   LDA #<[SPOOL+SPOOLSZ]
+         CMP TMP            ; 16-bit compare:
+         LDA #>[SPOOL+SPOOLSZ]
+         SBC TMP2           ; C=1: the end fits
          RTS
 ;
 ; The note at the top of EFTPXL.CFG:
@@ -203,10 +306,17 @@ CFGNOTE  .BYTE "; EFTPXL.CFG - EFTP_XL's sites",EOL
          .BYTE "; a password here is plain text",EOL
 CFGNOTEN =   *-CFGNOTE
 ;
-; SSAVEUI - SSAVE; on error say so
+; SSAVEUI - SSAVE (A as for SSAVE),
+; then the sites read again, so they
+; are as the file is; on error say so
 ; and wait for a key
 ;
 SSAVEUI  JSR SSAVE
+         PHP                ; C and A kept
+         PHA
+         JSR SLOAD
+         PLA
+         PLP
          BCC SSAVEU1
          STA FERR           ; the CIO code
          JSR MSGSTART
@@ -426,22 +536,15 @@ SFRAME   LDX #2
          LDA #CHRT
          JMP PUTCH
 ;
-; SEDIT - edit site X, on a copy
-; (SCOPY), so ESC leaves it as it was
-; Exit: C=1 saved, C=0 left with ESC
+; SEDIT - edit site X (SCOUNT: a new
+; one) in SREC: its line in SPOOL
+; stays as it was until it is saved,
+; so ESC leaves it so
+; Exit: C=1 to save, BUF = its line;
+;       C=0 left with ESC, or no room
 ;
 SEDIT    STX SEDI
          JSR SSEL
-         LDY #0
-SEDIT0   LDA (SITEP),Y      ; copy to SCOPY
-         STA SCOPY,Y
-         INY
-         CPY #SITESZ
-         BNE SEDIT0
-         LDA #<SCOPY        ; SITEP on the copy
-         STA SITEP          ; for SHFLD, SFIELD
-         LDA #>SCOPY
-         STA SITEP+1
          LDA #<EKEYS
          LDY #>EKEYS
          JSR KEYBAR
@@ -527,38 +630,36 @@ SEDIT8   LDX SFI
 SEDIT9   CMP #KRETURN       ; RETURN on the
          BNE SEDITJ         ; mode saves
 ;
-; Saved: blanks filled in, then the
-; copy goes back over site SEDI
+; To be saved: blanks filled in, the
+; line made, and is there room?
 ;
-         LDA SCOPY+48       ; no port: 21
+         LDA SREC+48        ; no port: 21
          BNE SEDIT10
          LDA #'2
-         STA SCOPY+48
+         STA SREC+48
          LDA #'1
-         STA SCOPY+49
+         STA SREC+49
          LDA #0
-         STA SCOPY+50
-SEDIT10  LDA SCOPY          ; no name: use server
+         STA SREC+50
+SEDIT10  LDA SREC           ; no name: use server
          BNE SEDIT12
          LDX #0
-SEDIT11  LDA SCOPY+16,X     ; server, field 1
-         STA SCOPY,X
+SEDIT11  LDA SREC+16,X      ; server, field 1
+         STA SREC,X
          BEQ SEDIT12
          INX
          CPX #15            ; 15 and the 0
          BNE SEDIT11
          LDA #0
-         STA SCOPY,X
-SEDIT12  LDX SEDI           ; copy back
-         JSR SSEL
-         LDY #0
-SEDIT13  LDA SCOPY,Y
-         STA (SITEP),Y
-         INY
-         CPY #SITESZ
-         BNE SEDIT13
-         SEC
-         RTS
+         STA SREC,X
+SEDIT12  JSR SPACK
+         JSR SROOM
+         BCS SEDIT13        ; fits: C=1, save
+         JSR INFOI
+         .BYTE "No room for this site.",0
+         JSR KEYGET
+         CLC                ; as if ESC
+SEDIT13  RTS
 ;
 ; SITESCR - the Sites screen
 ; Exit: A=site to connect to, or NO
@@ -616,16 +717,13 @@ SITES5   CMP #14            ; ^N
 ; New: edit an empty site after the
 ; last; it counts once it is saved
 ;
-SITES6   TAX                ; new one at the end
-         JSR SCLEAR
-         LDA SCOUNT         ; cursor on it
-         JSR SHLIST
-         LDX SCOUNT
+SITES6   JSR SHLIST         ; A=SCOUNT: cursor
+         LDX SCOUNT         ; on the new one
          JSR SEDIT
          BCC SITESJ         ; cancelled
          LDA SCOUNT
          STA SCUR
-         INC SCOUNT
+         LDA #0             ; BUF, added
          JSR SSAVEUI
          JMP SITES1
 SITES7   CMP #5             ; ^E
@@ -635,6 +733,7 @@ SITES7   CMP #5             ; ^E
          LDX SCUR
          JSR SEDIT
          BCC SITESJ
+         LDA #0             ; BUF in its place
          JSR SSAVEUI
          JMP SITES1
 SITESK   JMP SITES1         ; for far branches
@@ -660,44 +759,20 @@ SITES8A  LDA SCOUNT
          CMP #'Y
          BNE SITESK
 ;
-; Each site after the cursor's one
-; down a place, X+1 to X
+; Deleted: written without it, then
+; the cursor on the last if it was
+; past the end
 ;
-         LDX SCUR
-SITES9   INX                ; close the gap
-         CPX SCOUNT
-         BCS SITES10        ; to the last
-         DEX
-         JSR SMOVE
-         INX
-         BNE SITES9         ; always
-SITES10  DEC SCOUNT
+         LDA SCUR
+         STA SEDI
+         LDA #$80           ; left out
+         JSR SSAVEUI
          LDA SCUR
          BEQ SITES11
          CMP SCOUNT
-         BNE SITES11
+         BCC SITES11
          DEC SCUR           ; was the last
-SITES11  JSR SSAVEUI
-         JMP SITES1
-;
-; SMOVE - site X+1 to site X
-; Exit: X kept
-;
-SMOVE    LDA SITEL,X        ; PTR2 = site X
-         STA PTR2
-         LDA SITEH,X
-         STA PTR2+1
-         LDA SITEL+1,X      ; PTR = the next
-         STA PTR
-         LDA SITEH+1,X
-         STA PTR+1
-         LDY #0
-SMOVE1   LDA (PTR),Y
-         STA (PTR2),Y
-         INY
-         CPY #SITESZ
-         BNE SMOVE1
-         RTS
+SITES11  JMP SITES1
 ;
 CFG      .BYTE "D:EFTPXL.CFG",0
 STITLE   .BYTE "Sites",0

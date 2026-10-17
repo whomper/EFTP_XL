@@ -5,9 +5,9 @@
 #   make atr        bin/EFTPXL.ATR: the bootable disk, the sources as
 #                   Mac/65 takes them; they must give the same program
 #   make test       xl/'s tests and tools/test_sim.py
-#   make dist       a release's files in dist/
+#   make dist       a release's files in dist/ (the program, its
+#                   disk, AERA.FNT and EFTPTEST.ATR, the test disk)
 #   make version    the version every build shows (x.y)
-#   make font       ASM/FONT.M65 again, from xl/'s font
 #
 # pip install -r xl/requirements.txt -r requirements.txt
 #
@@ -21,13 +21,14 @@ SRC        := $(PYTHON) xl/tools/atari_src.py
 PROGRAM    := bin/EFTPXL.PRG
 FONTFILE   := bin/AERA.FNT
 DISK       := bin/EFTPXL.ATR
+TESTDISK   := bin/EFTPTEST.ATR
 SRCS       := $(wildcard ASM/*.M65)
 VERSION    := $(shell sed -n 's/^VERSION *\.BYTE "EFTP_XL \([^"]*\)".*/\1/p' ASM/EFTPXL.M65)
 # the shared includes the program uses, as its main file names them
 AXSRCS     := $(patsubst %,xl/src/%.M65,$(shell sed -n \
                 's/^ *\.INCLUDE #D:\(AX[A-Z0-9]*\)\.M65.*/\1/p' ASM/EFTPXL.M65))
 
-.PHONY: all atr test dist version font clean
+.PHONY: all atr test dist version clean
 
 all: $(PROGRAM)
 
@@ -43,9 +44,6 @@ $(FONTFILE): xl/tools/font.py xl/font/*
 	mkdir -p bin
 	$(PYTHON) xl/tools/font.py fnt $@
 
-font:
-	$(PYTHON) xl/tools/font.py m65 ASM/FONT.M65 EFTP_XL $(VERSION)
-
 # the disk: SpartaDOS 3.2, the sources numbered and tokenized, the
 # program and the font; what is on it must build the same program
 atr: $(DISK)
@@ -60,16 +58,24 @@ $(DISK): $(PROGRAM) $(FONTFILE) $(SRCS) $(AXSRCS) xl/tools/*.py
 	cmp bin/atr/CHECK.PRG $(PROGRAM)
 	rm -rf bin/atr
 
-test: $(PROGRAM) $(DISK)
+# the test disk for real hardware: the program, the font, the test
+# plan (docs/TESTPLAN.TXT), a site and the files the plan sends
+$(TESTDISK): $(PROGRAM) $(FONTFILE) docs/TESTPLAN.TXT tools/testdisk.py xl/tools/*.py
+	$(PYTHON) tools/testdisk.py bin/testdisk $(VERSION) > /dev/null
+	$(SRC) disk $@ --program EFTP_XL --version $(VERSION) --volume EFTPTEST \
+	    --tree bin/testdisk $(PROGRAM) $(FONTFILE) > /dev/null
+	rm -rf bin/testdisk
+
+test: $(PROGRAM) $(DISK) $(TESTDISK)
 	$(PYTHON) xl/tests/test_tools.py
 	$(PYTHON) xl/tests/test_ax.py
 	$(PYTHON) xl/tests/test_sim.py
 	$(PYTHON) tools/test_sim.py
 
-dist: $(PROGRAM) $(DISK) $(FONTFILE)
+dist: $(PROGRAM) $(DISK) $(FONTFILE) $(TESTDISK)
 	rm -rf dist
 	mkdir -p dist
-	cp $(PROGRAM) $(DISK) $(FONTFILE) dist/
+	cp $(PROGRAM) $(DISK) $(FONTFILE) $(TESTDISK) dist/
 
 version:
 	@echo $(VERSION)

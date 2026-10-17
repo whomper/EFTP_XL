@@ -77,7 +77,7 @@ PSEND    *=  *+1        ; the end
 STK      *=  *+1        ; SBSTAMP's X
 PATH0    *=  *+PATHLEN  ; "D1:" or "D1:>GAMES>"
 PATH1    *=  *+PATHLEN  ; the server's
-POOL0    *=  *+1024     ; the names
+POOL0    *=  *+MAXE*13  ; the names: 8.3
 POOL1    *=  *+1280
 ;
 ; FTP and FujiNet
@@ -204,8 +204,9 @@ SCUR     *=  *+1        ; Sites cursor
 SCUR2    *=  *+1        ; SHLIST
 SLI      *=  *+1
 SEDI     *=  *+1        ; SEDIT's site
-SLINE    *=  *+200      ; a line of EFTPXL.CFG
-SCOPY    *=  *+SITESZ   ; the site edited
-SITES    *=  *+SITESZ*MAXSITES
+SOP      *=  *+1        ; SSAVE: $80 delete
+SPEND    *=  *+2        ; SPOOL's end
+SREC     *=  *+SITESZ   ; a site, unpacked
+SPOOL    *=  *+SPOOLSZ  ; the sites' lines
 ;
 BSSEND   =   *

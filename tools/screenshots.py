@@ -55,6 +55,9 @@ def main():
     files(d1, {'GAMES/RIVRAID.XEX': 8192, 'DOWNLOAD/X': None, 'EDOS.COM': 11_900,
                'EDOS.FNT': 1024, 'DIGDUG.XEX': 16_100, 'NOTES.TXT': 610,
                'AUTORUN.SYS': 1800})
+    # the family font, as on a real disk: without it the simulator's
+    # (empty) ROM font would draw nothing but the icons
+    shutil.copy(os.path.join(sim.ROOT, 'bin', 'AERA.FNT'), d1)
     server = Server(srv, 2121)
     try:
         site = (f'^K^NMac\\n127.0.0.1\\n{server.port}\\n{USER}\\n{PASSWORD}\\n/\\n'

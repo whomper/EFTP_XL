@@ -228,16 +228,115 @@ def main():
               shots[0][:200])
         open(cfg, 'wb').write(saved)
 
-        # AERA.FNT on D1: is read over the built-in font
+        # ESC and BREAK cancel every question, prompt and box: nothing
+        # written, erased, sent or changed (the 8-bit guidelines, 3.4)
+        def atari():
+            return sorted(os.listdir(d1))
+        cfg = os.path.join(d1, 'EFTPXL.CFG')
+        before, cfg_before = atari(), open(cfg, 'rb').read()
+        for key, kname in (('\\e', 'ESC'), ('\\k', 'BREAK')):
+            shots = run(f'^NXYZ{key}\\s^Q', d1)
+            check(f'{kname}: new folder cancelled', atari() == before, str(atari()))
+            shots = run(f'D^EZZ{key}\\s^Q', d1)
+            check(f'{kname}: rename cancelled', atari() == before, str(atari()))
+            shots = run(f'D\\x{key}\\s^Q', d1)
+            check(f'{kname}: delete Y/N is no', atari() == before, str(atari()))
+            shots = run(f'\\h\\s{key}\\s^Q', d1)
+            check(f'{kname}: HELP back', 'sites / disconnect' in shots[0]
+                  and 'sites / disconnect' not in shots[1]
+                  and 'DIGDUG.XEX' in shots[1], shots[1][:200])
+            shots = run(f'^K\\s{key}\\s^Q', d1)
+            check(f'{kname}: Sites back', 'Sites' in shots[0] and 'DIGDUG.XEX' in shots[1],
+                  shots[1][:200])
+            shots = run(f'^K^Enew{key}\\s^Q', d1)
+            check(f'{kname}: site edit cancelled', open(cfg, 'rb').read() == cfg_before)
+            shots = run(f'^K\\x{key}\\s^Q', d1)
+            check(f'{kname}: site delete Y/N is no', open(cfg, 'rb').read() == cfg_before)
+            shots = run(f'^K^Nnew{key}\\s^Q', d1)
+            check(f'{kname}: new site cancelled', open(cfg, 'rb').read() == cfg_before)
+            shots = run(f'^K\\n\\wB\\n{key}\\w\\s^Q', d1)
+            check(f'{kname}: replace Y/N is no, the queue stopped',
+                  'Stopped' in shots[0] and atari() == before, shots[0][:120])
+            os.remove(os.path.join(d1, 'BIGFILE.BIN')) if 'BIGFILE.BIN' not in before \
+                and os.path.exists(os.path.join(d1, 'BIGFILE.BIN')) else None
+            shots = run(f'^K\\n\\w\\tD\\n\\nD\\nY{key}\\w\\s^Q', d1)
+            check(f'{kname}: a transfer stopped', 'Stopped' in shots[0], shots[0][:120])
+        # a site without its password: the question, cancelled
+        site_line = [x for x in cfg_before.split(b'\x9b') if x and not x.startswith(b';')][0]
+        f = site_line.split(b'|')
+        open(cfg, 'wb').write(b'|'.join(f[:4] + [b''] + f[5:]) + b'\x9b')
+        for key, kname in (('\\e', 'ESC'), ('\\k', 'BREAK')):
+            shots = run(f'^K\\n\\s{key}\\w\\s^Q', d1)
+            check(f'{kname}: password question cancelled', 'Password for' in shots[0]
+                  and 'games' not in shots[1] and not LAST.fujinet.conn, shots[1][:200])
+        open(cfg, 'wb').write(cfg_before)
+
+        # the sites kept as their lines: edit one (the others as they
+        # were, in order), add one, delete one, and no room
+        shots = run('^K^N\\nb.example\\n\\n\\n\\n\\n\\n\\n^K\\d^E\\b\\b\\b\\b\\b\\b\\b\\b\\b'
+                    'c.example\\n\\n\\n\\n\\n\\n\\n\\n^Q', d1)
+        sites = [x for x in open(cfg, 'rb').read().split(b'\x9b') if x and not x.startswith(b';')]
+        check('sites: added and edited, in order', len(sites) == 2 and sites[0] == site_line
+              and sites[1].startswith(b'c.example|b.example|21|'), repr(sites))
+        shots = run('^K\\d\\xy\\s^Q', d1)
+        sites = [x for x in open(cfg, 'rb').read().split(b'\x9b') if x and not x.startswith(b';')]
+        check('sites: one deleted', sites == [site_line], repr(sites))
+        long = 'L' * 31
+        shots = run(f'^K^N\\n{long}\\n\\n\\n\\n{"F" * 39}\\n{"A" * 23}\\n\\n' * 7 + '\\s^Q', d1)
+        check('sites: no room for more', 'No room for this site.' in shots[0]
+              or 'No room: 8 sites at most.' in shots[0], shots[0][:200])
+        sites = [x for x in open(cfg, 'rb').read().split(b'\x9b') if x and not x.startswith(b';')]
+        shown = run('^K\\s^Q', d1)[0].count('L' * 15)
+        check('sites: what is saved reads back', sites[0] == site_line
+              and 1 < len(sites) <= 8 and shown == len(sites) - 1, f'{len(sites)} {shown}')
+        open(cfg, 'wb').write(cfg_before)
+
+        # the test disk for real hardware: clean, and what the plan needs
+        sys.path.insert(0, os.path.join(sim.ROOT, 'xl', 'tools'))
+        import sparta
+        td = os.path.join(sim.ROOT, 'bin', 'EFTPTEST.ATR')
+        if os.path.exists(td):
+            disk = sparta.Disk(td)
+            problems, lost = disk.fsck()
+            names = {p for p, e, folder in disk.walk()}
+            want = {'X32G.DOS', 'EFTPXL.PRG', 'AERA.FNT', 'EFTPXL.CFG', 'TESTPLAN.TXT',
+                    'TEXT.TXT', 'BIN.DAT', 'EMPTY.DAT', 'BIG.DAT', 'TREE', 'TREE>A.TXT',
+                    'TREE>SUB', 'TREE>SUB>B.DAT'}
+            check('test disk: clean, with its files', not problems and not lost
+                  and want <= names, f'{problems} {lost} {sorted(names)}')
+        else:
+            check('test disk: made', False, td)
+
+        # the font: D:AERA.FNT read into the 1K below the screen, else a
+        # copy of the font in use; EFTP_XL's four icons over it either way
+        page = ((LAST.mem[sim.RAMTOP] - 8) & 0xFC) << 8
+        icons = {0x40: b'\x00\x70\x7E\x42\x42\x7E\x00\x00',
+                 0x46: b'\x00\x00\x00\x00\x00\x00\x54\x00',
+                 0x50: b'\x00\x78\x4C\x44\x44\x7C\x00\x00',
+                 0x7B: b'\xAA\x55\xAA\x55\xAA\x55\xAA\x55'}
+
+        def with_icons(font):
+            font = bytearray(font)
+            for c, g in icons.items():
+                font[c * 8:c * 8 + 8] = g
+            return bytes(font)
         fnt = bytes((i * 29 + 3) & 255 for i in range(1024))
         open(os.path.join(d1, 'AERA.FNT'), 'wb').write(fnt)
         run('^Q', d1)
-        check('AERA.FNT read', bytes(LAST.mem[0x4000:0x4400]) == fnt)
+        check('AERA.FNT read below the screen, the icons on it',
+              bytes(LAST.mem[page:page + 1024]) == with_icons(fnt))
+        check('the font page used, and DOS\'s back after ^Q',
+              LAST.to_dos and LAST.mem[sim.CHBAS] == 0xE0)
         os.remove(os.path.join(d1, 'AERA.FNT'))
         run('^Q', d1)
-        check('no AERA.FNT: the built-in font',
-              bytes(LAST.mem[0x4000:0x4400]) == open(BUILTIN, 'rb').read()
-              if os.path.exists(BUILTIN) else True)
+        rom = bytes(LAST.mem[0xE000:0xE400])
+        check('no AERA.FNT: the font in use, and the icons',
+              bytes(LAST.mem[page:page + 1024]) == with_icons(rom))
+        aera = open(BUILTIN, 'rb').read() if os.path.exists(BUILTIN) else b''
+        check('AERA.FNT has the icons where EFTP_XL puts them',
+              aera and with_icons(aera) == aera)
+        check('no font in the program', len(open(XEX, 'rb').read()) < 15360)
+
     finally:
         server.close()
         shutil.rmtree(tmp)

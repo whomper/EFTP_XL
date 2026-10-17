@@ -17,23 +17,25 @@ LOAD     =   $4000      ; above DOS and EDOS
 ; init segment, which DOS runs
 ; before the rest of the file loads.
 ; MEMLO must be at most LOAD, and
-; MEMTOP at least BSSEND. At $9A00,
-; below the screen and past what the
-; file loads (the variables cover it
-; later: it has run by then)
+; MEMTOP at least BSSEND+$41F: room
+; for the font's 1K below the screen
+; too (MEMTOP is $3E1 under it). At
+; $9A00, past what the file loads
+; (the font may cover it later: it
+; has run by then)
 ;
 AXLOW    =   LOAD
-AXHIGH   =   BSSEND
+AXHIGH   =   BSSEND+$41F ; and the font
          *=  $9A00
 AXLOWM   .BYTE "EFTP_XL loads at $4000: MEMLO is above it",EOL
 AXROOMM  .BYTE "EFTP_XL: not enough memory",EOL
          .INCLUDE #D:AXLOAD.M65
 ;
-; The program; the font first, as
-; it must be 1K aligned
+; The program (the font is AERA.FNT,
+; read at the start, below the
+; screen: FONTLD)
 ;
          *=  LOAD
-         .INCLUDE #D:FONT.M65
 ;
 ; The last release; every build
 ; shows it

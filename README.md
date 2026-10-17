@@ -48,10 +48,14 @@ design is in [docs/design](docs/design).
    password, the folder on the server to start in, and the folder on the
    Atari (e.g. `D1:>DOWNLOAD>`). RETURN on a site connects.
 
-**The font.** `AERA.FNT` is the font the AERA 8-bit programs share.
-When it is on the drive (and SpartaDOS folder) you start EFTP_XL from,
-EFTP_XL reads it; without it, EFTP_XL uses its own copy of the same
-font, so the file is only needed to try a newer one.
+**The font.** `AERA.FNT` is the font the AERA 8-bit programs share. It
+isn't in the program: when it is on the drive (and SpartaDOS folder)
+you start EFTP_XL from, EFTP_XL reads it into the 1K just below the
+screen, as EDOS does; without it, EFTP_XL copies the font in use (the
+ROM's). Either way EFTP_XL puts its own four icons on it, on characters
+text hardly uses: a folder, a file, the "..." of a name cut short and
+the empty part of a progress bar (the heart, the club, Ctrl+F and the
+spade). `AERA.FNT` has the same icons in the same places.
 
 The screen, after EFTP: the Atari on the left, the server on the right,
 the folder you are in above each, and the pane with the keyboard has its
@@ -63,7 +67,7 @@ file under the cursor, then the transfers.
 | ^K / ^D        | the sites (connect) / disconnect        |
 | RETURN         | open the folder, send the file          |
 | ^T             | send the marked files and folders, or the one under the cursor |
-| ESC            | stop the transfer                       |
+| ESC (or BREAK) | stop the transfer; cancel any question, typed name or box, as "no": nothing is changed |
 | BACKSPACE      | the folder up                           |
 | TAB            | the other pane                          |
 | ↑ ↓ (or - =)   | move; ← → (or + \*) a page              |
@@ -133,11 +137,14 @@ Notes:
 - On an error the info line says what went wrong: the server's own
   reply (`530 Login incorrect`), or the Atari's own error with its text
   (`NOTES.TXT: Disk full`).
-- The program takes `$4000`-`$9B41` (the font, the program, its
-  variables): above EDOS and the MEMLO of DOS 2.5 and SpartaDOS 3, and
-  below the screen, so BASIC can stay on. If a DOS's MEMLO is above
-  `$4000`, or there isn't room, the program says so and goes back to DOS
-  before loading itself.
+- The program takes `$4000`-`$94D0` (the program and its variables),
+  and the font the 1K just below the screen (`$9800` with BASIC on):
+  above EDOS and the MEMLO of DOS 2.5 and SpartaDOS 3, so BASIC can
+  stay on. If a DOS's MEMLO is above `$4000`, or there isn't room for
+  both, the program says so and goes back to DOS before loading itself.
+- `EFTPXL.CFG` starts with a note on what it is; lines that start with
+  `;` are notes, and EFTP_XL skips them. It holds up to 8 sites, as
+  long as their lines fit in 640 bytes (about 80 each).
 
 ## How it reaches the servers
 
@@ -164,9 +171,9 @@ plain text, so only use it on your home network.
 ## Building
 
 The program is 6502 assembly in Mac/65's form, in [ASM](ASM):
-`EFTPXL.M65` is the main file and includes the others. It is 15.2K, the
-font included; the first version, in C with cc65, was 27K (it is in
-the git history, up to v0.2).
+`EFTPXL.M65` is the main file and includes the others. It is 14.6K (the
+font is `AERA.FNT`, read when it is there); the first version, in C with
+cc65, was 27K (it is in the git history, up to v0.2).
 
 **On another computer** with Python 3. The cross-assembler is
 `xl/tools/mac65.py`, from the AERA 8-bit shared tools (`xl/`, below),
@@ -232,7 +239,6 @@ this repository.
 
 ```
 ASM/        the program: EFTPXL.M65, the main file, and its parts
-            (FONT.M65 is made by make font, from xl/'s font)
 xl/         the AERA 8-bit shared code and tools, from AERA-Atari
             (read-only here; tools/sync-xl.sh brings it up to date)
   src/      AX*.M65: the OS's names, RESET, AERA.FNT, CIO's error texts
@@ -278,18 +284,20 @@ every FTP command sent.
 **The checks.** `make test` runs xl's own tests, then
 `tools/test_sim.py`: the program that way against an FTP server it
 starts, looking at the screen, at memory and at the files on both
-sides, 41 checks:
+sides, 74 checks:
 
 | | |
 |---|---|
-| Sites | a site made and saved in `EFTPXL.CFG`; connecting |
+| Sites | a site made and saved in `EFTPXL.CFG`, the note on top, notes skipped, 1.2's file read; edited, added, deleted in order; no room; connecting |
 | Panes | both lists, sizes in bytes, the server's folder, into and out of folders on both sides |
 | Files | down and up byte for byte, binary and text (line ends changed), the sums; the replace question; ESC stops and leaves no half file |
 | Folders | a server folder two folders deep down to the Atari, an Atari folder with one in it up to the server, both panes back where they were |
 | New, rename, delete | folders and files on the Atari and on the server |
 | DOS 2.5 | its listing; no folders made, none sent, and the error's text |
 | RESET | back to the main screen, disconnected, `N1:` and `N2:` closed, the keys working; ^Q still back to DOS |
-| HELP, AERA.FNT | the About lines; the font read from the disk, or the built-in one |
+| HELP, the font | the About lines; `AERA.FNT` read below the screen, or the font in use copied there, the icons on it either way; no font in the program |
+| ESC and BREAK | each cancels as "no": new folder, rename, delete, HELP, the Sites screen, a site's edit, delete and new, the replace question, the password question; each stops a transfer |
+| The test disk | `EFTPTEST.ATR` clean, with the files the test plan needs |
 | Loading | the load check refuses a DOS whose MEMLO is above $4000, says so and goes back to DOS |
 
 CI (`.github/workflows/ci.yml`) builds the program and the disk
@@ -305,7 +313,13 @@ assembling the disk's sources. That is how the SpartaDOS directory fixed
 in 0.6 was found. The cartridge isn't in this repository, so this isn't
 part of CI.
 
-**On real hardware.** Each release says whether it has been.
+**On real hardware.** `EFTPTEST.ATR`, in each release, is a bootable
+SpartaDOS 3.2 disk with the program, `AERA.FNT`, a site to fill in
+(`PI_IP`), the files to send (text, binary, empty, 64K, a folder with a
+folder in it) and `TESTPLAN.TXT`, the test plan in 38 columns: `TYPE
+TESTPLAN.TXT` on the Atari. Its source is
+[docs/TESTPLAN.TXT](docs/TESTPLAN.TXT). Each release says whether it has
+been tried.
 
 ## Releases
 
@@ -316,7 +330,8 @@ raise the version, commit and push, then run the Release workflow
 (Actions > Release > Run workflow, on main) with what is new:
 [`.github/workflows/release.yml`](.github/workflows/release.yml) (the
 AERA 8-bit one, from `xl/`) runs `make test` and `make dist`, tags the
-commit `vX.Y` and publishes `EFTPXL.PRG`, `EFTPXL.ATR` and `AERA.FNT` as
+commit `vX.Y` and publishes `EFTPXL.PRG`, `EFTPXL.ATR`, `AERA.FNT` and
+`EFTPTEST.ATR` as
 a GitHub Release, marked Latest. Pushing a tag made with `git tag -a`
 does the same, with the tag's message as the notes. A release that must
 not be used is marked with the Withdraw workflow

@@ -33,7 +33,7 @@ sys.path.insert(0, os.path.join(ROOT, 'xl', 'tools'))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import a8sim  # noqa: E402
 from a8sim import parse_keys, Stop  # noqa: E402,F401
-from a8sim.core import CHBAS, DOSINI, DOSINI_TRAP, RUNAD  # noqa: E402,F401
+from a8sim.core import CHBAS, DOSINI, DOSINI_TRAP, RAMTOP, RUNAD  # noqa: E402,F401
 from fujinet import FujiNet  # noqa: E402,F401
 
 # EFTP_XL's own characters, as screen_text shows them

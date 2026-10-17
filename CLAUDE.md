@@ -3,12 +3,13 @@
 - **Releases carry the program.** `bin/` and `dist/` are build output,
   never committed. `VERSION` in `ASM/EFTPXL.M65` holds the last release
   (every build shows `x.y`; there is no -dev label). A release:
-  raise `VERSION` and the version in every source file's header
-  (`make font` for FONT.M65), commit, push, then run the Release
+  raise `VERSION` and the version in every source file's header,
+  commit, push, then run the Release
   workflow on main with the notes; `.github/workflows/release.yml`
   (xl's) runs `make test` and `make dist`, tags vX.Y and publishes
   `EFTPXL.PRG`, the disk `EFTPXL.ATR` (the sources and the program, so
-  not `-SRC`; always this name) and `AERA.FNT`. Never reuse a number.
+  not `-SRC`; always this name), `AERA.FNT` and `EFTPTEST.ATR` (the
+  test disk, with docs/TESTPLAN.TXT). Never reuse a number.
 - **Only formal releases leave the build machine.** Erez gets vX.Y
   releases made by the Release workflow from `main`, nothing else: no
   test builds, no CI artifacts, no builds from a branch. Work lands on
