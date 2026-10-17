@@ -9,6 +9,8 @@
                     at most N times; else exit 2)
      clear          press Shift+< (clear the screen)
      reset          press RESET (a warm start)
+     help           press HELP (XL/XE), held 3 frames
+     break          press BREAK, held 3 frames
      dump FILE      write the 384x240 screen buffer
      screen         print the screen
 */
@@ -16,6 +18,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "libatari800.h"
+#include "akey.h"
 
 static input_template_t in;
 
@@ -85,6 +88,15 @@ int main(int argc, char **argv) {
             frames(2);
             libatari800_clear_input_array(&in);
             frames(2);
+        } else if (!strcmp(line, "help") || !strcmp(line, "break")) {
+            libatari800_clear_input_array(&in);
+            if (line[0] == 'h')
+                in.keycode = AKEY_HELP;
+            else
+                in.special = -AKEY_BREAK;   /* a negative key: through special, as RESET */
+            frames(3);
+            libatari800_clear_input_array(&in);
+            frames(4);
         } else if (!strcmp(line, "reset")) {
             libatari800_clear_input_array(&in);
             in.special = 2;     /* AKEY_WARMSTART, EFTP_XL's */

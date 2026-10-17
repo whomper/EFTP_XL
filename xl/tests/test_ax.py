@@ -32,6 +32,7 @@ AXERRS   =   {errs}
 AXLOW    =   $2000
 AXHIGH   =   $3000
 AXWARM   =   ${warm:04X}
+AXFMIN   =   $80
          *=  $2F00
 AXLOWM   .BYTE "low",EOL
 AXROOMM  .BYTE "room",EOL
@@ -251,31 +252,60 @@ class TestReset(unittest.TestCase):
 class TestFont(unittest.TestCase):
     FONT = bytes(range(256)) * 4
 
-    def test_read(self):
-        a = Atari(PROGRAM, {'AERA.FNT': self.FONT})
+    def font(self, files, ramtop=0xC0):
+        a = Atari(PROGRAM, files)
         a.load()
-        self.assertEqual(a.call(a.sym('AXFONT'), a=0x80, x=0x50), 'rts')
-        self.assertEqual(a.flag_c(), 0)
-        self.assertEqual(bytes(a.mem[0x8000:0x8400]), self.FONT)
-        self.assertEqual(a.iocb, {})                     # closed
-        self.assertEqual(a.mpu.x, 0x50)
+        a.mem[0x6A] = ramtop
+        a.mem[0x2F4] = 0xE0
+        return a
+
+    def run_font(self, a, x=0x50):
+        self.assertEqual(a.call(a.sym('AXFONT'), x=x), 'rts')
+        return a.flag_c(), a.mem[0x2F4], a.mem[a.sym('AXFPG')]
+
+    def test_below_the_screen(self):
+        # (RAMTOP-8) AND $FC: the 1K just under GR.0's screen
+        for ramtop, page in ((0xC0, 0xB8), (0xA0, 0x98), (0x9F, 0x94)):
+            a = self.font({'AERA.FNT': self.FONT}, ramtop)
+            self.assertEqual(self.run_font(a), (0, page, page))
+            self.assertEqual(bytes(a.mem[page * 256:page * 256 + 1024]), self.FONT)
+            self.assertEqual(a.iocb, {})                 # closed
+            self.assertEqual(a.mpu.x, 0x50)
+
+    def test_after_reset_no_second_read(self):
+        a = self.font({'AERA.FNT': self.FONT})
+        self.run_font(a)
+        a.files.clear()
+        a.mem[0x2F4] = 0xE0                              # RESET put the ROM's back
+        self.assertEqual(self.run_font(a), (0, 0xB8, 0xB8))
 
     def test_missing(self):
-        a = Atari(PROGRAM)
-        a.load()
-        self.assertEqual(a.call(a.sym('AXFONT'), a=0x80, x=0x50), 'rts')
-        self.assertEqual(a.flag_c(), 1)
-        self.assertEqual(a.mpu.y, 170)
-        self.assertEqual(bytes(a.mem[0x8000:0x8400]), bytes(1024))
+        a = self.font({})
+        self.assertEqual(self.run_font(a), (1, 0xE0, 0xE0))
+        self.assertEqual(bytes(a.mem[0xB800:0xBC00]), bytes(1024))
         self.assertEqual(a.iocb, {})
+        a.files['AERA.FNT'] = self.FONT                  # tried once only
+        self.assertEqual(self.run_font(a), (1, 0xE0, 0xE0))
+        self.assertEqual(bytes(a.mem[0xB800:0xBC00]), bytes(1024))
 
     def test_short(self):
-        a = Atari(PROGRAM, {'AERA.FNT': self.FONT[:100]})
-        a.load()
-        a.call(a.sym('AXFONT'), a=0x80, x=0x10)
-        self.assertEqual(a.flag_c(), 1)
-        self.assertEqual(a.mpu.y, 136)
+        a = self.font({'AERA.FNT': self.FONT[:100]})
+        self.assertEqual(self.run_font(a, x=0x10), (1, 0xE0, 0xE0))
         self.assertEqual(a.iocb, {})
+
+    def test_no_room(self):
+        # the page would be under AXFMIN ($80 here): not read at all
+        a = self.font({'AERA.FNT': self.FONT}, ramtop=0x84)
+        self.assertEqual(self.run_font(a), (1, 0xE0, 0xE0))
+        self.assertEqual(bytes(a.mem[0x7C00:0x8000]), bytes(1024))
+        a = self.font({'AERA.FNT': self.FONT}, ramtop=0x88)  # $80 itself is room
+        self.assertEqual(self.run_font(a), (0, 0x80, 0x80))
+
+    def test_rom_to_quit(self):
+        a = self.font({'AERA.FNT': self.FONT})
+        self.run_font(a)
+        a.call(a.sym('AXFROM'))
+        self.assertEqual(a.mem[0x2F4], 0xE0)
 
 
 class TestErrors(unittest.TestCase):

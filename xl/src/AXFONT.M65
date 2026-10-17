@@ -1,23 +1,32 @@
 ;
 ; AXFONT.M65 - AERA XL shared code
-; AERA.FNT, the family's font, from
-; the current drive (guidelines 5.3)
+; AERA.FNT, the family's font, just
+; below the screen (guidelines 5.3)
 ; Copyright (C) 2026 AERA | Erez Yaary
 ;
-; AXFONT - read D:AERA.FNT (1K) to a
-; page. The program sets CHBAS to it,
-; and again after RESET; without the
-; file it keeps the ROM font or its
-; own copy. A short or bad file may
-; leave the page part-written.
-; A: the page, 1K aligned ($xC, $x0,
-;    $x4, $x8)
+; AXFONT - select the family font.
+; The first call reads D:AERA.FNT
+; (1K) to the page below the screen,
+; (RAMTOP-8) AND $FC; later calls
+; (after RESET) only set CHBAS. No
+; file, a short one, or no room (the
+; page under AXFMIN) keep the ROM
+; font. A short or bad file may leave
+; the page part-written.
 ; X: the IOCB to use, times 16
-; Exit: C=0 read, C=1 not (Y: CIO's
-;       status); the IOCB is closed;
-;       A changed
+; Exit: C=0 AERA.FNT, C=1 ROM font;
+;       AXFPG its page; the IOCB is
+;       closed; A, Y changed
 ;
-AXFONT   PHA                ; the page
+AXFONT   LDA AXFPG          ; tried already
+         BNE AXFSET
+         LDA RAMTOP
+         SEC
+         SBC #8             ; 4 pages screen
+         AND #$FC           ; 1K aligned
+         CMP #AXFMIN
+         BCC AXFONT2        ; no room
+         PHA                ; the page
          LDA #<AXFNAME
          STA ICBAL,X
          LDA #>AXFNAME
@@ -31,6 +40,7 @@ AXFONT   PHA                ; the page
          PLA
          CPY #$80           ; C=1: not there
          BCS AXFONT1
+         PHA
          STA ICBAH,X        ; 1K to the page
          LDA #0
          STA ICBAL,X
@@ -39,14 +49,34 @@ AXFONT   PHA                ; the page
          STA ICBLH,X
          LDA #AXGETCHR
          JSR AXFCIO
-AXFONT1  TYA                ; keep the status
+         PLA
+AXFONT1  STA AXFPG          ; read or not
+         TYA                ; keep the status
          PHA
          LDA #AXCLOSE
          JSR AXFCIO
          PLA
          TAY
-         CPY #$80           ; C=1: an error
+         CPY #$80
+         BCC AXFSET         ; read: the page
+AXFONT2  LDA #$E0           ; the ROM font
+         STA AXFPG
+;
+; AXFSET - CHBAS to AXFPG; C=1 for
+; the ROM's ($E0)
+;
+AXFSET   LDA AXFPG
+         STA CHBAS
+         CMP #$E0           ; C=1: ROM
+         RTS
+;
+; AXFROM - the ROM font, before the
+; program goes back to DOS
+;
+AXFROM   LDA #$E0
+         STA CHBAS
          RTS
 AXFCIO   STA ICCOM,X        ; CIO command A
          JMP CIOV
+AXFPG    .BYTE 0            ; 0: not tried yet
 AXFNAME  .BYTE "D:AERA.FNT",EOL

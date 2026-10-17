@@ -4,7 +4,8 @@
 # xl/ end to end in atari800: HELLO.M65, built by xl/tools/mac65.py and
 # put on a SpartaDOS 3.2 disk by atari_src.py, boots and runs; built to
 # load below MEMLO, its AXLOAD check refuses and SpartaDOS carries on;
-# after RESET, AXRESET brings it back (DOS's init first).
+# after RESET, AXRESET brings it back (DOS's init first); HELP and
+# BREAK reach it.
 #   xl/tests/test_atari800.sh DIR    (DIR: scratch, where a8run is built)
 set -e
 XL=$(cd "$(dirname "$0")/.." && pwd)
@@ -32,6 +33,9 @@ run() {
     echo "$1: PASS"
 }
 run RESET "$W/reset.txt" "$W/T.ATR"
+# a8run's help and break: the OS sets HELPFG and BRKKEY, HELLO says so
+printf 'until D1: 400\nwait 60\ntype HELLO.PRG\\n\nuntil AERA XL OK 300\nhelp\nuntil AERA XL HELP 100\nbreak\nuntil AERA XL BREAK 100\nscreen\n' > "$W/keys.txt"
+run KEYS "$W/keys.txt" "$W/T.ATR"
 # --tree: a folder made by sparta.py, as SpartaDOS 3.2 reads it
 mkdir -p "$W/tree/SUB"
 printf 'IN SUB\233' > "$W/tree/SUB/C.TXT"
