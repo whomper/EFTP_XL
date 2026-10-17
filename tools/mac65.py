@@ -26,6 +26,9 @@ inverse-video strings.
 
 Zero-page addressing is chosen when the operand's value is below $100 and
 every symbol in it is already defined at that point of the current pass.
+An equate may take its value from a symbol defined later (AXHIGH = BSSEND),
+as MAC/65 allows; such an equate counts as not yet defined wherever that
+matters (zero page, .IF).
 MAC/65 sizes such an operand as absolute in pass 1 and as zero page in
 pass 2, so its labels move: a zero-page symbol used before it is defined is
 an error here too, as is a symbol in .IF that is not yet defined (MAC/65
@@ -128,6 +131,7 @@ def strip_comment(s):
 class Assembler:
     def __init__(self):
         self.pass1_syms = {}
+        self.forward_eq = set()   # equates whose value comes from a later symbol
 
     # ------------------------------------------------------------ expressions
     def eval(self, text, where):
@@ -201,6 +205,8 @@ class Assembler:
             return atascii(t[1])
         if re.match(r'[A-Za-z_]', t):
             name = t.upper()
+            if name in self.forward_eq:
+                self._known = False     # its value came from a later symbol
             if name in self.syms:
                 return self.syms[name]
             self._known = False
@@ -231,7 +237,8 @@ class Assembler:
         name = name.upper()
         if name in self.syms and self.syms[name] != value:
             raise AsmError(f"symbol {name} redefined")
-        if self.pass_no == 2 and name in self.pass1_syms and self.pass1_syms[name] != value:
+        if (self.pass_no == 2 and name in self.pass1_syms and self.pass1_syms[name] != value
+                and name not in self.forward_eq):
             raise AsmError(f"phase error: {name} was ${self.pass1_syms[name]:04X} in pass 1, "
                            f"${value:04X} in pass 2")
         self.syms[name] = value
@@ -360,9 +367,11 @@ class Assembler:
             return
 
         if op == '=':
-            v, _ = self.eval(operand, self.where)
             if not label:
                 raise AsmError("'=' needs a label")
+            v, known = self.eval(operand, self.where)
+            if not known and self.pass_no == 1:
+                self.forward_eq.add(label.upper())
             self.define(label, v)
             if self.pass_no == 2:
                 self.listing.append((None, b'', src))

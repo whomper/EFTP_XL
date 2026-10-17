@@ -44,10 +44,9 @@ as MAC/65's two passes need. No shared file includes another.
 | `sparta.py`, `atr.py` | SpartaDOS and DOS 2 / MyDOS disk images: list, add, remove, check |
 | `font.py` | `AERA.FNT`, from Erez's `font/EREZ.FNT`: as a file, or as `.BYTE` lines for a program that carries it |
 | `disk/` | SpartaDOS 3.2's boot sectors and `X32G.DOS`, for the bootable disks |
+| `atari800/` | The release checks in atari800 with its own OS ROM (guidelines 8, level 2), from EFTP_XL's build machine. `build.sh DIR` builds `a8run`, which drives libatari800 from a script. `a8check.py start` checks that the disk boots and the program starts. `a8check.py mac65` checks that MAC/65 on the Atari assembles the disk's sources to the same program; it needs Erez's MAC/65 cartridge image, which never goes in git. |
 
-Coming next:
-- the 6502 simulator's core, from EDOS's and EFTP_XL's `sim.py`;
-- the atari800 harness.
+Coming next: the 6502 simulator's core, from EDOS's and EFTP_XL's `sim.py`.
 
 ## The workflows (`workflows/`)
 
@@ -63,6 +62,8 @@ into place. The release asks the program's Makefile for three targets:
 pip install -r xl/requirements.txt
 python3 xl/tests/test_tools.py    # the assembler, the tokeniser, the disk, the font
 python3 xl/tests/test_ax.py       # the AX includes on py65, with CIO and DOS stood in
+xl/tests/test_atari800.sh DIR     # end to end in atari800: HELLO.M65 boots and runs on
+                                  # SpartaDOS 3.2; built too low, AXLOAD refuses it
 ```
 
 Copyright (C) 2026 AERA | Erez Yaary. GPL-2.0-or-later, see [COPYING](../COPYING). SpartaDOS 3.2
