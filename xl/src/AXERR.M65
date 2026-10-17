@@ -1,0 +1,85 @@
+;
+; AXERR.M65 - AERA XL shared code
+; The texts of CIO's errors
+; (guidelines 5.4)
+; Copyright (C) 2026 AERA | Erez Yaary
+;
+; Before it: AXPTR, a zero page pair
+; the program lends, and AXERRS: 1
+; for CIO's own errors (128-147), 2
+; for DOS's disk errors (160-171) too.
+;
+; AXERRT - the text of error Y
+; Exit: C=0: A/Y = the text, ending
+;       in EOL; C=1: no text for it.
+;       X and AXPTR changed
+;
+AXERRT   LDA #<AXETAB
+         STA AXPTR
+         LDA #>AXETAB
+         STA AXPTR+1
+         TYA
+         TAX                ; X: the code
+AXERR1   LDY #0
+         LDA (AXPTR),Y
+         CMP #$FF           ; the end: C=1
+         BEQ AXERR5
+         TXA
+         CMP (AXPTR),Y      ; this one?
+         BEQ AXERR3
+AXERR2   INY                ; on to its EOL
+         LDA (AXPTR),Y
+         CMP #EOL
+         BNE AXERR2
+         TYA                ; past it: +Y+1
+         SEC
+         ADC AXPTR
+         STA AXPTR
+         BCC AXERR1
+         INC AXPTR+1
+         BCS AXERR1         ; always
+AXERR3   LDA AXPTR          ; C=1: +1, past
+         ADC #0             ; the code
+         LDY AXPTR+1
+         BCC AXERR4
+         INY
+AXERR4   CLC
+AXERR5   RTS
+;
+; Code, text, EOL; $FF at the end
+;
+AXETAB   .BYTE 128,"BREAK key",EOL
+         .BYTE 129,"IOCB already open",EOL
+         .BYTE 130,"No such device",EOL
+         .BYTE 131,"Opened for write only",EOL
+         .BYTE 132,"Invalid command",EOL
+         .BYTE 133,"Device or file not open",EOL
+         .BYTE 134,"Bad IOCB number",EOL
+         .BYTE 135,"Opened for read only",EOL
+         .BYTE 136,"End of file",EOL
+         .BYTE 137,"Truncated record",EOL
+         .BYTE 138,"Device timeout",EOL
+         .BYTE 139,"Device NAK",EOL
+         .BYTE 140,"Serial framing error",EOL
+         .BYTE 141,"Cursor out of range",EOL
+         .BYTE 142,"Serial bus overrun",EOL
+         .BYTE 143,"Checksum error",EOL
+         .BYTE 144,"Device done error",EOL
+         .BYTE 145,"Bad screen mode",EOL
+         .BYTE 146,"Function not supported",EOL
+         .BYTE 147,"Not enough memory",EOL
+         .IF AXERRS>1
+         .BYTE 160,"Bad drive number",EOL
+         .BYTE 161,"Too many open files",EOL
+         .BYTE 162,"Disk full",EOL
+         .BYTE 163,"Fatal disk I/O error",EOL
+         .BYTE 164,"File number mismatch",EOL
+         .BYTE 165,"Bad file name",EOL
+         .BYTE 166,"POINT data length",EOL
+         .BYTE 167,"File locked",EOL
+         .BYTE 168,"Invalid command for disk",EOL
+         .BYTE 169,"Directory full",EOL
+         .BYTE 170,"File not found",EOL
+         .BYTE 171,"Invalid POINT",EOL
+         .ENDIF
+         .BYTE $FF

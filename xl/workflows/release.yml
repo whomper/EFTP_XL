@@ -1,0 +1,83 @@
+name: Release
+
+# AERA XL's release (AERA-Atari xl/workflows/release.yml, copied here by
+# tools/sync-xl.sh: change it there). It builds and tests, tags vX.Y and
+# publishes dist/'s files as a GitHub Release, marked Latest. Two ways:
+# - Actions > Release > Run workflow, on main: the notes are the input,
+#   or release-notes/vX.Y.md when the input is empty;
+# - push a tag vX.Y made with git tag -a: its message is the notes.
+# The repository's Makefile gives:
+#   make version   the version the program shows (x.y)
+#   make test      every check
+#   make dist      the release's files in dist/
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      notes:
+        description: "What is new (Markdown); empty: release-notes/vX.Y.md"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Tools
+        run: |
+          pip install -q -r xl/requirements.txt
+          if [ -f requirements.txt ]; then pip install -q -r requirements.txt; fi
+      - name: Which release
+        run: |
+          V=$(make -s version)
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            TAG=$GITHUB_REF_NAME
+            if [ "$TAG" != "v$V" ]; then
+              echo "::error::tag $TAG, but the program shows $V"
+              exit 1
+            fi
+          else
+            TAG=v$V
+            if [ "$GITHUB_REF_NAME" != main ]; then
+              echo "::error::run it on main"
+              exit 1
+            fi
+            if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null; then
+              echo "::error::$TAG is out already: raise the version first"
+              exit 1
+            fi
+          fi
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          echo "VERSION=$V" >> "$GITHUB_ENV"
+      - name: Test and build
+        run: |
+          make test
+          make dist
+          test -n "$(ls dist)"
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOTES: ${{ inputs.notes }}
+        run: |
+          N="$RUNNER_TEMP/notes.md"
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            git fetch -q --force origin "refs/tags/$TAG:refs/tags/$TAG"
+            git tag -l --format='%(contents)' "$TAG" > "$N"
+          elif [ -n "$NOTES" ]; then
+            printf '%s\n' "$NOTES" > "$N"
+          elif [ -f "release-notes/$TAG.md" ]; then
+            cp "release-notes/$TAG.md" "$N"
+          else
+            echo "::error::no notes: give them, or add release-notes/$TAG.md"
+            exit 1
+          fi
+          gh release create "$TAG" dist/* --target "$GITHUB_SHA" --latest \
+            --title "${GITHUB_REPOSITORY#*/} $VERSION" --notes-file "$N"

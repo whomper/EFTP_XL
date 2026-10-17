@@ -1,0 +1,54 @@
+name: Withdraw
+
+# AERA XL (AERA-Atari xl/workflows/withdraw.yml, copied here by
+# tools/sync-xl.sh: change it there).
+
+# Marks releases that must not be used: puts a notice at the top of
+# each one's notes, naming the release to use instead and why. The
+# files stay, so old links still work. Actions > Withdraw > Run workflow.
+on:
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: "The releases to withdraw, e.g. v0.9 v1.0"
+        required: true
+        type: string
+      use:
+        description: "The release to use instead, e.g. v1.1"
+        required: true
+        type: string
+      why:
+        description: "Why (Markdown, one line)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  withdraw:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Withdraw
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAGS: ${{ inputs.tags }}
+          USE: ${{ inputs.use }}
+          WHY: ${{ inputs.why }}
+        run: |
+          gh release view "$USE" >/dev/null
+          URL="https://github.com/$GH_REPO/releases/tag/$USE"
+          for TAG in $TAGS; do
+            gh release view "$TAG" --json body -q .body > "$RUNNER_TEMP/old.md"
+            if grep -q '^> \*\*Withdrawn' "$RUNNER_TEMP/old.md"; then
+              echo "$TAG: withdrawn already"
+              continue
+            fi
+            {
+              printf '> **Withdrawn: use [%s](%s) instead.** %s\n\n' "$USE" "$URL" "$WHY"
+              cat "$RUNNER_TEMP/old.md"
+            } > "$RUNNER_TEMP/new.md"
+            gh release edit "$TAG" --notes-file "$RUNNER_TEMP/new.md"
+            echo "$TAG: withdrawn, use $USE"
+          done

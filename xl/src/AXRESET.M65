@@ -1,0 +1,57 @@
+;
+; AXRESET.M65 - AERA XL shared code
+; RESET back into the program
+; (guidelines 3.3)
+; Copyright (C) 2026 AERA | Erez Yaary
+;
+; Before it: AXWARM, the program's
+; warm start, where RESET comes once
+; DOS has set itself up again. The
+; warm start resets the stack and sets
+; the screen, font and colours again.
+; The JSR in AXINIT holds DOS's own
+; DOSINI; AXDOSI names it, for a
+; program that hands it on.
+;
+; AXSTART - at the program's start:
+; keep DOS's DOSINI and point DOSINI
+; at AXINIT. Run again (DOSINI ours
+; already), it keeps what it has.
+; Exit: A changed
+;
+AXSTART  LDA DOSINI         ; ours already?
+         CMP #<AXINIT
+         BNE AXRST1
+         LDA DOSINI+1
+         CMP #>AXINIT
+         BEQ AXRST2         ; yes: keep it
+AXRST1   LDA DOSINI         ; DOS's, into the
+         STA AXINIT+1       ; JSR below
+         LDA DOSINI+1
+         STA AXINIT+2
+         LDA #<AXINIT
+         STA DOSINI
+         LDA #>AXINIT
+         STA DOSINI+1
+AXRST2   RTS
+;
+; AXINIT - RESET: DOS's init, then
+; the program's warm start
+;
+AXINIT   JSR AXRST2         ; DOS's DOSINI here
+         JMP AXWARM
+AXDOSI   =   AXINIT+1
+;
+; AXQUIT - leaving: DOSINI is DOS's
+; again, so a later RESET never comes
+; into memory that is no longer ours.
+; Call it before every way out: quit
+; to DOS, a cartridge, Go To, a load
+; over the program.
+; Exit: A changed
+;
+AXQUIT   LDA AXINIT+1
+         STA DOSINI
+         LDA AXINIT+2
+         STA DOSINI+1
+         RTS

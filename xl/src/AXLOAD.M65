@@ -1,0 +1,54 @@
+;
+; AXLOAD.M65 - AERA XL shared code
+; The load check (guidelines 4.2)
+; Copyright (C) 2026 AERA | Erez Yaary
+;
+; An init segment: DOS runs it as
+; soon as it is in, before the rest
+; of the program loads. MEMLO must be
+; at most AXLOW and MEMTOP at least
+; AXHIGH; else it prints a message on
+; E: and goes back to DOS.
+;
+; Before it: AXLOW (the load address),
+; AXHIGH (the first byte above the
+; program and its work area), and
+; *= where it goes: above the program,
+; below the screen, where the load
+; hasn't been yet. Just before the
+; .INCLUDE, the two messages (ATASCII,
+; ending in EOL):
+;   AXLOWM   DOS is too big for us
+;   AXROOMM  not enough memory
+; After it, *= INITAD is done, so the
+; program sets its own *= again.
+;
+AXCHECK  LDA #<AXLOW        ; AXLOW-MEMLO:
+         CMP MEMLO          ; C=1 if MEMLO is
+         LDA #>AXLOW        ; AXLOW or lower
+         SBC MEMLO+1
+         BCC AXCHK1         ; DOS is too big
+         LDA MEMTOP         ; MEMTOP-AXHIGH:
+         CMP #<AXHIGH       ; C=1 if MEMTOP is
+         LDA MEMTOP+1       ; AXHIGH or more
+         SBC #>AXHIGH
+         BCS AXCHK3         ; all well: load on
+         LDA #<AXROOMM
+         LDY #>AXROOMM
+         BNE AXCHK2         ; always
+AXCHK1   LDA #<AXLOWM
+         LDY #>AXLOWM
+AXCHK2   STA ICBAL          ; print it on E:,
+         STY ICBAH          ; IOCB 0
+         LDA #$FF           ; up to the EOL
+         STA ICBLL
+         LDA #0
+         STA ICBLH
+         LDA #AXPUTREC
+         STA ICCOM
+         LDX #0
+         JSR CIOV
+         JMP (DOSVEC)       ; back to DOS
+AXCHK3   RTS
+         *=  INITAD         ; DOS calls it
+         .WORD AXCHECK
