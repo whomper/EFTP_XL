@@ -1,18 +1,13 @@
 ;
-; EFTP_XL - the main screen, after EFTP on the ST
-; Copyright (C) 2026 AERA | Erez Yaary. GPL-2.0-or-later, see COPYING.
+; UI.M65 - EFTP_XL 0.9
+; The main screen and its keys
+; Copyright (C) 2026 AERA | Erez Yaary
 ;
-;   0  title bar                       16  -------+-------
-;   1  info line                       17  details of the cursor's file
-;   2  -------------+------------      18  --- Transfers -------
-;   3  D1:>GAMES>   | /pub/atari       19-21 transfers
-;   4  2 dirs 5 files| 2 dirs 5 files  22  ---------------
-;   5-15 the files  | the files        23  keys
+; START - run address: clear the
+; variables, draw the screen, read
+; the disk, then the key loop
 ;
-; Most routines work on the pane in SIDE (PUSE); ACTIVE is the pane
-; with the keyboard.
-;
-START    LDA #<BSS          ; the variables start at 0
+START    LDA #<BSS          ; zero BSS..BSSEND
          STA PTR
          LDA #>BSS
          STA PTR+1
@@ -26,35 +21,37 @@ START1   TYA
          LDA PTR
          CMP #<BSSEND
          BCC START1
-         STY CONN
+         STY CONN           ; Y=0: ZP ones too
          STY ACTIVE
          STY SINV
-         TSX                ; for ^Q, back to DOS from anywhere
+         TSX                ; for ^Q: back to DOS
          STX SAVESP
-         JSR FTOUT
-         LDA #NO
+         JSR FTOUT          ; 20 s timeout
+         LDA #NO            ; no site yet
          STA SITE
-         LDA #1
+         LDA #1             ; D1:
          JSR LDRIVE
          JSR SCRINIT
          JSR DALL
-         JSR SLOAD
+         JSR SLOAD          ; read the sites
          JSR READLOC
          LDA #LOCAL
          JSR DPANE
          JSR DDETAIL
-MAIN     JSR KEYGET
+MAIN     JSR KEYGET         ; main loop
          STA KEY
          LDA ACTIVE
          JSR PUSE
          JSR DISP
          JMP MAIN
 ;
-; DISP: the key's routine (they end with RTS)
+; DISP - run the routine for KEY;
+; it is pushed as address-1, so RTS
+; goes to it
 ;
 DISP     LDX #0
-DISP1    LDA KEYS,X
-         BEQ DISP3
+DISP1    LDA KEYS,X         ; look it up
+         BEQ DISP3          ; not in KEYS
          CMP KEY
          BEQ DISP2
          INX
@@ -63,13 +60,13 @@ DISP2    LDA KEYH,X
          PHA
          LDA KEYL,X
          PHA
-         RTS
-DISP3    LDA KEY            ; 1-8: a drive, in the Atari's pane
+         RTS                ; to the routine
+DISP3    LDA KEY            ; 1-8: a drive
          CMP #'1
          BCC DISP4
          CMP #'9
          BCS DISP4
-         LDX ACTIVE
+         LDX ACTIVE         ; Atari pane only
          BNE DISP4
          AND #$0F
          JSR LDRIVE
@@ -77,10 +74,16 @@ DISP3    LDA KEY            ; 1-8: a drive, in the Atari's pane
          LDA #LOCAL
          JSR DPANE
          JMP DDETAIL
-DISP4    JSR ISALPH         ; a letter: the next name starting with it
-         BCC DISP5
+DISP4    JSR ISALPH         ; letter: to the next
+         BCC DISP5          ; name with it
          JMP JUMP
 DISP5    RTS
+;
+; KEYS - the keys, 0 ends: arrows
+; and - = + *, TAB, RETURN, BKSP,
+; space, ^A ^K ^D ^R, HELP ?, ^Q ^T
+; ^N ^E, Shift/Ctrl+Delete
+; KEYL/KEYH: their routines, less 1
 ;
 KEYS     .BYTE KUP,'-,KDOWN,'=,KLEFT,'+,KRIGHT,'*,KTAB,KRETURN,KBKSP,32
          .BYTE 1,11,4,18,KHELP,'?,17,20,14,5,KDEL,KDEL2,0
@@ -95,30 +98,33 @@ KEYH     .BYTE >[HUP-1],>[HUP-1],>[HDOWN-1],>[HDOWN-1],>[HPGUP-1]
          .BYTE >[HREAD-1],>[HELP-1],>[HELP-1],>[HQUIT-1],>[HSEND-1]
          .BYTE >[NEWFOLD-1],>[RENAME-1],>[DELETE-1],>[DELETE-1]
 ;
-HUP      LDX SIDE
+; The key routines, on the active
+; pane (SIDE)
+;
+HUP      LDX SIDE           ; up a line
          LDA PCUR,X
-         BEQ DISP5
+         BEQ DISP5          ; at the top
          SEC
          SBC #1
          JMP MOVETO
-HDOWN    LDX SIDE
+HDOWN    LDX SIDE           ; down a line
          LDA PCUR,X
          CLC
          ADC #1
-         JMP MOVETO
-HPGUP    LDX SIDE
+         JMP MOVETO         ; stops at the end
+HPGUP    LDX SIDE           ; up a page
          LDA PCUR,X
          SEC
          SBC #VIS
          BCS HPGUP1
-         LDA #0
+         LDA #0             ; to the top
 HPGUP1   JMP MOVETO
-HPGDN    LDX SIDE
+HPGDN    LDX SIDE           ; down a page
          LDA PCUR,X
          CLC
          ADC #VIS
          JMP MOVETO
-HTAB     LDA CONNECTD
+HTAB     LDA CONNECTD       ; the other pane
          BEQ NOTCONN
          LDA ACTIVE
          EOR #1
@@ -127,45 +133,47 @@ HTAB     LDA CONNECTD
 NOTCONN  JSR INFOI
          .BYTE "Not connected: ^K picks a site",0
          RTS
-HSPACE   LDA #0
+HSPACE   LDA #0             ; mark one, move on
          JMP MARK
-HMALL    LDA #1
+HMALL    LDA #1             ; mark all or none
          JMP MARK
-HSITES   JSR SITESCR
+HSITES   JSR SITESCR        ; A=site, or NO
          PHA
          JSR DALL
          PLA
-         BMI HSITES1
+         BMI HSITES1        ; none picked
          JSR CONNECT
-         JMP DPANES         ; the panes; the info line keeps what was said
+         JMP DPANES         ; keep the info line
 HSITES1  RTS
 HDISC    JSR DISC
          JMP DALL
-HREAD    JSR READLOC
+HREAD    JSR READLOC        ; read both again
          LDA CONNECTD
          BEQ HREAD1
          JSR READREM
 HREAD1   JMP DALL
 HQUIT    JSR DISC
          JSR SCRDONE
-         LDX SAVESP
+         LDX SAVESP         ; stack as at START
          TXS
-         RTS
-HSEND    LDA #0
+         RTS                ; back to DOS
+HSEND    LDA #0             ; marked, or cursor
          JMP SENDF
 ;
-; -- drawing
+; Drawing the main screen
 ;
-; INFO: A/Y on the info line, and the dot when connected
+; INFO - A/Y on the info line, then
+; the dot in the last column when
+; connected; INFOI: string inline
 ;
 INFOI    JSR INLINE
 INFO     PHA
          TYA
          PHA
-         LDX #1
+         LDX #1             ; row 1
          LDY #SCRL
          JSR AT
-         LDA #SCRW-1
+         LDA #SCRW-1        ; all but the dot
          STA SW
          PLA
          TAY
@@ -177,20 +185,22 @@ INFO     PHA
          LDA #CHDOT
 INFO1    JMP PUTCH
 ;
-; IDLE: the info line when nothing is going on
+; IDLE - the info line at rest: the
+; site's name, or "Not connected"
 ;
 IDLE     LDA CONNECTD
          BEQ IDLE1
          LDX SITE
          JSR SSEL
-         LDA SITEP
+         LDA SITEP          ; its name: field 0
          LDY SITEP+1
          JMP INFO
 IDLE1    JSR INFOI
          .BYTE "Not connected",0
          RTS
 ;
-; INFOMSG: MSG on the info line
+; INFOMSG - MSG on the info line
+; MSGSTART: start a line in MSG
 ;
 INFOMSG  LDA #<MSG
          LDY #>MSG
@@ -199,7 +209,16 @@ MSGSTART LDA #<MSG
          LDY #>MSG
          JMP SBSTART
 ;
-DFRAME   LDX #2
+; DFRAME - rows 2-22: the lines and
+; the transfers. The rows:
+;  0 title       16 ---+---
+;  1 info        17 details
+;  2 ---+---     18 - Transfers -
+;  3 folders     19-21 transfers
+;  4 counts      22 -------
+;  5-15 files    23 keys
+;
+DFRAME   LDX #2             ; clear rows 2-22
 DFRAME1  JSR CLRROW
          INX
          CPX #23
@@ -208,16 +227,16 @@ DFRAME1  JSR CLRROW
          JSR RULE
          LDX #16
          JSR RULE
-         LDX #2
+         LDX #2             ; line between panes
 DFRAME2  LDY #DIV
          JSR AT
          LDA #CHVLINE
          CPX #2
          BNE DFRAME3
-         LDA #CHTT
+         LDA #CHTT          ; T at the top
 DFRAME3  CPX #16
          BNE DFRAME4
-         LDA #CHBT
+         LDA #CHBT          ; and at the bottom
 DFRAME4  JSR PUTCH
          INX
          CPX #17
@@ -233,12 +252,14 @@ DFRAME4  JSR PUTCH
          JSR RULE
          JMP XDRAW
 ;
-; DENTRY: entry A of the pane in SIDE, on its row
+; DENTRY - entry A of pane SIDE on
+; its row: icon, name, size; a
+; blank row past the last one
 ;
 DENTRY   STA DEI
          LDX SIDE
          SEC
-         SBC PTOP,X
+         SBC PTOP,X         ; row A-PTOP+LISTROW
          CLC
          ADC #LISTROW
          TAX
@@ -250,23 +271,23 @@ DENTRY   STA DEI
          LDA DEI
          CMP PCOUNT,X
          BCC DENT1
-         LDA WIDTH,X
+         LDA WIDTH,X        ; none: blank
          STA SW
          JMP SPACES
 DENT1    LDY #0
-         CPX ACTIVE
-         BNE DENT2
+         CPX ACTIVE         ; inverse: cursor of
+         BNE DENT2          ; the active pane
          CMP PCUR,X
          BNE DENT2
          LDY #$80
 DENT2    STY SINV
          CLC
          ADC BASE
-         STA DEK
+         STA DEK            ; DEK=entry, DEF=flags
          TAX
          LDA EFLAG,X
          STA DEF
-         LDY #CHUP
+         LDY #CHUP          ; pick the icon
          AND #EUP
          BNE DENT3
          LDY #CHMARK
@@ -280,7 +301,7 @@ DENT2    STY SINV
          LDY #CHFILE
 DENT3    TYA
          JSR PUTCH
-         LDA #NAMEW
+         LDA #NAMEW         ; server pane: 1 more
          CLC
          ADC SIDE
          STA SW
@@ -290,23 +311,23 @@ DENT3    TYA
          CMP SW
          BCC DENT4
          BEQ DENT4
-         DEC SW
+         DEC SW             ; too long: cut it,
          JSR DENTN
-         LDA #CHMORE
+         LDA #CHMORE        ; then the more mark
          JSR PUTCH
          JMP DENT5
 DENT4    JSR DENTN
 DENT5    JSR SIZESTART
          LDA DEF
-         AND #EDIR+EUP
+         AND #EDIR+EUP      ; size of files only
          BNE DENT6
          LDX DEK
          JSR ESIZE
          JSR SBSIZE
-DENT6    LDA #<SIZEB
+DENT6    LDA #<SIZEB        ; right in 5 columns
          LDY #>SIZEB
          JSR STRLEN
-         EOR #$FF
+         EOR #$FF           ; SW = 5-length
          SEC
          ADC #5
          STA SW
@@ -315,12 +336,15 @@ DENT6    LDA #<SIZEB
          LDY #>SIZEB
          JSR PUTS
          JMP INVOFF
-DENTN    LDX DEK
+DENTN    LDX DEK            ; name, SW columns
          JSR ENAME
          JMP PUTW
 SIZESTART LDA #<SIZEB
          LDY #>SIZEB
          JMP SBSTART
+;
+; DLIST - the VIS rows of pane SIDE,
+; from its top
 ;
 DLIST    LDX SIDE
          LDA PTOP,X
@@ -336,8 +360,10 @@ DLIST1   LDA DLI
          BNE DLIST1
          RTS
 ;
-; MARKED: how many are marked in the active pane (A, MCNT); MSIZE
-; their size
+; MARKED - count the marked entries
+; of the active pane; MSIZE = their
+; size in all
+; Exit: A=MCNT, Z=1 if none
 ;
 MARKED   LDA ACTIVE
          JSR PUSE
@@ -350,12 +376,12 @@ MARKED   LDA ACTIVE
          JSR PEND
          LDX BASE
 MARKED1  CPX TMP4
-         BCS MARKED3
+         BCS MARKED3        ; all seen
          LDA EFLAG,X
          AND #EMARK
          BEQ MARKED2
          INC MCNT
-         CLC
+         CLC                ; MSIZE += its size
          LDA MSIZE
          ADC ES0,X
          STA MSIZE
@@ -373,7 +399,8 @@ MARKED2  INX
 MARKED3  LDA MCNT
          RTS
 ;
-; PEND: TMP4 = the end of the pane in SIDE (BASE + its count)
+; PEND - TMP4 = end of pane SIDE
+; (BASE + its count)
 ;
 PEND     LDX SIDE
          LDA BASE
@@ -382,8 +409,10 @@ PEND     LDX SIDE
          STA TMP4
          RTS
 ;
-; CURENT: the entry under the active pane's cursor, in A, X and CURK;
-; the pane's count in Y, Z set when it is empty
+; CURENT - the entry under the
+; active pane's cursor
+; Exit: A=X=CURK=entry, Y=count,
+;       Z=1 if the pane is empty
 ;
 CURENT   LDA ACTIVE
          JSR PUSE
@@ -395,17 +424,21 @@ CURENT   LDA ACTIVE
          LDY SIDE
          LDA PCOUNT,Y
          TAY
-         PHP
+         PHP                ; keep Z of count
          TXA
          PLP
          RTS
+;
+; DDETAIL - the details row: how
+; many marked and their size, or
+; the cursor's name, size and date
 ;
 DDETAIL  LDX #DETROW
          JSR CLRROW
          LDY #SCRL
          JSR AT
          JSR MARKED
-         BEQ DDET1
+         BEQ DDET1          ; none marked
          JSR MSGSTART
          LDA MCNT
          JSR SBBYTE
@@ -417,14 +450,14 @@ DDETAIL  LDX #DETROW
          JSR SBSIZE
          JMP DDET5
 DDET1    JSR CURENT
-         BEQ DDET6
+         BEQ DDET6          ; empty pane
          LDA EFLAG,X
          AND #EUP
          BEQ DDET2
          JSR PUTSI
          .BYTE "The folder above",0
          RTS
-DDET2    JSR ENAME
+DDET2    JSR ENAME          ; name, 22 at most
          JSR STRLEN
          CMP #22
          BCC DDET3
@@ -433,7 +466,7 @@ DDET3    STA SW
          LDX CURK
          JSR ENAME
          JSR PUTW
-         JSR MSGSTART
+         JSR MSGSTART       ; then " size date"
          JSR SBSP
          LDX CURK
          LDA EFLAG,X
@@ -447,7 +480,7 @@ DDET4    JSR ESIZE
 DDET4A   JSR SBSP
          LDX CURK
          JSR SBSTAMP
-         LDA #<MSG
+         LDA #<MSG          ; only if it fits
          LDY #>MSG
          JSR STRLEN
          CLC
@@ -459,14 +492,15 @@ DDET5    LDA #<MSG
          JMP PUTS
 DDET6    RTS
 ;
-; DPANE: pane A: its folder, how many there are, its files
+; DPANE - pane A: its folder, its
+; counts, its files
 ;
 DPANE    STA DPS
          JSR PUSE
          LDX DPS
-         LDA COL0,X
+         LDA COL0,X         ; DPC column,
          STA DPC
-         LDA WIDTH,X
+         LDA WIDTH,X        ; DPW width
          STA DPW
          STA SW
          LDX #HEADROW
@@ -476,15 +510,15 @@ DPANE    STA DPS
          BEQ DPANE3
          LDA CONNECTD
          BNE DPANE3
-         JMP DPNOCON
-DPANE3   LDY #0             ; the folder, its end when it's too long
-         LDA DPS
+         JMP DPNOCON        ; server, offline
+DPANE3   LDY #0             ; folder: inverse in
+         LDA DPS            ; the active pane
          CMP ACTIVE
          BNE DPANE4
          LDY #$80
 DPANE4   STY SINV
          LDX DPS
-         LDA PATHL,X
+         LDA PATHL,X        ; DPP = its path
          STA DPP
          LDA PATHH,X
          STA DPP+1
@@ -494,8 +528,8 @@ DPANE4   STY SINV
          CMP DPW
          BCC DPANE5
          BEQ DPANE5
-         SBC DPW            ; carry is set: n - w + 1 on
-         SEC
+         SBC DPW            ; too long: show the
+         SEC                ; end, skip n-w+1
          ADC DPP
          STA DPP
          BCC DPANE4A
@@ -507,7 +541,7 @@ DPANE5   LDA DPP
          LDY DPP+1
          JSR PUTW
          JSR INVOFF
-         JSR MSGSTART
+         JSR MSGSTART       ; "2 dirs 5 files"
          LDX DPS
          LDA PDIRS,X
          PHA
@@ -528,7 +562,7 @@ DPANE5   LDA DPP
          LDX DPS
          LDA PFULL,X
          BEQ DPANE6
-         LDA #'+
+         LDA #'+            ; more than fit
          JSR SBCH
 DPANE6   LDX #CNTROW
          LDY DPC
@@ -537,16 +571,17 @@ DPANE6   LDX #CNTROW
          STA SW
          JSR INFOMSG1
          JMP DLIST
-INFOMSG1 LDA #<MSG
+INFOMSG1 LDA #<MSG          ; MSG in SW columns
          LDY #>MSG
          JMP PUTW
 ;
-; DPNOCON: the server's pane when not connected
+; DPNOCON - the server pane when
+; not connected
 ;
 DPNOCON  LDA #<SERVER
          LDY #>SERVER
          JSR PUTW
-         LDX #CNTROW
+         LDX #CNTROW        ; blank the rest
 DPANE1   LDY DPC
          JSR AT
          JSR SPACES
@@ -554,7 +589,7 @@ DPANE1   LDY DPC
          INX
          CPX #LISTROW+VIS
          BNE DPANE1
-         INC DPC
+         INC DPC            ; text in a column
          LDX #LISTROW+2
          JSR DPAT
          JSR PUTSI
@@ -572,10 +607,10 @@ DPANE1   LDY DPC
          JSR PUTSI
          .BYTE "one with ^N.",0
          RTS
-DPAT     LDY DPC
+DPAT     LDY DPC            ; row X, column DPC
          JMP AT
 ;
-; SBPLURAL: "s" unless A is 1
+; SBPLURAL - add "s" unless A=1
 ;
 SBPLURAL CMP #1
          BEQ SBPL1
@@ -583,13 +618,17 @@ SBPLURAL CMP #1
          JMP SBCH
 SBPL1    RTS
 ;
+; DPANES - both panes, the details
+;
 DPANES   LDA #LOCAL
          JSR DPANE
          LDA #REMOTE
          JSR DPANE
          JMP DDETAIL
 ;
-DALL     LDX #0
+; DALL - the whole screen
+;
+DALL     LDX #0             ; title bar, inverse
          LDY #SCRL
          JSR AT
          LDA #SCRW
@@ -603,7 +642,7 @@ DALL     LDX #0
          LDY #>VERSION
          JSR PUTS
          LDX #0
-         LDY #SCRR-13
+         LDY #SCRR-13       ; at the right end
          JSR AT
          JSR PUTSI
          .BYTE "(C) AERA 2026",0
@@ -615,9 +654,12 @@ DALL     LDX #0
          LDY #>MKEYS
          JMP KEYBAR
 ;
-; -- reading the panes
+; Reading the panes
 ;
-; REPORT: "what: why" on the info line, what A/Y and why from FERR
+; REPORT - "what: why" on the info
+; line; A/Y=what, FERR=FTP error
+; REPORTI: what inline
+; Timeout or closed: disconnected
 ;
 REPORTI  JSR INLINE
 REPORT   JSR WHAT
@@ -631,15 +673,15 @@ REPORT1  CMP #ECLOSED
          BNE REPORT3
          JSR SBI
          .BYTE "connection closed",0
-REPORT2  LDA #0
+REPORT2  LDA #0             ; connection gone
          STA CONNECTD
          JMP INFOMSG
-REPORT3  LDA #<FTPMSG
+REPORT3  LDA #<FTPMSG       ; the server's reply
          LDY #>FTPMSG
          JSR SBADD
          JMP INFOMSG
 ;
-; WHAT: MSG = A/Y + ": "
+; WHAT - MSG = A/Y + ": "
 ;
 WHAT     PHA
          TYA
@@ -653,11 +695,14 @@ WHAT     PHA
          .BYTE ": ",0
          RTS
 ;
+; READLOC - read the Atari pane; on
+; error "PATH0 error N"
+;
 READLOC  JSR INFOI
          .BYTE "Reading the disk...",0
          JSR LREAD
          BCC READLOC1
-         STA FERR
+         STA FERR           ; CIO status
          JSR MSGSTART
          LDA #<PATH0
          LDY #>PATH0
@@ -669,6 +714,9 @@ READLOC  JSR INFOI
          JMP INFOMSG
 READLOC1 JMP IDLE
 ;
+; READREM - read the server pane; on
+; error "List: why"
+;
 READREM  JSR INFOI
          .BYTE "Reading the server's folder...",0
          JSR RREAD
@@ -678,29 +726,31 @@ READREM  JSR INFOI
          .BYTE "List",0
          RTS
 ;
-; FINDN: the cursor of the pane in SIDE on the name A/Y, if it's there
+; FINDN - cursor of pane SIDE on the
+; name A/Y, if it is there
 ;
 FINDN    JSR PFIND
-         BCS FINDN2
+         BCS FINDN2         ; not there
          SEC
          SBC BASE
          LDX SIDE
          STA PCUR,X
-         LDY #0
+         LDY #0             ; top 0 if on page 1,
          CMP #VIS
          BCC FINDN1
-         SBC #VIS/2
+         SBC #VIS/2         ; else cursor mid-way
          TAY
 FINDN1   TYA
          STA PTOP,X
 FINDN2   RTS
 ;
-; REREAD: read pane A again, the cursor staying on the same name
+; REREAD - read pane A again, the
+; cursor staying on the same name
 ;
 REREAD   STA RRS
          JSR PUSE
-         LDA #0
-         STA UTMP
+         LDA #0             ; UTMP = its name,
+         STA UTMP           ; "" if none
          LDX SIDE
          LDA PCOUNT,X
          BEQ REREAD1
@@ -721,7 +771,7 @@ REREAD3  LDA RRS
          LDY #>UTMP
          JMP FINDN
 ;
-; TOUTMP: UTMP = A/Y
+; TOUTMP - UTMP = A/Y
 ;
 TOUTMP   LDX #<UTMP
          STX PTR2
@@ -729,14 +779,17 @@ TOUTMP   LDX #<UTMP
          STX PTR2+1
          JMP STRCPY
 ;
-; ASK: ask A/Y on the info line, editing UTMP (EDMAX); Z set when left
-; with ESC
+; ASK - ask A/Y on the info line and
+; edit ASKB after it (EDMAX long)
+; ASKI: A/Y inline; ASKTI: inline,
+; and ASKB = UTMP
+; Exit: A=key, Z=1 if ESC
 ;
 ASKI     JSR INLINE
 ASK      STA ASKQ
          STY ASKQ+1
          JSR INFO
-         LDA ASKQ
+         LDA ASKQ           ; edit after it
          LDY ASKQ+1
          JSR STRLEN
          CLC
@@ -744,7 +797,7 @@ ASK      STA ASKQ
          TAY
          LDX #1
          JSR AT
-         LDA #SCRR
+         LDA #SCRR          ; up to the dot
          SEC
          SBC SCOL
          STA SW

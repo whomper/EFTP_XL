@@ -1,12 +1,12 @@
 ;
-; EFTP_XL - the panes' entries
-; Copyright (C) 2026 AERA | Erez Yaary. GPL-2.0-or-later, see COPYING.
+; PANE.M65 - EFTP_XL 0.9
+; The panes' entries
+; Copyright (C) 2026 AERA | Erez Yaary
 ;
-; The entries of both panes are in arrays of their fields: the Atari's
-; at 0..63, the server's at 64..127, entry 128 spare for sorting. An
-; entry is an index, a field one LDA ...,X. A pane's own values are in
-; arrays of two, by side. Most routines work on the pane in SIDE, its
-; entries from BASE (PUSE).
+; PUSE - work on pane A: SIDE=A and
+; BASE its first entry (Atari 0,
+; server MAXE)
+; Exit: X=A
 ;
 PUSE     STA SIDE
          TAX
@@ -14,6 +14,8 @@ PUSE     STA SIDE
          LDA #MAXE
 PUSE1    STA BASE
          RTS
+;
+; PCLEAR - empty pane SIDE
 ;
 PCLEAR   LDX SIDE
          LDA #0
@@ -27,19 +29,22 @@ PCLEAR   LDX SIDE
          STA PUSEDH,X
          RTS
 ;
-; PADD: an entry called A/Y, with NSIZE, NFLAGS and the date in NDAY..
-; NMIN; then they go back to 0 (no date: NDAY 0). No room: PFULL set.
+; PADD - add the entry named A/Y to
+; pane SIDE, with NSIZE, NFLAGS and
+; the date NDAY..NMIN (NDAY 0: none)
+; Exit: those cleared (NCLEAR);
+;       PFULL set if no room
 ;
 PADD4    LDA #1             ; no room
          STA PFULL,X
          JMP NCLEAR
 PADD     JSR STRLEN
-         STA TMP
+         STA TMP            ; name length
          LDX SIDE
          LDA PCOUNT,X
          CMP #MAXE
-         BEQ PADD4
-         LDA PUSEDL,X       ; the pool used, with this name and its 0
+         BEQ PADD4          ; no entry free
+         LDA PUSEDL,X       ; pool used + name + 0
          SEC
          ADC TMP
          STA TMP2
@@ -50,13 +55,13 @@ PADD     JSR STRLEN
          CMP TMP2
          LDA PSIZEH,X
          SBC TMP3
-         BCC PADD4
+         BCC PADD4          ; pool full
          LDA BASE
          CLC
          ADC PCOUNT,X
-         TAY
-         LDA POOLL,X
-         CLC
+         TAY                ; Y = the new entry
+         LDA POOLL,X        ; its name: next free
+         CLC                ; in the pool
          ADC PUSEDL,X
          STA ENL,Y
          STA PTR2
@@ -89,17 +94,21 @@ PADD     JSR STRLEN
          STA EMIN,Y
          LDA NFLAGS
          STA EFLAG,Y
-         LSR A
+         LSR A              ; EUP
          BCS PADD3          ; ".." is not counted
-         LSR A
+         LSR A              ; EDIR
          BCC PADD2
          INC PDIRS,X
-         BCS PADD3
+         BCS PADD3          ; always
 PADD2    INC PFILES,X
-PADD3    LDA PTR
+PADD3    LDA PTR            ; name into the pool
          LDY PTR+1
          JSR STRCPY
          JMP NCLEAR
+;
+; NCLEAR - clear NFLAGS, NDAY and
+; NSIZE for the next entry
+;
 NCLEAR   LDA #0
          STA NFLAGS
          STA NDAY
@@ -109,7 +118,9 @@ NCLEAR   LDA #0
          STA NSIZE+3
          RTS
 ;
-; PSORT: ".." first, then the folders, then the files, by name
+; PSORT - sort pane SIDE: ".." first,
+; then folders, then files, by name
+; (insertion sort, NE the spare)
 ;
 PSORT    LDX SIDE
          LDA BASE
@@ -117,16 +128,16 @@ PSORT    LDX SIDE
          CLC
          ADC PCOUNT,X
          STA PSEND
-PSORT1   INC PSI
+PSORT1   INC PSI            ; next one to place
          LDA PSI
          CMP PSEND
-         BCS PSORT4
-         LDX #NE
+         BCS PSORT4         ; all done
+         LDX #NE            ; hold it in NE
          LDY PSI
          JSR ECOPY
          LDA PSI
          STA PSJ
-PSORT2   LDX PSJ
+PSORT2   LDX PSJ            ; move later ones up
          CPX BASE
          BEQ PSORT3
          DEX
@@ -139,13 +150,16 @@ PSORT2   LDX PSJ
          JSR ECOPY
          DEC PSJ
          JMP PSORT2
-PSORT3   LDX PSJ
+PSORT3   LDX PSJ            ; into the gap
          LDY #NE
          JSR ECOPY
          JMP PSORT1
 PSORT4   RTS
 ;
-; EAFTER: does entry X go after entry Y? carry set when so
+; EAFTER - does entry X go after
+; entry Y? By RANK, then by name,
+; case ignored
+; Exit: C=1 if so
 ;
 EAFTER   STX TMP
          STY TMP2
@@ -155,7 +169,7 @@ EAFTER   STX TMP
          LDA EFLAG,X
          JSR RANK
          CMP TMP3
-         BNE EAFT3
+         BNE EAFT3          ; ranks differ
          LDA ENL,X
          STA PTR
          LDA ENH,X
@@ -171,15 +185,16 @@ EAFT1    LDA (PTR2),Y
          LDA (PTR),Y
          JSR UPPER
          CMP TMP4
-         BNE EAFT3
+         BNE EAFT3          ; C from the compare
          TAX
-         BEQ EAFT2
+         BEQ EAFT2          ; the same name
          INY
          BNE EAFT1
 EAFT2    CLC
 EAFT3    RTS
 ;
-; RANK: the flags A as 0 "..", 1 a folder, 2 a file
+; RANK - flags A as 0 "..", 1 a
+; folder, 2 a file
 ;
 RANK     LSR A
          BCS RANK2
@@ -191,7 +206,7 @@ RANK1    RTS
 RANK2    LDA #0
          RTS
 ;
-; ECOPY: entry Y to entry X
+; ECOPY - copy entry Y to entry X
 ;
 ECOPY    LDA ENL,Y
          STA ENL,X
@@ -219,8 +234,9 @@ ECOPY    LDA ENL,Y
          STA EMIN,X
          RTS
 ;
-; PFIND: the entry called A/Y, in A with the carry clear; or NO and the
-; carry set
+; PFIND - find the name A/Y in pane
+; SIDE (case counts)
+; Exit: C=0, A=entry; else C=1, A=NO
 ;
 PFIND    STA PTR2
          STY PTR2+1
@@ -232,7 +248,7 @@ PFIND    STA PTR2
          STA TMP3
 PFIND1   LDX TMP4
          CPX TMP3
-         BCS PFIND3
+         BCS PFIND3         ; not there
          LDA ENL,X
          LDY ENH,X
          JSR STRCMP
@@ -246,7 +262,7 @@ PFIND3   LDA #NO
          SEC
          RTS
 ;
-; ESIZE: NUM = entry X's size; ENAME: A/Y its name
+; ESIZE - NUM = entry X's size
 ;
 ESIZE    LDA ES0,X
          STA NUM
@@ -257,15 +273,19 @@ ESIZE    LDA ES0,X
          LDA ES3,X
          STA NUM+3
          RTS
+;
+; ENAME - A/Y = entry X's name
+;
 ENAME    LDA ENL,X
          LDY ENH,X
          RTS
 ;
-; SBSTAMP: entry X's date, "15.10" "15.10.26" or "15.10 15:20"
+; SBSTAMP - add entry X's date:
+; "15.10", "15.10.26" or "15.10 15:20"
 ;
 SBSTAMP  LDA EDAY,X
-         BEQ SBSTA2
-         STX STK
+         BEQ SBSTA2         ; no date
+         STX STK            ; SB2 changes X
          JSR SB2
          JSR SBDOT
          LDX STK
@@ -274,7 +294,7 @@ SBSTAMP  LDA EDAY,X
          LDX STK
          LDA EYEAR,X
          CMP #NO
-         BEQ SBSTA1
+         BEQ SBSTA1         ; no year: the time?
          PHA
          JSR SBDOT
          PLA
@@ -292,10 +312,15 @@ SBSTA1   LDA EHOUR,X
          LDA EMIN,X
          JMP SB2
 SBSTA2   RTS
+;
+; SBDOT - add "."; SBSP: a space
+;
 SBDOT    LDA #'.
-         .BYTE $2C          ; BIT: skips the LDA #32
+         .BYTE $2C          ; BIT: skips LDA #32
 SBSP     LDA #32
          JMP SBCH
+;
+; Each pane's name pool and its size
 ;
 POOLL    .BYTE <POOL0,<POOL1
 POOLH    .BYTE >POOL0,>POOL1

@@ -1,6 +1,7 @@
 ;
-; EFTP_XL - the Atari's addresses, the zero page, the constants
-; Copyright (C) 2026 AERA | Erez Yaary. GPL-2.0-or-later, see COPYING.
+; EQUATES.M65 - EFTP_XL 0.9
+; OS addresses, zero page, constants
+; Copyright (C) 2026 AERA | Erez Yaary
 ;
 ; The OS
 ;
@@ -9,7 +10,10 @@ RTCLOK   =   $12        ; $14 is the low byte
 ICAX1Z   =   $2A
 ATRACT   =   $4D
 SAVMSC   =   $58
-DDEVIC   =   $0300      ; the SIO block
+;
+; SIO block
+;
+DDEVIC   =   $0300
 DUNIT    =   $0301
 DCOMND   =   $0302
 DSTATS   =   $0303
@@ -20,12 +24,15 @@ DBYTLO   =   $0308
 DBYTHI   =   $0309
 DAUX1    =   $030A
 DAUX2    =   $030B
+;
+; IOCBs
+;
 ICCOM0   =   $0342      ; IOCB 0, E:
 ICBAL0   =   $0344
 ICBAH0   =   $0345
 ICBLL0   =   $0348
 ICBLH0   =   $0349
-IOCB     =   $50        ; IOCB 5, for the disks
+IOCB     =   $50        ; IOCB 5, the disks
 ICCOM    =   $0392
 ICBAL    =   $0394
 ICBAH    =   $0395
@@ -44,62 +51,63 @@ MEMLO    =   $02E7
 CRSINH   =   $02F0
 CHBAS    =   $02F4
 CH       =   $02FC
-PAL      =   $D014
+PAL      =   $D014      ; bits 1-3 0: PAL
 KEYBDV   =   $E420
 CIOV     =   $E456
 SIOV     =   $E459
 ;
-; The zero page: $82 up, free once DOS has started a program
+; Zero page: $82 up, free once DOS
+; has started a program
 ;
 PTR      =   $82        ; pointers
 PTR2     =   $84
 PTR3     =   $86
-SBP      =   $88        ; where the string being built goes on
-SCRP     =   $8A        ; the screen row being drawn in
-NUM      =   $8C        ; 32-bit numbers: NUM and REM in a row
-REM      =   $90        ; (DIV32 shifts them as one)
-NUM2     =   $94
-DVT      =   $A7        ; 4 bytes, for DIV32
-PCX      =   $AB        ; PUTCH keeps the registers here
+SBP      =   $88        ; string being built
+SCRP     =   $8A        ; row being drawn
+NUM      =   $8C        ; 32-bit numbers
+REM      =   $90        ; (DIV32: NUM, REM
+NUM2     =   $94        ; shift as one)
+DVT      =   $A7        ; 4 bytes, DIV32
+PCX      =   $AB        ; PUTCH saves regs
 PCY      =   $AC
 PCA      =   $AD
-EDS      =   $AE        ; the string EDIT edits
+EDS      =   $AE        ; string EDIT edits
 SITEP    =   $B0        ; a site
 SROW     =   $98        ; where drawing goes
 SCOL     =   $99
-SINV     =   $9A        ; $80: in inverse
-SW       =   $9B        ; a width, for PUTW and REP
+SINV     =   $9A        ; $80: inverse
+SW       =   $9B        ; width, PUTW, REP
 TMP      =   $9C
 TMP2     =   $9D
 TMP3     =   $9E
 TMP4     =   $9F
-ARGP     =   $A0        ; an FTP command's argument; high byte 0: none
+ARGP     =   $A0        ; FTP arg; hi 0: none
 K        =   $A2        ; an entry
-SIDE     =   $A3        ; the pane worked on (PUSE)
+SIDE     =   $A3        ; pane worked on
 BASE     =   $A4        ; its first entry
-ACTIVE   =   $A5        ; the pane with the keyboard
-CONN     =   $A6        ; the FujiNet connection: 0 N1:, 1 N2:
+ACTIVE   =   $A5        ; pane with the keys
+CONN     =   $A6        ; 0 N1:, 1 N2:
 ;
-; Characters the screen draws (ATASCII)
+; Screen characters (ATASCII)
 ;
-CHHLINE  =   $12
+CHHLINE  =   $12        ; box lines
 CHVLINE  =   $7C
-CHTL     =   $11
+CHTL     =   $11        ; corners
 CHTR     =   $05
 CHBL     =   $1A
 CHBR     =   $03
-CHLT     =   $01
+CHLT     =   $01        ; tees
 CHRT     =   $04
 CHTT     =   $17
 CHBT     =   $18
 CHDOT    =   $14        ; connected
 CHMARK   =   $60        ; a marked file
-CHUP     =   $1C
+CHUP     =   $1C        ; arrows
 CHDOWN   =   $1D
-CHFOLDER =   $00        ; EFTP_XL's own (tools/mkfont.py)
+CHFOLDER =   $00        ; own (mkfont.py)
 CHFILE   =   $10
-CHMORE   =   $06
-CHSHADE  =   $7B
+CHMORE   =   $06        ; name cut short
+CHSHADE  =   $7B        ; bar fill
 ;
 ; Keys
 ;
@@ -116,44 +124,44 @@ KDEL2    =   $FE        ; Ctrl+Delete
 KHELP    =   $FF
 EOL      =   $9B
 ;
-; The panes
+; Panes
 ;
 LOCAL    =   0
 REMOTE   =   1
-MAXE     =   64         ; entries in a pane
-NE       =   128        ; both; entry NE is spare, for sorting
-EUP      =   $01        ; an entry's flags: ".."
+MAXE     =   64         ; entries a pane
+NE       =   128        ; both; NE: sort spare
+EUP      =   $01        ; entry flags: ".."
 EDIR     =   $02
 EMARK    =   $04
-EDONE    =   $10
+EDONE    =   $10        ; how a transfer went
 EFAIL    =   $20
 ESKIP    =   $40
 PATHLEN  =   80
-NO       =   $FF
+NO       =   $FF        ; none
 ;
-; The screen
+; Screen
 ;
 SCRL     =   1          ; columns 1..38
 SCRR     =   38
 SCRW     =   38
-DIV      =   19         ; the line between the panes
+DIV      =   19         ; line between panes
 HEADROW  =   3
 CNTROW   =   4
 LISTROW  =   5
-VIS      =   11         ; files shown in a pane
+VIS      =   11         ; files in a pane
 DETROW   =   17
 XROW     =   18         ; the transfers
 XROWS    =   3
 NAMEW    =   DIV-SCRL-6
 ;
-; FTP's errors: carry set, A one of these
+; FTP errors: C=1, A one of these
 ;
-EOPEN    =   1          ; could not open the TCP connection
+EOPEN    =   1          ; no TCP connection
 ETIME    =   2          ; no answer in time
-ECLOSED  =   3          ; the connection closed
-EREPLY   =   4          ; the server said no (FTPMSG has why)
+ECLOSED  =   3          ; connection closed
+EREPLY   =   4          ; server said no
 ;
-MODEBIN  =   0          ; a site's Files
-MODETEXT =   1
-MODETYPE =   2
+MODEBIN  =   0          ; site's Files: binary
+MODETEXT =   1          ; text
+MODETYPE =   2          ; by extension
 MAXSITES =   8

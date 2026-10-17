@@ -6,7 +6,9 @@ disk that boots SpartaDOS 3.2, ready for Mac/65: each NAME.ASM as NAME.M65, in t
 Mac/65's SAVE writes and LOAD and .INCLUDE read (tools/mac65tok.py).
 The lines are numbered 10, 20, ..., and the spaces that only line
 things up are left out (Mac/65 lays a line out itself). Other files
-go as they are.
+go as they are. Each .ASM must have its header line
+"; NAME.M65 - EFTP_XL x.y", x.y as in VERSION, and stay under MAXM65
+bytes as tokens.
 
     tools/atari_src.py OUT.ATR FILE...
     tools/atari_src.py --check OUT.ATR [--to DIR]
@@ -16,6 +18,7 @@ go as they are.
 """
 import argparse
 import os
+import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -27,6 +30,7 @@ BOOT = os.path.join(HERE, 'disk', 'SPARTA.BOOT')   # SpartaDOS 3's boot sectors
 DOS = os.path.join(HERE, 'disk', 'X32G.DOS')       # and SpartaDOS 3.2, which they boot
 DD_SECTORS = 720
 EOL = 0x9B
+MAXM65 = 14000      # bytes of tokens, so Mac/65 can LOAD a file
 
 
 def squeeze(line):
@@ -120,13 +124,23 @@ def main():
             print(f'{name} {len(data)} bytes')
         return 0
 
+    version = None
+    for path in a.files:
+        m = re.search(r'^VERSION +\.BYTE "EFTP_XL ([^"]*)"', open(path, 'rb').read()
+                      .decode('ascii', 'replace'), re.M)
+        version = version or (m and m.group(1))
     files = []
     for path in a.files:
         name = os.path.basename(path).upper()
         data = open(path, 'rb').read()
         if name.endswith('.ASM'):
+            head = f'; {name[:-4]}.M65 - EFTP_XL {version}'
+            if head not in data.decode('ascii').split('\n')[:4]:
+                raise SystemExit(f'{path}: the header has no "{head}" line')
             text = mac65(data.decode('ascii')).replace(bytes([EOL]), b'\n')
             name, data = name[:-4] + '.M65', mac65tok.tokenize(text.decode('ascii'))
+            if len(data) > MAXM65:
+                raise SystemExit(f'{path}: {len(data)} bytes as {name}, over {MAXM65}')
         files.append((name, data))
     files.insert(0, ('X32G.DOS', open(DOS, 'rb').read()))
     d = new_disk(a.atr, 'EFTPXL')

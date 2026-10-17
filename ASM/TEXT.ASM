@@ -1,28 +1,25 @@
 ;
-; EFTP_XL - text and numbers
-; Copyright (C) 2026 AERA | Erez Yaary. GPL-2.0-or-later, see COPYING.
+; TEXT.M65 - EFTP_XL 0.9
+; Strings, lines and 32-bit numbers
+; Copyright (C) 2026 AERA | Erez Yaary
 ;
-; Strings end in a 0. A routine taking one gets it in A (low) and
-; Y (high). The ones ending in I take the string written after the JSR:
-;
+; INLINE - string after the JSR, for
+; the ...I routines:
 ;          JSR SBI
 ;          .BYTE " files",0
+; Their first instruction; returns
+; past the 0
+; Exit: A/Y=PTR=string
 ;
-; A line is built with SBSTART (where), then SBADD, SBI, SBCH, SBNUM
-; (NUM's low 16 bits) and SBSIZE (NUM as "244K"), each adding at SBP.
-;
-; INLINE: called first thing by an I routine, gives it its string
-; (A/Y and PTR) and moves its return address past the string.
-;
-INLINE   PLA
+INLINE   PLA                ; our return
          STA IRET
          PLA
          STA IRET+1
-         PLA
+         PLA                ; the caller's
          STA PTR
          PLA
          STA PTR+1
-         JSR INCPTR
+         JSR INCPTR         ; string starts here
          LDA PTR
          LDY PTR+1
          JSR STRLEN
@@ -31,7 +28,7 @@ INLINE   PLA
          TAX
          LDA PTR+1
          ADC #0
-         PHA
+         PHA                ; return to the 0
          TXA
          PHA
          LDA IRET+1
@@ -42,12 +39,17 @@ INLINE   PLA
          LDY PTR+1
          RTS
 ;
+; INCPTR - PTR + 1
+;
 INCPTR   INC PTR
          BNE INCP1
          INC PTR+1
 INCP1    RTS
 ;
-; STRLEN: the length of A/Y in A and Y (at most 255); PTR = the string
+; STRLEN - length of a string
+; A/Y=string
+; Exit: A=Y=length (255 max), Z=1
+;       if empty, PTR=string
 ;
 STRLEN   STA PTR
          STY PTR+1
@@ -59,7 +61,9 @@ STRL1    LDA (PTR),Y
 STRL2    TYA
          RTS
 ;
-; STRCPY: A/Y to PTR2, the 0 too; Y = its length
+; STRCPY - copy A/Y to PTR2, with
+; the 0
+; Exit: Y=length
 ;
 STRCPY   STA PTR
          STY PTR+1
@@ -71,7 +75,9 @@ STRC1    LDA (PTR),Y
          BNE STRC1
 STRC2    RTS
 ;
-; STRCMP: A/Y the same as PTR2? Z set when so (case counts)
+; STRCMP - A/Y same as PTR2?
+; Case counts
+; Exit: Z=1 if the same
 ;
 STRCMP   STA PTR
          STY PTR+1
@@ -79,14 +85,15 @@ STRCMP   STA PTR
 STRM1    LDA (PTR),Y
          CMP (PTR2),Y
          BNE STRM2
-         TAX
+         TAX                ; both ended?
          BEQ STRM2
          INY
          BNE STRM1
 STRM2    RTS
 ;
-; FINDCH: PTR moves on to the next A in its string: carry clear, or
-; carry set when there is none
+; FINDCH - PTR on to char A in its
+; string
+; Exit: C=0 found, C=1 none
 ;
 FINDCH   STA TMP4
 FINDC1   LDY #0
@@ -101,8 +108,10 @@ FINDC2   SEC
 FINDC3   CLC
          RTS
 ;
-; STRSTR: find A/Y in the string at PTR3: carry clear, PTR3 on it; or
-; carry set. PREFIX: does the string at PTR3 start with A/Y? (the same)
+; STRSTR - find A/Y in the string
+; at PTR3
+; Exit: C=0 found, PTR3 on it;
+;       C=1 not there
 ;
 STRSTRI  JSR INLINE
 STRSTR   STA PTR2
@@ -111,19 +120,24 @@ STRS1    JSR PREFIX1
          BCC STRS3
          LDY #0
          LDA (PTR3),Y
-         BEQ STRS2
+         BEQ STRS2          ; end: not there
          INC PTR3
          BNE STRS1
          INC PTR3+1
          BNE STRS1
 STRS2    SEC
 STRS3    RTS
+;
+; PREFIX - string at PTR3 starts
+; with A/Y?
+; Exit: C=0 yes, C=1 no
+;
 PREFIXI  JSR INLINE
 PREFIX   STA PTR2
          STY PTR2+1
 PREFIX1  LDY #0
 PREF1    LDA (PTR2),Y
-         BEQ PREF2
+         BEQ PREF2          ; all of A/Y matched
          CMP (PTR3),Y
          BNE STRS2
          INY
@@ -131,7 +145,7 @@ PREF1    LDA (PTR2),Y
 PREF2    CLC
          RTS
 ;
-; UPPER: A in capitals
+; UPPER - A in capitals
 ;
 UPPER    CMP #'a
          BCC UPP1
@@ -140,7 +154,8 @@ UPPER    CMP #'a
          SBC #31            ; carry is clear: - 32
 UPP1     RTS
 ;
-; UPSTR: the string A/Y in capitals
+; UPSTR - string A/Y in capitals,
+; in place
 ;
 UPSTR    STA PTR
          STY PTR+1
@@ -152,11 +167,13 @@ UPS1     LDA (PTR),Y
          INY
          BNE UPS1
 ;
-; ISDIG, ISALPH, ISALNUM: carry set when A is one (A is kept)
+; ISDIG, ISALPH, ISALNUM - is A a
+; digit, letter, either?
+; Exit: C=1 yes, A kept
 ;
 ISDIG    CMP #'9+1
          BCS ISNOT
-         CMP #'0
+         CMP #'0            ; C=1 if 0-9
          RTS
 ISNOT    CLC
          RTS
@@ -174,7 +191,12 @@ ISALNUM  JSR ISDIG
          BCC ISALPH
          RTS
 ;
-; -- building a line
+; Building a line at SBP: SBSTART,
+; then SBADD, SBI, SBCH, SBNUM,
+; SBBYTE, SBSIZE; always 0 ended
+;
+; SBSTART - start an empty line
+; A/Y=buffer
 ;
 SBSTART  STA SBP
          STY SBP+1
@@ -182,6 +204,10 @@ SBSTART  STA SBP
          TAY
          STA (SBP),Y
          RTS
+;
+; SBADD - add string A/Y
+; SBI - add the string after the JSR
+;
 SBI      JSR INLINE
 SBADD    STA PTR
          STY PTR+1
@@ -193,7 +219,8 @@ SBA1     LDA (PTR),Y
          BNE SBA1
 SBA2     RTS
 ;
-; SBCH: A at SBP (X and Y are kept)
+; SBCH - add char A
+; X and Y kept
 ;
 SBCH     STY PCY
          LDY #0
@@ -201,18 +228,20 @@ SBCH     STY PCY
          INC SBP
          BNE SBC1
          INC SBP+1
-SBC1     TYA
+SBC1     TYA                ; new 0 after it
          STA (SBP),Y
          LDY PCY
          RTS
 ;
-; SBNUM: NUM's low 16 bits, in digits
+; SBNUM - add NUM's low 16 bits in
+; digits, no leading 0s
+; NUM is lost
 ;
 SBNUM    LDX #0
          STX TMP2           ; a digit seen yet
 SBN1     LDA #'0
          STA TMP3
-SBN2     LDA NUM
+SBN2     LDA NUM            ; take off 10^n
          SEC
          SBC POWLO,X
          TAY
@@ -224,12 +253,12 @@ SBN2     LDA NUM
          INC TMP3
          BNE SBN2
 SBN3     LDA TMP3
-         CPX #4
+         CPX #4             ; always the last
          BEQ SBN4
          CMP #'0
          BNE SBN4
          LDY TMP2
-         BEQ SBN5
+         BEQ SBN5           ; leading 0
 SBN4     STA TMP2
          JSR SBCH
 SBN5     INX
@@ -239,7 +268,8 @@ SBN5     INX
 POWLO    .BYTE <10000,<1000,<100,<10,<1
 POWHI    .BYTE >10000,>1000,>100,>10,>1
 ;
-; SBBYTE: A in digits; SB2: in two
+; SBBYTE - add A in digits
+; SB2 - the same, two digits at least
 ;
 SB2      CMP #10
          BCS SBBYTE
@@ -252,20 +282,22 @@ SBBYTE   STA NUM
          STA NUM+1
          JMP SBNUM
 ;
-; SBSIZE: NUM as at most four characters, "244K", "13M"
+; SBSIZE - add NUM in 4 chars at
+; most: "999", "244K", "13M"
+; NUM is lost
 ;
 SBSIZE   LDA #0
          STA SUNIT
          JSR GE1000
          BCC SBS1
-         LDA #<1023
+         LDA #<1023         ; K, rounded up
          LDX #>1023
          JSR SHR10
          LDA #'K
          STA SUNIT
          JSR GE1000
          BCC SBS1
-         LDA #<512
+         LDA #<512          ; M, rounded
          LDX #>512
          JSR SHR10
          LDA #'M
@@ -276,7 +308,8 @@ SBS1     JSR SBNUM
          JSR SBCH
 SBS2     RTS
 ;
-; GE1000: carry set when NUM is 1000 or more
+; GE1000 - NUM 1000 or more?
+; Exit: C=1 yes
 ;
 GE1000   LDA NUM+2
          ORA NUM+3
@@ -289,10 +322,11 @@ GE1000   LDA NUM+2
 GE1      SEC
          RTS
 ;
-; SHR10: NUM = (NUM + X/A) / 1024
+; SHR10 - NUM = (NUM + X/A) / 1024
+; A=low, X=high
 ;
 SHR10    JSR ADDNUM
-         LDX #0
+         LDX #0             ; down a byte
 SHR1     LDA NUM+1,X
          STA NUM,X
          INX
@@ -300,14 +334,15 @@ SHR1     LDA NUM+1,X
          BNE SHR1
          LDA #0
          STA NUM+3
-         JSR LSR32
+         JSR LSR32          ; and two bits
 LSR32    LSR NUM+3
          ROR NUM+2
          ROR NUM+1
          ROR NUM
          RTS
 ;
-; ADDNUM: NUM = NUM + X/A (high in X)
+; ADDNUM - NUM = NUM + X/A
+; A=low, X=high
 ;
 ADDNUM   CLC
          ADC NUM
@@ -321,7 +356,7 @@ ADDNUM   CLC
          INC NUM+3
 ADDN1    RTS
 ;
-; ADDTO: the 4 bytes at A/Y += NUM (a count going up by a block)
+; ADDTO - 4 bytes at A/Y += NUM
 ;
 ADDTO    STA PTR
          STY PTR+1
@@ -336,7 +371,8 @@ ADDT1    LDA (PTR),Y
          BNE ADDT1
          RTS
 ;
-; GETL, PUTL: NUM = the 4 bytes at A/Y; the 4 bytes at A/Y = NUM
+; GETL - NUM = 4 bytes at A/Y
+; PUTL - 4 bytes at A/Y = NUM
 ;
 GETL     STA PTR
          STY PTR+1
@@ -355,7 +391,7 @@ PUTL1    LDA NUM,Y
          BPL PUTL1
          RTS
 ;
-; NUM2L: NUM2 = the 4 bytes at A/Y
+; NUM2L - NUM2 = 4 bytes at A/Y
 ;
 NUM2L    STA PTR
          STY PTR+1
@@ -366,23 +402,24 @@ NUM2L1   LDA (PTR),Y
          BPL NUM2L1
          RTS
 ;
-; DIV32: NUM = NUM / NUM2, REM what is left
+; DIV32 - NUM = NUM / NUM2
+; Exit: REM=remainder
 ;
 DIV32    LDX #3
          LDA #0
 DIV1     STA REM,X
          DEX
          BPL DIV1
-         LDA #32
+         LDA #32            ; bits
          STA TMP4
-DIV2     LDX #0
+DIV2     LDX #0             ; NUM,REM left 1
          LDY #8
          CLC
 DIV3     ROL NUM,X
          INX
          DEY
          BNE DIV3
-         LDX #0
+         LDX #0             ; DVT = REM - NUM2
          LDY #4
          SEC
 DIV4     LDA REM,X
@@ -391,22 +428,23 @@ DIV4     LDA REM,X
          INX
          DEY
          BNE DIV4
-         BCC DIV6
+         BCC DIV6           ; doesn't go
          LDX #3
 DIV5     LDA DVT,X
          STA REM,X
          DEX
          BPL DIV5
-         INC NUM
+         INC NUM            ; quotient bit
 DIV6     DEC TMP4
          BNE DIV2
          RTS
 ;
-; MUL8: NUM = NUM * A
+; MUL8 - NUM = NUM * A
+; NUM2 is lost
 ;
 MUL8     STA TMP4
          LDX #3
-MUL1     LDA NUM,X
+MUL1     LDA NUM,X          ; NUM2 = NUM, NUM 0
          STA NUM2,X
          LDA #0
          STA NUM,X
@@ -414,7 +452,7 @@ MUL1     LDA NUM,X
          BPL MUL1
 MUL2     LSR TMP4
          BCC MUL4
-         LDX #0
+         LDX #0             ; bit set: add
          LDY #4
          CLC
 MUL3     LDA NUM,X
@@ -423,7 +461,7 @@ MUL3     LDA NUM,X
          INX
          DEY
          BNE MUL3
-MUL4     ASL NUM2
+MUL4     ASL NUM2           ; NUM2 * 2
          ROL NUM2+1
          ROL NUM2+2
          ROL NUM2+3
@@ -431,7 +469,8 @@ MUL4     ASL NUM2
          BNE MUL2
          RTS
 ;
-; ATOL: the digits at PTR into NUM; PTR moves past them
+; ATOL - digits at PTR into NUM
+; Exit: PTR past them
 ;
 ATOL     LDX #3
          LDA #0
@@ -444,7 +483,7 @@ ATOL2    LDY #0
          BCC ATOL3
          AND #$0F
          PHA
-         LDA #10
+         LDA #10            ; NUM*10 + digit
          JSR MUL8
          PLA
          LDX #0
@@ -453,7 +492,8 @@ ATOL2    LDY #0
          JMP ATOL2
 ATOL3    RTS
 ;
-; ATOIP: the number at A/Y, in A (and NUM)
+; ATOIP - number at A/Y
+; Exit: NUM, A=its low byte
 ;
 ATOIP    STA PTR
          STY PTR+1
@@ -461,8 +501,9 @@ ATOIP    STA PTR
          LDA NUM
          RTS
 ;
-; SKIPW: PTR on to the next word (past this one and its spaces);
-; carry set when there is no next word
+; SKIPW - PTR on to the next word,
+; past this one and its spaces
+; Exit: C=1 no next word
 ;
 SKIPW    LDY #0
          LDA (PTR),Y
@@ -471,7 +512,7 @@ SKIPW    LDY #0
          BEQ SKIPW1
          JSR INCPTR
          JMP SKIPW
-SKIPW1   JSR INCPTR
+SKIPW1   JSR INCPTR         ; skip spaces
          LDA (PTR),Y
          CMP #32
          BEQ SKIPW1

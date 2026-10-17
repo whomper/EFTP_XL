@@ -1,24 +1,18 @@
 ;
-; EFTP_XL - the server's pane
-; Copyright (C) 2026 AERA | Erez Yaary. GPL-2.0-or-later, see COPYING.
+; REMOTE.M65 - EFTP_XL 0.9
+; The server's pane, from LIST
+; Copyright (C) 2026 AERA | Erez Yaary
 ;
-; LIST has no standard format; the two seen in practice are
-;
-;   Unix  "drwxr-xr-x  2 user group  4096 Oct 15 15:20 games"
-;         "-rw-r--r--  1 user group 249856 Apr 22  2024 STinG 1.26.zip"
-;   DOS   "10-15-26  03:33PM       <DIR>          games"
-;         "10-15-26  03:33PM               14336 index.html"
-;
-; Anything else is left out.
-;
-; RREAD: the server's folder into its pane, PATH1 from PWD
+; RREAD - the server's folder into
+; its pane; PATH1 from PWD
+; Exit: C=1 on error, A=code
 ;
 RREAD    LDA #REMOTE
          JSR PUSE
          JSR PCLEAR
          JSR FPWD
          BCS RREAD2
-         LDA PATH1          ; not at "/": ".." first
+         LDA PATH1          ; not "/": ".." first
          CMP #'/
          BNE RREAD1
          LDA PATH1+1
@@ -29,7 +23,7 @@ RREAD1   LDA #EUP
          LDY #>DOTDOT
          JSR PADD
 RREAD1A  JSR FLIST
-         PHP
+         PHP                ; keep its C and A
          PHA
          LDA #REMOTE
          JSR PUSE
@@ -38,14 +32,17 @@ RREAD1A  JSR FLIST
          PLP
 RREAD2   RTS
 ;
-; RADD: the line in FLINE into the pane
+; RADD - LIST line in FLINE into the
+; pane; DOS or Unix style (LIST has
+; no standard), others left out
 ;
 RADD0    RTS
 RADD     LDA FLINE
          JSR ISDIG
-         BCC RADD3
+         BCC RADD3          ; no digit: Unix
 ;
 ; DOS: date, time, <DIR> or size, name
+; 10-15-26  03:33PM  <DIR>  games
 ;
          LDA #<FLINE
          LDY #>FLINE
@@ -56,21 +53,24 @@ RADD     LDA FLINE
          BCC RADD0
          LDX #2
          JSR WCH0
-         CMP #'<
+         CMP #'<            ; "<DIR>"
          BNE RADD1
          LDA #EDIR
          STA NFLAGS
          BNE RADD2
-RADD1    JSR ATOL
+RADD1    JSR ATOL           ; the size
          JSR NSIZEW
 RADD2    LDX #0
          JSR WDATE
-         LDX #3
+         LDX #3             ; name: word 3
          BNE RADD7
 ;
-; Unix: flags links owner group size month day time-or-year name
+; Unix: flags, links, owner, group,
+; size, month, day, time or year,
+; name:
+; drwxr-xr-x 2 u g 4096 Oct 15 15:20 x
 ;
-RADD3    CMP #'-
+RADD3    CMP #'-            ; file, folder, link
          BEQ RADD4
          CMP #'d
          BEQ RADD4
@@ -89,12 +89,12 @@ RADD4    LDA #<FLINE
          LDA #EDIR
          STA NFLAGS
          BNE RADD6
-RADD5    LDX #4
+RADD5    LDX #4             ; the size
          JSR WPTR
          JSR ATOL
          JSR NSIZEW
 RADD6    JSR UDATE
-         LDA FLINE          ; a link: its name, not where it points
+         LDA FLINE          ; link: cut " -> x"
          CMP #'l
          BNE RADD6A
          LDX #8
@@ -109,8 +109,8 @@ RADD6    JSR UDATE
          LDA #0
          TAY
          STA (PTR3),Y
-RADD6A   LDX #8
-RADD7    JSR WPTR           ; "." and ".." are left out
+RADD6A   LDX #8             ; name: word 8
+RADD7    JSR WPTR           ; not "." or ".."
          LDA #<DOTDOT+1
          STA PTR2
          LDA #>[DOTDOT+1]
@@ -133,12 +133,15 @@ RADD7    JSR WPTR           ; "." and ".." are left out
 RADD8    JMP NCLEAR
 RADD9    RTS
 ;
-; UDATE: words 5, 6, 7: "Oct 15 15:20" (this year) or "Apr 22 2024"
+; UDATE - Unix date, words 5 to 7,
+; into NMON, NDAY and NHOUR, NMIN or
+; NYEAR: "Oct 15 15:20" (this year)
+; or "Apr 22 2024"
 ;
 UDATE    LDX #5
          JSR WPTR
          LDY #2
-UDATE1   LDA (PTR),Y
+UDATE1   LDA (PTR),Y        ; month name to MW
          STA MW,Y
          DEY
          BPL UDATE1
@@ -159,9 +162,9 @@ UDATE3   INX
          INY
          CPY #13
          BNE UDATE2
-         LDY #0
+         LDY #0             ; not known
 UDATE4   STY NMON
-         LDX #6
+         LDX #6             ; the day
          JSR WPTR
          JSR ATOL
          LDA NUM
@@ -170,12 +173,12 @@ UDATE4   STY NMON
          JSR WPTR
          LDY #2
          LDA (PTR),Y
-         CMP #':
+         CMP #':            ; "15:20"?
          BNE UDATE5
          JSR ATOL
          LDA NUM
          STA NHOUR
-         JSR INCPTR
+         JSR INCPTR         ; past the ":"
          JSR ATOL
          LDA NUM
          STA NMIN

@@ -1,19 +1,22 @@
 ;
-; EFTP_XL - the Atari side: files and folders through CIO, so any DOS
-; Copyright (C) 2026 AERA | Erez Yaary. GPL-2.0-or-later, see COPYING.
+; LOCAL.M65 - EFTP_XL 0.9
+; Atari files and folders, by CIO
+; Copyright (C) 2026 AERA | Erez Yaary
 ;
-; The CIO calls (IOCB 5) return the status in A, the carry set when it
-; is an error (128 and up).
-;
-; IOSPEC: the buffer is the string A/Y, its length the length
+; IOSPEC - buffer = string A/Y, its
+; length the string's
 ;
 IOSPEC   STA ICBAL
          STY ICBAH
          JSR STRLEN
-IOLEN    STA ICBLL
+IOLEN    STA ICBLL          ; A = length
          LDA #0
          STA ICBLH
          RTS
+;
+; CCLOSE - close IOCB 5
+; IOCMD - CIO command A on IOCB 5
+; Exit: A=status, C=1 on error (128+)
 ;
 CCLOSE   LDA #12
 IOCMD    STA ICCOM
@@ -23,13 +26,17 @@ IOCMD    STA ICCOM
          CPY #128
          RTS
 ;
-; COPEN: open A/Y with aux1 X (4 read, 8 write, 6 a directory)
+; COPEN - open A/Y, X=aux1:
+; 4 read, 8 write, 6 directory
+; Exit: C=1 on error, A=status
 ;
 COPEN    STX ICAX1
-         LDX #3
+         LDX #3             ; OPEN
          BNE CXIO1
 ;
-; CXIO: XIO X on A/Y: 32 rename, 33 delete, 42 new folder, 43 remove
+; CXIO - XIO X on A/Y: 32 rename,
+; 33 delete, 42 mkdir, 43 rmdir
+; Exit: C=1 on error, A=status
 ;
 CXIO     PHA
          LDA #0
@@ -40,10 +47,10 @@ CXIO1    STX TMP2
          STY TMP3
          JSR CCLOSE
          LDA #0
-         LDX ICAX1          ; a directory: SpartaDOS's long one, with
-         CPX #6             ; bytes and <DIR> (aux2 $80; DOS 2 takes
-         BNE CXIO2          ; no notice of it)
-         LDA #$80
+         LDX ICAX1          ; directory: aux2
+         CPX #6             ; $80 asks SpartaDOS
+         BNE CXIO2          ; for the long one;
+         LDA #$80           ; DOS 2 ignores it
 CXIO2    STA ICAX2
          LDA TMP
          LDY TMP3
@@ -51,7 +58,10 @@ CXIO2    STA ICAX2
          LDA TMP2
          JMP IOCMD
 ;
-; CGETLN: a line into A/Y, X bytes at most with its 0 (the EOL goes)
+; CGETLN - read a line into A/Y,
+; X=buffer size with its 0
+; Exit: C=1 on error, A=status;
+;       EOL replaced by a 0
 ;
 CGETLN   STA ICBAL
          STA PTR
@@ -60,16 +70,16 @@ CGETLN   STA ICBAL
          DEX
          TXA
          JSR IOLEN
-         LDA #5
+         LDA #5             ; GET RECORD
          JSR IOCMD
          PHP
          PHA
-         LDY ICBLL
+         LDY ICBLL          ; bytes read
          BEQ CGETL1
          DEY
          LDA (PTR),Y
          CMP #EOL
-         BEQ CGETL1
+         BEQ CGETL1         ; 0 over the EOL
          INY
 CGETL1   LDA #0
          STA (PTR),Y
@@ -77,35 +87,38 @@ CGETL1   LDA #0
          PLP
          RTS
 ;
-; CPUTLN: the string A/Y as a line (with an EOL)
+; CPUTLN - write string A/Y and EOL
+; Exit: C=1 on error, A=status
 ;
 CPUTLN   JSR IOSPEC
          LDY ICBLL
          STY TMP4
-         LDA #EOL
+         LDA #EOL           ; EOL over the 0
          STA (PTR),Y
          INY
          TYA
          JSR IOLEN
-         LDA #9
+         LDA #9             ; PUT RECORD
          JSR IOCMD
          PHP
          PHA
          LDY TMP4
-         LDA #0
+         LDA #0             ; the 0 back
          STA (PTR),Y
          PLA
          PLP
          RTS
 ;
-; CREAD: X pages into A/Y; CGOT how many bytes came (with 136 too)
+; CREAD - read X pages into A/Y
+; Exit: C=1 on error, A=status;
+;       CGOT=bytes read (136 too)
 ;
 CREAD    STA ICBAL
          STY ICBAH
          STX ICBLH
          LDA #0
          STA ICBLL
-         LDA #7
+         LDA #7             ; GET BYTES
          JSR IOCMD
          LDX ICBLL
          STX CGOT
@@ -113,7 +126,8 @@ CREAD    STA ICBAL
          STX CGOT+1
          RTS
 ;
-; CWRITE: XLEN bytes from A/Y
+; CWRITE - write XLEN bytes from A/Y
+; Exit: C=1 on error, A=status
 ;
 CWRITE   STA ICBAL
          STY ICBAH
@@ -121,23 +135,14 @@ CWRITE   STA ICBAL
          STA ICBLL
          LDA XLEN+1
          STA ICBLH
-         LDA #11
+         LDA #11            ; PUT BYTES
          JMP IOCMD
 ;
-; -- the Atari's pane
+; The Atari's pane
 ;
-; A directory is read the way DOS's own DIR does, opening "Dn:...*.*"
-; with aux1 6 and reading its lines:
-;
-;   DOS 2.5    "* NAME     EXT 012"    (lock, name, ext, sectors)
-;              "609 FREE SECTORS"
-;   SpartaDOS  "Volume:    ..."  "Directory: ..."  (its header)
-;              "NAME     EXT    1234 12-03-89 12:00"   (bytes)
-;              "GAMES        <DIR>  12-03-89 12:00"
-;              "  708 FREE SECTORS"
-;
-; LREAD: PATH0 into the pane; the carry set and A the CIO error when
-; it failed
+; LREAD - read folder PATH0 into the
+; pane, as DIR does: "*.*", aux1 6
+; Exit: C=1 on error, A=CIO status
 ;
 LREAD    LDA #LOCAL
          JSR PUSE
@@ -146,7 +151,7 @@ LREAD    LDA #LOCAL
          STA SPARTA
          LDA #'>
          JSR LHASDIR
-         BCS LREAD1
+         BCS LREAD1         ; top: no ".."
          LDA #EUP
          STA NFLAGS
          LDA #<DOTDOT
@@ -165,7 +170,7 @@ LREAD1   LDA #<FSPEC
          LDX #6
          JSR COPEN
          BCS LREAD4
-LREAD2   LDA #<LLINE
+LREAD2   LDA #<LLINE        ; each line
          LDY #>LLINE
          LDX #64
          JSR CGETLN
@@ -176,7 +181,7 @@ LREAD3   PHA
          JSR CCLOSE
          JSR PSORT
          PLA
-         CMP #136           ; the end of the directory
+         CMP #136           ; end of directory
          BNE LREAD5
          LDA #1
          CLC
@@ -188,7 +193,8 @@ LREAD5   SEC
          RTS
 DOTDOT   .BYTE "..",0
 ;
-; LHASDIR: is A in PATH0? carry clear when so, PTR on it
+; LHASDIR - look for A in PATH0
+; Exit: C=0 found, PTR on it
 ;
 LHASDIR  PHA
          LDA #<PATH0
@@ -198,20 +204,22 @@ LHASDIR  PHA
          PLA
          JMP FINDCH
 ;
-; LADD: a line of the listing into the pane
+; LADD - add a line of the listing
+; in LLINE to the pane; SpartaDOS's
+; starts: empty line, "Volume:"
 ;
 LADD0    RTS
 LADD     LDA #<LLINE
          STA PTR3
          LDA #>LLINE
          STA PTR3+1
-         JSR PREFIXI        ; SpartaDOS's header, after an empty line
+         JSR PREFIXI        ; SpartaDOS?
          .BYTE "Volume",0
          BCS LADD1
          INC SPARTA
 LADD1    JSR STRSTRI
          .BYTE "FREE SECTORS",0
-         BCC LADD0
+         BCC LADD0          ; the last line
          LDA #<LLINE
          STA PTR3
          LDA #>LLINE
@@ -221,22 +229,22 @@ LADD1    JSR STRSTRI
          LDA SPARTA
          BNE LADD3
 ;
-; DOS 2: lock flag, space, name in 8 columns, extension in the next 3,
-; space, sectors: "* STARRAIDXEX 012"
+; DOS 2: "* NAME    EXT 012"
+; lock, name in 8, ext in 3, sectors
 ;
          LDA #<LLINE
          LDY #>LLINE
          JSR STRLEN
          CMP #14
-         BCC LADD0
+         BCC LADD0          ; too short
          LDA LLINE+1
          CMP #32
          BNE LADD0
-         LDA #<[LLINE+2]
+         LDA #<[LLINE+2]    ; word 0: name
          STA WLO
          LDA #>[LLINE+2]
          STA WHI
-         LDA #<[LLINE+10]
+         LDA #<[LLINE+10]   ; word 1: ext
          STA WLO+1
          LDA #>[LLINE+10]
          STA WHI+1
@@ -244,16 +252,17 @@ LADD1    JSR STRSTRI
          LDA #<[LLINE+14]
          LDY #>[LLINE+14]
          JSR ATOIP
-         LDA #125
+         LDA #125           ; bytes a sector
          JSR MUL8
          JSR NSIZEW
          JMP LADD8
 ;
-; SpartaDOS: NAME [EXT] size or <DIR>, date
+; SpartaDOS: "NAME EXT 1234 date"
+; or "NAME <DIR> date"
 ;
 LADD3    JSR PREFIXI
          .BYTE "Volume",0
-         BCC LADD9
+         BCC LADD9          ; header lines
          JSR PREFIXI
          .BYTE "Directory",0
          BCC LADD9
@@ -262,8 +271,8 @@ LADD3    JSR PREFIXI
          LDX #4
          JSR WORDS
          LDA WCNT
-         BEQ LADD9
-         LDX #1             ; the word after the name
+         BEQ LADD9          ; empty line
+         LDX #1             ; word after name
          CPX WCNT
          BCS LADD4
          JSR WCH0
@@ -271,11 +280,11 @@ LADD3    JSR PREFIXI
          BEQ LADD4
          JSR ISDIG
          BCS LADD4
-         INX                ; it was the extension
+         INX                ; it was the ext
          BNE LADD5
 LADD4    LDA #0             ; no extension
          STA LEXT
-LADD5    STX TMP4
+LADD5    STX TMP4           ; size word
          JSR LNAME
          LDX TMP4
          CPX WCNT
@@ -283,7 +292,7 @@ LADD5    STX TMP4
          JSR WCH0
          CMP #'<
          BNE LADD6
-         LDA #EDIR
+         LDA #EDIR          ; <DIR>
          STA NFLAGS
          BNE LADD7
 LADD6    JSR WPTR
@@ -294,7 +303,7 @@ LADD7    LDX TMP4
          CPX WCNT
          BCS LADD8
          JSR WDATE
-         LDA NDAY           ; "12-03-89": the day first
+         LDA NDAY           ; day first: swap
          LDY NMON
          STY NDAY
          STA NMON
@@ -303,13 +312,14 @@ LADD8    LDA #<LNAMEB
          JMP PADD
 LADD9    RTS
 ;
-; WDATE: word X as "mm-dd-yy" into NMON, NDAY, NYEAR; no time
+; WDATE - word X, "mm-dd-yy", into
+; NMON, NDAY, NYEAR; no time
 ;
 WDATE    JSR WPTR
          JSR ATOL
          LDA NUM
          STA NMON
-         JSR INCPTR
+         JSR INCPTR         ; past the '-'
          JSR ATOL
          LDA NUM
          STA NDAY
@@ -321,7 +331,8 @@ WDATE    JSR WPTR
          STA NHOUR
          RTS
 ;
-; WPTR: PTR = word X; WCH0: its first character
+; WPTR - PTR = word X
+; WCH0 - A = its first character
 ;
 WPTR     LDA WLO,X
          STA PTR
@@ -333,20 +344,21 @@ WCH0     JSR WPTR
          LDA (PTR),Y
          RTS
 ;
-; NSIZEW: the entry's size is NUM
+; NSIZEW - entry's size = NUM
 ;
 NSIZEW   LDA #<NSIZE
          LDY #>NSIZE
          JMP PUTL
 ;
-; LNAME: LNAMEB = word 0 (8 at most, to a space), and "." word 1 (3
-; at most) when LEXT
+; LNAME - LNAMEB = word 0 (8 at
+; most), and "." word 1 (3 at most)
+; when LEXT
 ;
 LNAME    LDX #0
          JSR WPTR
          LDY #0
 LNAME1   LDA (PTR),Y
-         CMP #33
+         CMP #33            ; to a space or 0
          BCC LNAME2
          STA LNAMEB,Y
          INY
@@ -358,7 +370,7 @@ LNAME2   STY TMP
          LDX #1
          JSR WCH0
          CMP #33
-         BCC LNAME4
+         BCC LNAME4         ; blank ext
          LDX TMP
          LDA #'.
          STA LNAMEB,X
@@ -377,15 +389,16 @@ LNAME4   LDX TMP
          STA LNAMEB,X
          RTS
 ;
-; WORDS: the starts of the words of A/Y, X of them at most, into
-; WLO/WHI; WCNT how many (the string is left as it is)
+; WORDS - find words in string A/Y,
+; X at most, starts into WLO/WHI
+; Exit: WCNT=count, string unchanged
 ;
 WORDS    STA PTR
          STY PTR+1
          STX TMP
          LDX #0
 WORDS1   LDY #0
-WORDS2   LDA (PTR),Y
+WORDS2   LDA (PTR),Y        ; skip spaces
          CMP #32
          BNE WORDS3
          JSR INCPTR
@@ -393,13 +406,13 @@ WORDS2   LDA (PTR),Y
 WORDS3   CMP #0
          BEQ WORDS5
          CPX TMP
-         BEQ WORDS5
+         BEQ WORDS5         ; enough
          LDA PTR
          STA WLO,X
          LDA PTR+1
          STA WHI,X
          INX
-WORDS4   JSR INCPTR
+WORDS4   JSR INCPTR         ; to its end
          LDA (PTR),Y
          BEQ WORDS5
          CMP #32
@@ -408,14 +421,16 @@ WORDS4   JSR INCPTR
 WORDS5   STX WCNT
          RTS
 ;
-; LINTO: into the folder A/Y: "D1:" + "GAMES" -> "D1:>GAMES>"
+; LINTO - into folder A/Y:
+; "D1:" + "GAMES" -> "D1:>GAMES>"
+; Too long for PATH0: no change
 ;
 LINTO    STA PTR3
          STY PTR3+1
          LDA #'>
          JSR LHASDIR
          BCC LINTO1
-         LDA #'>
+         LDA #'>            ; top: add a '>'
          JSR LPADD
 LINTO1   LDA PTR3
          LDY PTR3+1
@@ -425,9 +440,9 @@ LINTO1   LDA PTR3
          LDY #>PATH0
          JSR STRLEN
          SEC
-         ADC TMP4
+         ADC TMP4           ; both, and '>'
          CMP #PATHLEN-2
-         BCS LINTO2
+         BCS LINTO2         ; too long
          LDA #<PATH0
          LDY #>PATH0
          JSR SBEND
@@ -438,7 +453,7 @@ LINTO1   LDA PTR3
          JMP SBCH
 LINTO2   RTS
 ;
-; LPADD: A on the end of PATH0
+; LPADD - add char A to PATH0
 ;
 LPADD    PHA
          LDA #<PATH0
@@ -447,7 +462,8 @@ LPADD    PHA
          PLA
          JMP SBCH
 ;
-; SBEND: go on building at the end of the string A/Y
+; SBEND - go on building at the end
+; of string A/Y
 ;
 SBEND    JSR STRLEN
          CLC
@@ -458,7 +474,8 @@ SBEND    JSR STRLEN
          STA SBP+1
          RTS
 ;
-; LUP: the folder above; carry set when already at the top of the drive
+; LUP - PATH0 up one folder
+; Exit: C=1 at the top already
 ;
 LUP      LDA #'>
          JSR LHASDIR
@@ -467,21 +484,21 @@ LUP      LDA #'>
          LDY #>PATH0
          JSR STRLEN
          DEY                ; the last '>'
-LUP1     DEY
+LUP1     DEY                ; to the '>' before
          BEQ LUP2
          LDA PATH0,Y
          CMP #'>
          BNE LUP1
 LUP2     LDA PATH0-1,Y
          CMP #':
-         BEQ LUP2A
+         BEQ LUP2A          ; "D1:>": to "D1:"
          INY                ; keep this '>'
 LUP2A    LDA #0
          STA PATH0,Y
          CLC
 LUP3     RTS
 ;
-; LDRIVE: drive A: "D1:" .. "D8:"
+; LDRIVE - PATH0 = drive A, "Dn:"
 ;
 LDRIVE   ORA #'0
          STA PATH0+1

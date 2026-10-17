@@ -1,19 +1,21 @@
          .OPT NO LIST
 ;
-; EFTP_XL - file transfer for 8-bit Ataris over FujiNet
-; Copyright (C) 2026 AERA | Erez Yaary. GPL-2.0-or-later, see COPYING.
+; EFTPXL.M65 - EFTP_XL 0.9
+; FTP client for FujiNet
+; Copyright (C) 2026 AERA | Erez Yaary
+; GPL-2.0-or-later, see COPYING
 ;
-; Mac/65 source: on the Atari, LOAD #D:EFTPXL.M65 from the source
-; disk, then ASM ,,#D:EFTPXL.PRG (README.md says more); on another
-; computer, make (ATasm). The program loads at LOAD, above DOS, EDOS ($1E00-$3752)
-; and the MEMLO of DOS 2.5 and SpartaDOS 3, and ends below $9C00, so
-; BASIC may be on.
+; Mac/65: LOAD #D:EFTPXL.M65, then
+; ASM ,,#D:EFTPXL.PRG
 ;
          .INCLUDE #D:EQUATES.M65
 ;
-LOAD     =   $4000
+LOAD     =   $4000      ; above DOS and EDOS
 ;
-; First, loaded and run before the program: is there room for it?
+; CHECK - init segment, run before
+; the program loads: MEMLO must be
+; at most LOAD and MEMTOP above
+; BSSEND, else say so and go to DOS
 ;
          *=  $9A00
 CHECK    LDA MEMLO+1
@@ -22,7 +24,7 @@ CHECK    LDA MEMLO+1
          BNE CHECK2
          LDA MEMLO
          BNE CHECK2
-CHECK1   LDA MEMTOP
+CHECK1   LDA MEMTOP         ; room up to BSSEND?
          CMP #<BSSEND
          LDA MEMTOP+1
          SBC #>BSSEND
@@ -30,9 +32,9 @@ CHECK1   LDA MEMTOP
          LDA #<NOROOM
          LDY #>NOROOM
          BNE CHECK4
-CHECK2   LDA #<LOW
+CHECK2   LDA #<LOW          ; DOS too big
          LDY #>LOW
-CHECK4   STA ICBAL0
+CHECK4   STA ICBAL0         ; print it on E:
          STY ICBAH0
          LDA #$FF
          STA ICBLL0
@@ -42,19 +44,21 @@ CHECK4   STA ICBAL0
          STA ICCOM0
          LDX #0
          JSR CIOV
-         JMP (DOSVEC)
+         JMP (DOSVEC)       ; back to DOS
 CHECK3   RTS
 LOW      .BYTE "EFTP_XL loads at $4000: MEMLO is above it",EOL
 NOROOM   .BYTE "EFTP_XL: not enough memory",EOL
          *=  INITAD
          .WORD CHECK
 ;
-; The program, its font first (1K-aligned)
+; The program; the font first, as
+; it must be 1K aligned
 ;
          *=  LOAD
          .INCLUDE #D:FONT.M65
 ;
-; the last release, which every build shows
+; The last release; every build
+; shows it
 ;
 VERSION  .BYTE "EFTP_XL 0.9",0
 ;

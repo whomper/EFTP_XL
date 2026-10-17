@@ -1,22 +1,16 @@
 ;
-; EFTP_XL - sending a folder, with all in it
-; Copyright (C) 2026 AERA | Erez Yaary. GPL-2.0-or-later, see COPYING.
+; XTREE.M65 - EFTP_XL 0.9
+; Folder transfers, depth first
+; Copyright (C) 2026 AERA | Erez Yaary
 ;
-; The folder is walked depth first with the two panes: the source pane
-; holds the folder being walked, the other pane the same folder on the
-; other side (so a file already there is asked about, as at the top).
-; Going into a folder makes it on the other side (one already there is
-; gone into), then both sides go into it and are read; coming back up
-; reads both again and the walk goes on from where it was in the
-; folder above (XIDX, by depth). Going to the Atari, a folder gets an
-; 8.3 name, as files do; DOS 2.5 has no folders, so it fails there.
+XDEEP    =   8          ; max folder depth
 ;
-XDEEP    =   8          ; folders in folders at most
+; XTREE - send folder K and all in it
+; to the other pane's side
+; Exit: A=EDONE, or EFAIL if any
+;       part of it failed
 ;
-; XTREE: folder K, with all in it, to the other side; A: EDONE, or
-; EFAIL when any of it failed
-;
-XTREE    LDX #1             ; where the cursors are, for after
+XTREE    LDX #1             ; save both cursors
 XTREEC   LDA PCUR,X
          STA XCURS,X
          LDA PTOP,X
@@ -27,40 +21,40 @@ XTREEC   LDA PCUR,X
          STA XTFAIL
          STA XDEPTH
          STA XIDX
-         LDX #3
+         LDX #3             ; clear the totals
 XTREE0   STA FSIZEB,X
          STA FDONEB,X
          DEX
          BPL XTREE0
          LDX K
-         JSR XFOLDER
+         JSR XFOLDER        ; into the top folder
          BCC XTREE0A
          JMP XTREE8
 XTREE0A  LDA #1
          STA XWALK
 XTREE1   LDA XSTOP          ; ESC: back up and out
          BNE XTREE5
-         LDA XDOWN          ; the source: the server going down
+         LDA XDOWN          ; source pane
          JSR PUSE
          LDX XDEPTH
-         LDA XIDX,X
+         LDA XIDX,X         ; next entry here
          LDY SIDE
          CMP PCOUNT,Y
-         BCS XTREE5         ; all of this folder done
+         BCS XTREE5         ; folder done
          INC XIDX,X
          CLC
          ADC BASE
          STA K
          TAX
          LDA EFLAG,X
-         AND #EUP
+         AND #EUP           ; skip ".."
          BNE XTREE1
          LDA EFLAG,X
          AND #EDIR
          BEQ XTREE3
-         LDA XDEPTH         ; a folder: into it
+         LDA XDEPTH         ; folder: go in
          CMP #XDEEP-1
-         BCS XTREE2
+         BCS XTREE2         ; too deep
          JSR XFOLDER
          BCS XTREE2
          INC XDEPTH
@@ -70,17 +64,17 @@ XTREE1   LDA XSTOP          ; ESC: back up and out
          JMP XTREE1
 XTREE2   INC XTFAIL
          JMP XTREE1
-XTREE3   JSR XFILE          ; a file
+XTREE3   JSR XFILE          ; file: send it
          CMP #EFAIL
          BNE XTREE1
          INC XTFAIL
          JMP XTREE1
-XTREE5   JSR XUP
+XTREE5   JSR XUP            ; up one level
          DEC XDEPTH
          BPL XTREE1
          LDA #0
          STA XWALK
-         LDX #1             ; the cursors back where they were
+         LDX #1             ; restore cursors
 XTREE6   LDA XCURS,X
          STA PCUR,X
          LDA XTOPS,X
@@ -94,11 +88,14 @@ XTREE6   LDA XCURS,X
 XTREE8   LDA #EFAIL
          RTS
 ;
-; XFOLDER: into folder X (of the source pane) on both sides, made on
-; the other side first; both panes read. The carry set when it failed
-; (and XERROR says why); then nothing has changed.
+; XFOLDER - enter folder X of the
+; source pane on both sides, making
+; it on the other side first; reads
+; both panes again
+; Exit: C=1 failed (XERROR says why),
+;       nothing changed
 ;
-XFOLDER  JSR ENAME
+XFOLDER  JSR ENAME          ; XFN = its name
          LDX #<XFN
          STX PTR2
          LDX #>XFN
@@ -107,7 +104,7 @@ XFOLDER  JSR ENAME
          LDA XDOWN
          BNE XFOLD3
 ;
-; up: the Atari's folder XFN to the server
+; Atari to server: MKD, then CWD
 ;
          LDA #<XFN
          STA ARGP
@@ -115,9 +112,9 @@ XFOLDER  JSR ENAME
          STA ARGP+1
          LDA #<VMKD
          LDY #>VMKD
-         JSR FDO            ; there already: it is gone into
+         JSR FDO
          BCC XFOLD1
-         CMP #EREPLY
+         CMP #EREPLY        ; exists: go in
          BNE XFOLD2
 XFOLD1   LDA #<XFN
          LDY #>XFN
@@ -133,23 +130,24 @@ XFOLD2   STA FERR
          SEC
          RTS
 ;
-; down: the server's folder XFN to the Atari, as ANAME
+; Server to Atari: XIO 42 (MKDIR)
+; with an 8.3 name, then CWD
 ;
 XFOLD3   LDA #<XFN
          LDY #>XFN
-         JSR ANAMES
+         JSR ANAMES         ; ANAME = 8.3 name
          LDA #<ANAME
          LDY #>ANAME
          JSR LSPECN
          LDA #<FSPEC
          LDY #>FSPEC
          LDX #42
-         JSR CXIO           ; there already: it is gone into
-         BCC XFOLD4
-         CMP #146           ; this DOS has no folders
+         JSR CXIO
+         BCC XFOLD4         ; any other error:
+         CMP #146           ; exists, go in
          BNE XFOLD4
-         STA XST
-         JMP SAYCIO1
+         STA XST            ; 146: no folders
+         JMP SAYCIO1        ; (DOS 2.5)
 XFOLD4   LDA #<XFN
          LDY #>XFN
          JSR FCWD
@@ -158,7 +156,8 @@ XFOLD4   LDA #<XFN
          LDY #>ANAME
          JSR LINTO
 ;
-; both: read both sides there; if one can't be read, back up
+; Read both sides; back up if
+; either can't be read
 ;
 XFOLD5   JSR LREAD
          BCS XFOLD6
@@ -177,22 +176,25 @@ XFOLD8   JSR XUP
          SEC
          RTS
 ;
-; XUP: both sides back up to the folder above, and read again
+; XUP - both sides up one folder,
+; and read again
 ;
 XUP      JSR LUP
-         LDA #<DOTDOT
+         LDA #<DOTDOT       ; CWD ..
          LDY #>DOTDOT
          JSR FCWD
          JSR LREAD
          JMP RREAD
 ;
-; SAYCIO1: XERROR why the folder can't be made (XST), and the carry set
+; SAYCIO1 - report CIO error XST
+; Exit: C=1
 ;
 SAYCIO1  JSR SAYCIO
          SEC
          RTS
 ;
-; LSPECN0: FSPEC = the Atari's folder, for SAYCIO
+; LSPECN0 - FSPEC = current Atari
+; folder, for SAYCIO
 ;
 LSPECN0  LDA #<NOTHING
          LDY #>NOTHING

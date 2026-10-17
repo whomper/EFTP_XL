@@ -7,6 +7,7 @@ lines: 8 bytes, one character, a line.
     tools/font2asm.py [fonts/EFTPXL.FNT] [ASM/FONT.ASM]
 """
 import os
+import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -17,11 +18,15 @@ def main():
     dst = sys.argv[2] if len(sys.argv) > 2 else os.path.join(ROOT, 'ASM', 'FONT.ASM')
     data = open(src, 'rb').read()
     assert len(data) == 1024, 'a font is 1024 bytes'
+    main_asm = open(os.path.join(ROOT, 'ASM', 'EFTPXL.ASM')).read()
+    version = re.search(r'^VERSION +\.BYTE "EFTP_XL ([^"]*)"', main_asm, re.M).group(1)
     out = [';',
-           '; EFTP_XL - the font: EDOS\'s, with EFTP_XL\'s own characters',
-           '; Copyright (C) 2026 AERA | Erez Yaary. GPL-2.0-or-later, see COPYING.',
+           f'; FONT.M65 - EFTP_XL {version}',
+           '; The font: EDOS\'s, plus EFTP_XL\'s own',
+           '; Copyright (C) 2026 AERA | Erez Yaary',
            ';',
-           '; Made by tools/font2asm.py from fonts/EFTPXL.FNT; 1K-aligned.',
+           '; From fonts/EFTPXL.FNT by',
+           '; tools/font2asm.py; 1K aligned',
            ';']
     for c in range(128):
         row = data[c * 8:c * 8 + 8]

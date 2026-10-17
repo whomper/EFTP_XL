@@ -1,28 +1,30 @@
 ;
-; EFTP_XL - the main screen's commands: connect, send, new folder,
-; rename, delete, moving about, help
-; Copyright (C) 2026 AERA | Erez Yaary. GPL-2.0-or-later, see COPYING.
+; CMDS.M65 - EFTP_XL 0.9
+; Main screen commands
+; Copyright (C) 2026 AERA | Erez Yaary
 ;
-; -- connecting
+; DISC - QUIT if connected, clear
+; the server pane
 ;
 DISC     LDA CONNECTD
          BEQ DISC1
          JSR FQUIT
 DISC1    LDA #0
          STA CONNECTD
-         STA ACTIVE
+         STA ACTIVE         ; back to the Atari
          LDA #REMOTE
          JSR PUSE
          JMP PCLEAR
 ;
-; CONNECT: to site A
+; CONNECT - connect and log in
+; A=site
 ;
 CONNECT  PHA
          JSR DISC
          PLA
          STA SITE
          JSR DALL
-         LDX #4             ; its password, or ask for it
+         LDX #4             ; its password
          JSR SITEF
          LDX #<PASSW
          STX PTR2
@@ -30,7 +32,7 @@ CONNECT  PHA
          STX PTR2+1
          JSR STRCPY
          LDA PASSW
-         BNE CONNECT1
+         BNE CONNECT1       ; none: ask for it
          JSR MSGSTART
          JSR SBI
          .BYTE "Password for ",0
@@ -38,9 +40,9 @@ CONNECT  PHA
          JSR SBADD
          LDA #':
          JSR SBCH
-         LDA #20
+         LDA #20            ; 19 at most
          STA EDMAX
-         LDA #1
+         LDA #1             ; show *s
          STA EDMASK
          LDA #<PASSW
          STA ASKB
@@ -54,7 +56,7 @@ CONNECT  PHA
          STA EDMASK
          PLP
          BNE CONNECT1
-         JMP IDLE
+         JMP IDLE           ; ESC
 CONNECT1 JSR MSGSTART
          JSR SBI
          .BYTE "Connecting to ",0
@@ -63,14 +65,14 @@ CONNECT1 JSR MSGSTART
          JSR SBI
          .BYTE "...",0
          JSR INFOMSG
-         LDX #1
+         LDX #1             ; host
          JSR SITEF
          LDX #<HOST
          STX PTR2
          LDX #>HOST
          STX PTR2+1
          JSR STRCPY
-         LDX #2
+         LDX #2             ; port
          JSR SITEF
          JSR FCONN
          BCC CONNECT2
@@ -78,12 +80,12 @@ CONNECT1 JSR MSGSTART
          JSR REPORTI
          .BYTE "Connect",0
          JMP FQUIT
-CONNECT2 LDX #3
+CONNECT2 LDX #3             ; user
          JSR SITEF
          JSR FLOGIN
          PHP
          PHA
-         LDX #19            ; the password goes from memory
+         LDX #19            ; wipe the password
          LDA #0
 CONNECT3 STA PASSW,X
          DEX
@@ -97,10 +99,10 @@ CONNECT3 STA PASSW,X
          JMP FQUIT
 CONNECT4 LDA #1
          STA CONNECTD
-         LDX #5             ; the server's folder
+         LDX #5             ; server folder
          JSR SITEF
          JSR STRLEN
-         BEQ CONNECT5
+         BEQ CONNECT5       ; none given
          LDX #5
          JSR SITEF
          JSR FCWD
@@ -108,7 +110,7 @@ CONNECT4 LDA #1
          STA FERR
          JSR REPORTI
          .BYTE "Folder",0
-CONNECT5 LDX #6             ; the Atari's
+CONNECT5 LDX #6             ; Atari folder
          JSR SITEF
          JSR STRLEN
          BEQ CONNECT6
@@ -122,10 +124,12 @@ CONNECT5 LDX #6             ; the Atari's
          JSR READLOC
 CONNECT6 JSR READREM
          LDA CONNECTD
-         STA ACTIVE
+         STA ACTIVE         ; server pane
          RTS
 ;
-; SITEF: field X of the site in SITE, A/Y; SNAME: its name
+; SITEF - field X of site SITE
+; SNAME - its name (field 0)
+; Exit: A/Y=field
 ;
 SNAME    LDX #0
 SITEF    TXA
@@ -136,17 +140,17 @@ SITEF    TXA
          TAX
          JMP SFIELD
 ;
-; -- sending
-;
-; SENDF: the marked files, or the one under the cursor (A not 0: only
-; that one), to the other side
+; SENDF - send the marked, or the
+; one under the cursor, to the
+; other side
+; A=0 marked, else only the one
 ;
 SENDF    LDX CONNECTD
          BNE SENDF1
          JMP NOTCONN
 SENDF1   STA XONLY
          JSR XSEND
-         BCC SENDF2
+         BCC SENDF2         ; nothing sent
          LDA #LOCAL
          JSR REREAD
          LDA #REMOTE
@@ -155,11 +159,13 @@ SENDF1   STA XONLY
          JMP DPANES
 SENDF2   RTS
 ;
-; -- new folder, rename, delete: on the server FTP's MKD, RNFR and
-; RNTO, DELE, RMD; on the Atari the DOS's XIO 42 (SpartaDOS), 32, 33,
-; 43
+; New folder, rename, delete
+; Server: MKD, RNFR/RNTO, DELE, RMD
+; Atari: XIO 42, 32, 33, 43
 ;
-; LSPECN: FSPEC = the Atari pane's folder + the name A/Y
+; LSPECN - FSPEC = Atari folder
+; + name
+; A/Y=name
 ;
 LSPECN   PHA
          TYA
@@ -175,27 +181,29 @@ LSPECN   PHA
          PLA
          JMP SBADD
 ;
-; AFTERI: done (carry and A as the call left them: a CIO status on the
-; Atari, an FTP error on the server): say so, or why not; then read
-; the pane again, the cursor on UTMP
+; AFTERI - say how it went, read the
+; pane again, cursor on UTMP
+; What it was after the JSR
+; C=1 failed, A=CIO status (Atari)
+; or FTP error (server)
 ;
 AFTERI   STA FERR
          PHP
          PLA
-         STA AFLG
+         STA AFLG           ; carry in bit 0
          JSR INLINE
          LSR AFLG
-         BCC AFTER3
+         BCC AFTER3         ; it worked
          LDX ACTIVE
          BNE AFTER2
          JSR WHAT
          LDA FERR
-         CMP #146
+         CMP #146           ; not supported
          BNE AFTER1
          JSR SBI
          .BYTE "this DOS has no folders",0
          JMP INFOMSG2
-AFTER1   CMP #170
+AFTER1   CMP #170           ; not found
          BNE AFTER1A
          JSR SBI
          .BYTE "not found",0
@@ -206,7 +214,7 @@ AFTER1A  JSR SBI
          JSR SBBYTE
 INFOMSG2 JSR INFOMSG
          JMP AFTER4
-AFTER2   JSR REPORT
+AFTER2   JSR REPORT         ; server error
          JMP AFTER4
 AFTER3   JSR IDLE
 AFTER4   LDA ACTIVE
@@ -223,7 +231,8 @@ AFTER6   LDA ACTIVE
          JSR DPANE
          JMP DDETAIL
 ;
-; EDMAXS: EDMAX = A on the Atari, 64 on the server
+; EDMAXS - EDMAX = A on the Atari,
+; 64 on the server
 ;
 EDMAXS   LDX ACTIVE
          BEQ EDMAXS1
@@ -231,19 +240,24 @@ EDMAXS   LDX ACTIVE
 EDMAXS1  STA EDMAX
          RTS
 ;
+; UPTMP - UTMP in capitals
+;
 UPTMP    LDA #<UTMP
          LDY #>UTMP
          JMP UPSTR
 ;
+; NEWFOLD - ask a name, make the
+; folder in the active pane
+;
 NEWFOLD  LDA #0
          STA UTMP
-         LDA #9
+         LDA #9             ; 8 chars on Atari
          JSR EDMAXS
          JSR ASKTI
          .BYTE "New folder:",0
-         BEQ NEWF3
+         BEQ NEWF3          ; ESC
          LDA UTMP
-         BEQ NEWF3
+         BEQ NEWF3          ; no name
          LDA ACTIVE
          BNE NEWF1
          JSR UPTMP
@@ -252,7 +266,7 @@ NEWFOLD  LDA #0
          JSR LSPECN
          LDA #<FSPEC
          LDY #>FSPEC
-         LDX #42
+         LDX #42            ; MKDIR
          JSR CXIO
          JMP NEWF2
 NEWF1    LDA #<UTMP
@@ -266,14 +280,17 @@ NEWF2    JSR AFTERI
          .BYTE "New folder",0
 NEWF3    RTS
 ;
+; RENAME - rename the entry under
+; the cursor
+;
 RENAME   JSR CURENT
          BEQ NEWF3
          LDA EFLAG,X
-         AND #EUP
+         AND #EUP           ; not ".."
          BNE NEWF3
          JSR ENAME
-         JSR TOUTMP
-         LDA #13
+         JSR TOUTMP         ; edit the old name
+         LDA #13            ; 8.3 on Atari
          JSR EDMAXS
          JSR ASKTI
          .BYTE "Rename to:",0
@@ -287,13 +304,13 @@ RENAME   JSR CURENT
          LDX #>UTMP
          STX PTR2+1
          JSR STRCMP
-         BEQ NEWF3
+         BEQ NEWF3          ; unchanged
          LDA ACTIVE
          BNE RENAME1
          JSR UPTMP
          LDX CURK
          JSR ENAME
-         JSR LSPECN
+         JSR LSPECN         ; "D1:>OLD,NEW"
          LDA #',
          JSR SBCH
          LDA #<UTMP
@@ -301,7 +318,7 @@ RENAME   JSR CURENT
          JSR SBADD
          LDA #<FSPEC
          LDY #>FSPEC
-         LDX #32
+         LDX #32            ; rename
          JSR CXIO
          JMP RENAME2
 RENAME1  LDX CURK
@@ -323,8 +340,9 @@ RENAME2  JSR AFTERI
          .BYTE "Rename",0
          RTS
 ;
-; DELETE: the marked files and folders, or the one under the cursor; a
-; folder has to be empty, as DOS and FTP want
+; DELETE - delete the marked, or the
+; one under the cursor, after a Y/N
+; A folder must be empty
 ;
 DELETE0  RTS
 DELETE   JSR MARKED
@@ -353,18 +371,18 @@ DELETE3  JSR SBI
          .BYTE "? Y/N",0
          JSR INFOMSG
          JSR KEYGET
-         AND #$DF
+         AND #$DF           ; y = Y
          CMP #'Y
          BEQ DELETE4
          JMP IDLE
 DELETE4  LDA #0
-         STA UTMP
+         STA UTMP           ; no name to find
          JSR PEND
          LDA TMP4
          STA DLEND
          LDA MCNT
          BEQ DELETE5
-         LDA BASE
+         LDA BASE           ; marked: from the top
          STA DLK
 DELETE5  LDX DLK
          CPX DLEND
@@ -375,9 +393,9 @@ DELETE5  LDX DLK
          AND #EMARK
          BEQ DELETE7
 DELETE6  JSR DELONE
-         BCS DELETE10
+         BCS DELETE10       ; stop at an error
          LDA MCNT
-         BEQ DELETE8
+         BEQ DELETE8        ; only the one
 DELETE7  INC DLK
          JMP DELETE5
 DELETE8  CLC
@@ -385,7 +403,8 @@ DELETE10 JSR AFTERI
          .BYTE "Delete",0
 DELETE9  RTS
 ;
-; DELONE: entry DLK; the carry set when it failed (A why)
+; DELONE - delete entry DLK
+; Exit: C=1 failed, A=why
 ;
 DELONE   LDX DLK
          LDA ACTIVE
@@ -395,10 +414,10 @@ DELONE   LDX DLK
          LDX DLK
          LDA EFLAG,X
          AND #EDIR
-         LDX #33
-         CMP #0
+         LDX #33            ; file
+         CMP #0             ; LDX hit Z
          BEQ DELONE1
-         LDX #43
+         LDX #43            ; folder
 DELONE1  LDA #<FSPEC
          LDY #>FSPEC
          JMP CXIO
@@ -417,16 +436,15 @@ DELONE3  LDA #<VRMD
          LDY #>VRMD
          JMP FDO
 ;
-; -- moving about
-;
-; MOVETO: the active pane's cursor to entry A
+; MOVETO - active pane's cursor to
+; entry A, scrolling as needed
 ;
 MOVETO   STA MVI
          LDA ACTIVE
          JSR PUSE
          LDX SIDE
          LDA PCOUNT,X
-         BEQ MOVETO5
+         BEQ MOVETO5        ; empty
          LDA PCUR,X
          STA MVOLD
          LDA PTOP,X
@@ -434,13 +452,13 @@ MOVETO   STA MVI
          LDA MVI
          CMP PCOUNT,X
          BCC MOVETO1
-         LDA PCOUNT,X
+         LDA PCOUNT,X       ; past end: last
          SBC #1
          STA MVI
 MOVETO1  STA PCUR,X
          CMP MVTOP
          BCS MOVETO2
-         STA PTOP,X
+         STA PTOP,X         ; above: scroll up
          BCC MOVETO3
 MOVETO2  LDA MVTOP
          CLC
@@ -449,27 +467,30 @@ MOVETO2  LDA MVTOP
          LDA MVI
          CMP TMP4
          BCC MOVETO3
-         SBC #VIS-1
+         SBC #VIS-1         ; below: bottom row
          STA PTOP,X
 MOVETO3  LDA PTOP,X
          CMP MVTOP
          BEQ MOVETO4
-         JSR DLIST
+         JSR DLIST          ; scrolled: all rows
          JMP DDETAIL
-MOVETO4  LDA MVOLD
+MOVETO4  LDA MVOLD          ; just the two rows
          JSR DENTRY
          LDA MVI
          JSR DENTRY
          JMP DDETAIL
 MOVETO5  RTS
 ;
+; GOUP - up one folder, cursor on
+; the folder left
+;
 GOUP     LDA ACTIVE
          BNE GOUP2
-         LDA #<PATH0        ; remember the folder left: "D1:>A>B>" -> "B"
+         LDA #<PATH0        ; "D1:>A>B>" -> "B"
          LDY #>PATH0
          JSR TOUTMP
          DEY
-         LDA #0
+         LDA #0             ; drop the last >
          STA UTMP,Y
 GOUP1    DEY
          BMI GOUP1A
@@ -477,9 +498,9 @@ GOUP1    DEY
          CMP #'>
          BNE GOUP1
 GOUP1A   INY
-         STY GUOFF
+         STY GUOFF          ; name starts here
          JSR LUP
-         BCS MOVETO5
+         BCS MOVETO5        ; at the top
          JSR READLOC
          JMP GOUP5
 GOUP2    LDY #0             ; "/pub/atari" -> "atari"
@@ -490,8 +511,8 @@ GOUP3    LDA PATH1,Y
          INY
          CMP #'/
          BNE GOUP3
-         STY GUOFF
-         BEQ GOUP3
+         STY GUOFF          ; after the last /
+         BEQ GOUP3          ; always
 GOUP4    LDA GUOFF
          CLC
          ADC #<PATH1
@@ -514,7 +535,7 @@ GOUP4    LDA GUOFF
 GOUP4A   JSR READREM
 GOUP5    LDA ACTIVE
          JSR PUSE
-         LDA #<UTMP
+         LDA #<UTMP         ; find UTMP+GUOFF
          CLC
          ADC GUOFF
          TAX
@@ -527,6 +548,9 @@ GOUP5    LDA ACTIVE
          JSR DPANE
          JMP DDETAIL
 ;
+; OPENENT - RETURN: into a folder,
+; up for "..", or send a file
+;
 OPENENT0 RTS
 OPENENT  JSR CURENT
          BEQ OPENENT0
@@ -537,7 +561,7 @@ OPENENT  JSR CURENT
 OPENENT1 LDA EFLAG,X
          AND #EDIR
          BNE OPENENT2
-         LDA #1
+         LDA #1             ; this one only
          JMP SENDF
 OPENENT2 JSR ENAME
          JSR TOUTMP
@@ -561,8 +585,9 @@ OPENENT4 LDA ACTIVE
          JSR DPANE
          JMP DDETAIL
 ;
-; MARK: the file under the cursor and on (A 0), or all of them, or none
-; when they all are
+; MARK - A=0: flip the mark under
+; the cursor and move on; else mark
+; all files, or none if all are
 ;
 MARK     STA MKALL
          JSR CURENT
@@ -585,7 +610,7 @@ MARK1    LDX SIDE
          CLC
          ADC #1
          JMP MOVETO
-MARK2    LDA #0
+MARK2    LDA #0             ; count unmarked
          STA MKANY
          LDX BASE
 MARK3    CPX TMP4
@@ -596,7 +621,7 @@ MARK3    CPX TMP4
          INC MKANY
 MARK3A   INX
          BNE MARK3
-MARK4    LDX BASE
+MARK4    LDX BASE           ; files only
 MARK5    CPX TMP4
          BCS MARK7
          LDA EFLAG,X
@@ -605,7 +630,7 @@ MARK5    CPX TMP4
          LDA EFLAG,X
          AND #255-EMARK
          LDY MKANY
-         BEQ MARK5A
+         BEQ MARK5A         ; all were: clear
          ORA #EMARK
 MARK5A   STA EFLAG,X
 MARK6    INX
@@ -614,7 +639,8 @@ MARK7    JSR DLIST
          JMP DDETAIL
 MARK9    RTS
 ;
-; JUMP: the next name starting with the letter A
+; JUMP - cursor to the next name
+; starting with letter A
 ;
 JUMP     JSR UPPER
          STA JKEY
@@ -630,7 +656,7 @@ JUMP1    LDX SIDE
          LDA PCUR,X
          CLC
          ADC JI
-JUMP2    CMP JN
+JUMP2    CMP JN             ; wrap around
          BCC JUMP3
          SBC JN
          JMP JUMP2
@@ -654,6 +680,8 @@ JUMP3    STA JJ
 JUMP4    LDA JJ
          JMP MOVETO
 ;
+; HELP - the keys box, until a key
+;
 HELP     LDA #<HTITLE
          LDY #>HTITLE
          JSR BOX
@@ -665,17 +693,17 @@ HELP     LDA #<HTITLE
          STA HROW
 HELP1    LDY #0
          LDA (PTR3),Y
-         BEQ HELP2
+         BEQ HELP2          ; end of list
          LDX HROW
          LDY #SCRL+2
          JSR AT
          JSR INVON
-         JSR KEYB2
+         JSR KEYB2          ; the key
          JSR INVOFF
          LDX HROW
          LDY #SCRL+10
          JSR AT
-         JSR KEYB2
+         JSR KEYB2          ; what it does
          INC HROW
          JMP HELP1
 HELP2    LDX #18
@@ -696,11 +724,16 @@ HELP2    LDX #18
          JSR KEYGET
          JMP DALL
 ;
+; Per pane: Atari, server
+;
 COL0     .BYTE SCRL,DIV+1
 WIDTH    .BYTE DIV-SCRL,SCRR-DIV
 PATHL    .BYTE <PATH0,<PATH1
 PATHH    .BYTE >PATH0,>PATH1
 SERVER   .BYTE "Server",0
+;
+; Key bar and help: key, text pairs
+;
 MKEYS    .BYTE "^K",0,"Sites",0,"^T",0,"Send",0,"TAB",0,"Pane",0
          .BYTE "HELP",0,"Keys",0,0
 HTITLE   .BYTE "Keys",0
@@ -717,6 +750,9 @@ HKEYS    .BYTE "^K ^D",0,"sites / disconnect",0
          .BYTE "1-8",0,"drive D1:-D8:",0
          .BYTE "ESC",0,"stop transfer",0
          .BYTE "^Q",0,"quit to DOS",0,0
+;
+; FTP commands
+;
 VMKD     .BYTE "MKD",0
 VRNFR    .BYTE "RNFR",0
 VRNTO    .BYTE "RNTO",0

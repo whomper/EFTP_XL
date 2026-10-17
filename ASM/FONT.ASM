@@ -1,8 +1,10 @@
 ;
-; EFTP_XL - the font: EDOS's, with EFTP_XL's own characters
-; Copyright (C) 2026 AERA | Erez Yaary. GPL-2.0-or-later, see COPYING.
+; FONT.M65 - EFTP_XL 0.9
+; The font: EDOS's, plus EFTP_XL's own
+; Copyright (C) 2026 AERA | Erez Yaary
 ;
-; Made by tools/font2asm.py from fonts/EFTPXL.FNT; 1K-aligned.
+; From fonts/EFTPXL.FNT by
+; tools/font2asm.py; 1K aligned
 ;
 FONT     .BYTE $00,$00,$00,$00,$00,$00,$00,$00
          .BYTE $00,$0C,$0C,$0C,$0C,$00,$0C,$00

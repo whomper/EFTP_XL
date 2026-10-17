@@ -3,7 +3,8 @@
 - **Releases carry the program.** `bin/` and `dist/` are build output,
   never committed. `VERSION` in `ASM/EFTPXL.ASM` holds the last release
   (every build shows `x.y`; there is no -dev label). A release:
-  raise `VERSION`, commit, push, then run the Release workflow on main
+  raise `VERSION` and the version in every source file's header,
+  commit, push, then run the Release workflow on main
   with the notes; `.github/workflows/release.yml` builds ATasm at
   `ATASM_REV` and the program, tags vX.Y and publishes `EFTPXL.PRG` and
   the disk `EFTPXL.ATR` (the sources and the program, so not
@@ -27,6 +28,12 @@
   MAC/65 1.01 saves); an operator or directive not used before needs
   its token checked against Mac/65 the same way. `make atr` checks the
   disk gives the same program. The C version in `C/` is kept for reference only.
+- **Comments** in the sources are short, in the usual Atari way: each
+  file starts with the header `; NAME.M65 - EFTP_XL x.y`, a line on
+  what is in it and the copyright line (`make atr` checks the name and
+  version); each routine has a few lines on what it does, its inputs
+  and `Exit:`; short end-of-line comments where the code doesn't say it
+  itself. Comment lines fit 38 columns.
 - **Test** with `make test` (tools/test_sim.py, the real program on py65
   against pyftpdlib): all its checks pass before a push.
 - **The README's pictures** are the real program in tools/sim.py:

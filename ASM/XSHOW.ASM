@@ -1,10 +1,12 @@
 ;
-; EFTP_XL - sending files: showing it, and each file going
-; Copyright (C) 2026 AERA | Erez Yaary. GPL-2.0-or-later, see COPYING.
+; XSHOW.M65 - EFTP_XL 0.9
+; Transfers area, progress, each file
+; Copyright (C) 2026 AERA | Erez Yaary
 ;
-; -- showing it
 ;
-; XRATIO: the file's done * A / its size (255 at most)
+; XRATIO - the file's done * A / its
+; size
+; Exit: A, 255 at most (0 if size 0)
 ;
 XRATIO   PHA
          LDA FSIZEB
@@ -12,7 +14,7 @@ XRATIO   PHA
          ORA FSIZEB+2
          ORA FSIZEB+3
          BNE XRATIO1
-         PLA
+         PLA                ; size 0
          LDA #0
          RTS
 XRATIO1  LDA #<FDONEB
@@ -28,95 +30,98 @@ XRATIO1  LDA #<FDONEB
          ORA NUM+2
          ORA NUM+3
          BEQ XRATIO2
-         LDA #255
+         LDA #255           ; over a byte
          RTS
 XRATIO2  LDA NUM
          RTS
 ;
-; DROW: the transfer A of the queue on its row
+; DROW - queue entry A on its row:
+; arrow, name, then a bar and % for
+; the one going, else how it went
+; and its size
 ;
 DROW     STA DRI
          SEC
-         SBC XFIRST
+         SBC XFIRST         ; its screen row
          CLC
          ADC #XROW+1
          TAX
          JSR CLRROW
          LDY #SCRL
          JSR AT
-         LDA #CHUP
+         LDA #CHUP          ; arrow: which way
          LDX XDOWN
          BEQ DROW1
          LDA #CHDOWN
 DROW1    JSR PUTCH
          INC SCOL
-         LDA #12
+         LDA #12            ; name: 12 columns
          STA SW
          LDX DRI
          LDA XQST,X         ; how it went
          STA DRF
          LDA XQUEUE,X
-         LDY XWALK          ; in a folder: the file going in it
+         LDY XWALK          ; in a folder walk
          BEQ DROW1A
-         CPX XCUR
+         CPX XCUR           ; the one going
          BNE DROW1A
-         LDA K
-DROW1A   STA DRJ
+         LDA K              ; shows file K
+DROW1A   STA DRJ            ; DRJ = entry
          TAX
          JSR SHOWN
          JSR PUTW
          INC SCOL
-         JSR SIZESTART
+         JSR SIZESTART      ; build in SIZEB
          LDA DRI
          CMP XCUR
-         BNE DROW3
+         BNE DROW3          ; not the one going
          LDA DRF
          AND #EDONE+EFAIL+ESKIP
-         BNE DROW3
-         LDA #16            ; the bar
+         BNE DROW3          ; or it has ended
+         LDA #16            ; the bar, 16 wide
          JSR XRATIO
          CMP #17
          BCC DROW2
          LDA #16
 DROW2    STA DRFILL
          STA SW
-         JSR INVON
+         JSR INVON          ; done: inverse
          JSR SPACES
          JSR INVOFF
          LDA #16
          SEC
          SBC DRFILL
          STA SW
-         LDA #CHSHADE
+         LDA #CHSHADE       ; to go: shaded
          JSR REP
          LDA #100
          JSR XRATIO
          CMP #100
          BCC DROW2A
-         LDA #99
+         LDA #99            ; not 100% yet
 DROW2A   JSR SBBYTE
          LDA #'%
          JSR SBCH
          JMP DROW8
-DROW3    LDA DRF
+DROW3    LDA DRF            ; X = in STATES
          LDX #0
          AND #EDONE
-         BNE DROW7
+         BNE DROW7          ; Done
          LDX #5
          LDA DRF
          AND #ESKIP
-         BNE DROW7
+         BNE DROW7          ; Skipped
          LDX #13
          LDA DRF
          AND #EFAIL
-         BEQ DROW7
+         BEQ DROW7          ; Waiting
          LDX #21
          LDA XSTOP
-         BEQ DROW7
+         BEQ DROW7          ; Failed
          LDA DRI
          CMP XCUR
          BNE DROW7
-         LDX #28
+         LDX #28            ; Stopped by ESC
 DROW7    TXA
          CLC
          ADC #<STATES
@@ -130,43 +135,45 @@ DROW7A   JSR PUTS
          BNE DROW8
          JSR ESIZE
          JSR SBSIZE
-DROW8    LDA #<SIZEB
+DROW8    LDA #<SIZEB        ; SIZEB at the right
          LDY #>SIZEB
          JSR STRLEN
          EOR #$FF
          SEC
-         ADC #SCRR+1
+         ADC #SCRR+1        ; SCRR+1 - length
          STA SCOL
          LDA #<SIZEB
          LDY #>SIZEB
          JMP PUTS
 STATES   .BYTE "Done",0,"Skipped",0,"Waiting",0,"Failed",0,"Stopped",0
 ;
-; DQUEUE: the queue, the file going and those around it
+; DQUEUE - draw the queue: XROWS rows
+; from the one before the one going,
+; and " 2 of 5 " on the line above
 ;
 DQUEUE   LDA XCUR
          BEQ DQUEUE1
          SEC
-         SBC #1
+         SBC #1             ; one done above it
 DQUEUE1  STA XFIRST
          LDA XCOUNT
          CMP #XROWS+1
          BCS DQUEUE2
-         LDA #0
+         LDA #0             ; all fit: from 0
          STA XFIRST
          BEQ DQUEUE3
-DQUEUE2  SBC #XROWS
-         CMP XFIRST
+DQUEUE2  SBC #XROWS         ; else keep the
+         CMP XFIRST         ; rows full
          BCS DQUEUE3
          STA XFIRST
 DQUEUE3  LDA XFIRST
          STA DQR
-DQUEUE4  LDA DQR
+DQUEUE4  LDA DQR            ; each row
          CMP XCOUNT
-         BCS DQUEUE5
+         BCS DQUEUE5        ; past the end
          JSR DROW
          JMP DQUEUE6
-DQUEUE5  SEC
+DQUEUE5  SEC                ; blank row
          SBC XFIRST
          CLC
          ADC #XROW+1
@@ -184,8 +191,8 @@ DQUEUE6  INC DQR
          JSR SBSP
          LDA XCUR
          CLC
-         ADC #1
-         CMP XCOUNT
+         ADC #1             ; from 1, up to
+         CMP XCOUNT         ; XCOUNT
          BCC DQUEUE7
          LDA XCOUNT
 DQUEUE7  JSR SBBYTE
@@ -194,15 +201,15 @@ DQUEUE7  JSR SBBYTE
          LDA XCOUNT
          JSR SBBYTE
          JSR SBSP
-         LDX #XROW
-         LDY #SCRR-10
+         LDX #XROW          ; the line above:
+         LDY #SCRR-10       ; clear its end
          JSR AT
          LDA #11
          STA SW
          LDA #CHHLINE
          JSR REP
-         LDA #<XLINE
-         LDY #>XLINE
+         LDA #<XLINE        ; then XLINE at
+         LDY #>XLINE        ; the right
          JSR STRLEN
          EOR #$FF
          SEC
@@ -212,7 +219,9 @@ DQUEUE7  JSR SBBYTE
          LDY #>XLINE
          JMP PUTS
 ;
-; XPROG: the file going, on the info line and in the queue
+; XPROG - show the file going: arrow,
+; name, done/size and speed on the
+; info line, and its queue row
 ;
 XPROG    LDA #<XLINE
          LDY #>XLINE
@@ -245,37 +254,40 @@ XPROG1   JSR SBCH
          LDA XCUR
          JMP DROW
 ;
-; XMOVED: XN bytes of a block went: count them, show them; Z clear
-; when ESC was pressed
+; XMOVED - XN bytes of a block went:
+; count them, show them, look for ESC
+; Exit: A=XSTOP, Z=0 to stop
 ;
-XMOVED   LDA XN
+XMOVED   LDA XN             ; NUM = XN
          STA NUM
          LDA XN+1
          STA NUM+1
          LDA #0
          STA NUM+2
          STA NUM+3
-         LDA #<FDONEB
+         LDA #<FDONEB       ; the file's done
          LDY #>FDONEB
          JSR ADDTO
-         LDA #<TDONE
+         LDA #<TDONE        ; and the total
          LDY #>TDONE
          JSR ADDTO
          JSR XPROG
          JSR KEYHIT
-         BEQ XMOVED1
+         BEQ XMOVED1        ; no key
          JSR KEYGET
          CMP #KESC
          BNE XMOVED1
-         LDA #1
+         LDA #1             ; ESC: stop
          STA XSTOP
 XMOVED1  LDA XSTOP
          RTS
 ;
-; XERRI: XERROR = "what: why", what after the JSR, why from FERR
+; XERRI - XERROR = "what: why" on the
+; info line; what: the string after
+; the JSR, why: from FERR
 ;
 XERRI    JSR INLINE
-         PHA
+         PHA                ; keep A/Y
          TYA
          PHA
          LDA #<XERROR
@@ -298,8 +310,8 @@ XERR1    CMP #ECLOSED
          JSR SBI
          .BYTE "connection lost",0
          JMP XERR3
-XERR2    LDA #0
-         STA FTPMSG+27
+XERR2    LDA #0             ; else the reply,
+         STA FTPMSG+27      ; cut to fit
          LDA #<FTPMSG
          LDY #>FTPMSG
          JSR SBADD
@@ -307,14 +319,16 @@ XERR3    LDA #<XERROR
          LDY #>XERROR
          JMP INFO
 ;
-; SAYCIO: XERROR = "NAME.EXT: error 144", the CIO status in XST
+; SAYCIO - XERROR = "NAME.EXT: error
+; 144" on the info line: CIO status
+; XST, name from FSPEC
 ;
 SAYCIO   LDA #<XERROR
          LDY #>XERROR
          JSR SBSTART
          LDA #<FSPEC
          LDY #>FSPEC
-         JSR STRLEN         ; the name: after the last '>' or ':'
+         JSR STRLEN         ; after last > or :
 SAYCIO4  DEY
          BMI SAYCIO5
          LDA FSPEC,Y
@@ -325,7 +339,7 @@ SAYCIO4  DEY
 SAYCIO5  INY
          TYA
          CLC
-         ADC #<FSPEC
+         ADC #<FSPEC        ; A/Y = FSPEC+Y
          TAX
          LDA #>FSPEC
          ADC #0
@@ -338,8 +352,9 @@ SAYCIO5  INY
          JSR SBBYTE
          JMP XERR3
 ;
-; MAYREP: is A/Y in pane X? Then ask; the carry set: leave it (ESC
-; stops too)
+; MAYREP - if A/Y is in pane X, ask to
+; replace it (ESC also stops it all)
+; Exit: C=1 leave it, C=0 go on
 ;
 MAYREP   STA MRN
          STY MRN+1
@@ -348,8 +363,8 @@ MAYREP   STA MRN
          LDA MRN
          LDY MRN+1
          JSR PFIND
-         BCC MAYREP1
-         CLC
+         BCC MAYREP1        ; there: ask
+         CLC                ; not there: go on
          RTS
 MAYREP1  JSR MSGSTART
          LDA MRN
@@ -361,9 +376,9 @@ MAYREP1  JSR MSGSTART
          JSR KEYGET
          CMP #KESC
          BNE MAYREP2
-         LDA #1
+         LDA #1             ; ESC: stop
          STA XSTOP
-MAYREP2  AND #$DF
+MAYREP2  AND #$DF           ; to capitals
          CMP #'Y
          BEQ MAYREP3
          SEC
@@ -371,20 +386,23 @@ MAYREP2  AND #$DF
 MAYREP3  CLC
          RTS
 ;
-; -- one file each way; they return EDONE, EFAIL or ESKIP in A
+; One file each way
+;
+; GETF - file K, server to Atari
+; Exit: A=EDONE, EFAIL or ESKIP
 ;
 GETF     LDX K
-         JSR ANAMEX
+         JSR ANAMEX         ; its 8.3 name
          LDA #<ANAME
          LDY #>ANAME
          LDX #LOCAL
          JSR MAYREP
          BCC GETF1
-         LDA #ESKIP
+         LDA #ESKIP         ; leave it
          RTS
 GETF1    LDA #<ANAME
          LDY #>ANAME
-         JSR LSPECN
+         JSR LSPECN         ; FSPEC = its path
          LDX K
          JSR ENAME
          JSR FRETR
@@ -396,23 +414,23 @@ GETF1    LDA #<ANAME
          RTS
 GETF2    LDA #<FSPEC
          LDY #>FSPEC
-         LDX #8
+         LDX #8             ; write
          JSR COPEN
          BCC GETF3
-         STA XST
+         STA XST            ; could not open
          JSR CCLOSE
          JSR FABORT
          JSR SAYCIO
          LDA #EFAIL
          RTS
-GETF3    JSR FREAD
+GETF3    JSR FREAD          ; next block
          BCS GETF6
          LDA NLEN
          ORA NLEN+1
-         BEQ GETF5
+         BEQ GETF5          ; end of file
          LDA NLEN
-         STA XLEN
-         STA XN
+         STA XLEN           ; XLEN to write,
+         STA XN             ; XN to count
          LDA NLEN+1
          STA XLEN+1
          STA XN+1
@@ -421,13 +439,13 @@ GETF3    JSR FREAD
          JSR TOATARI
 GETF4    LDA XLEN
          ORA XLEN+1
-         BEQ GETF4A
+         BEQ GETF4A         ; none to write
          LDA #<BUF
          LDY #>BUF
          JSR CWRITE
          BCS GETF7
 GETF4A   JSR XMOVED
-         BEQ GETF3
+         BEQ GETF3          ; no ESC: more
          JSR CCLOSE         ; stopped
          JSR FABORT
          JMP GETF9
@@ -449,29 +467,32 @@ GETF7    STA XST            ; the disk failed
 GETF7A   STA XST
 GETF7B   JSR FABORT
          JSR SAYCIO
-GETF9    LDA #<FSPEC        ; no half files on the disk
+GETF9    LDA #<FSPEC        ; no half files
          LDY #>FSPEC
-         LDX #33
+         LDX #33            ; XIO 33: delete
          JSR CXIO
          LDA #EFAIL
          RTS
+;
+; PUTF - file K, Atari to server
+; Exit: A=EDONE, EFAIL or ESKIP
 ;
 PUTF     LDX K
          JSR ENAME
          LDX #REMOTE
          JSR MAYREP
          BCC PUTF1
-         LDA #ESKIP
+         LDA #ESKIP         ; leave it
          RTS
 PUTF1    LDX K
          JSR ENAME
-         JSR LSPECN
+         JSR LSPECN         ; FSPEC = its path
          LDA #<FSPEC
          LDY #>FSPEC
-         LDX #4
+         LDX #4             ; read
          JSR COPEN
          BCC PUTF2
-         STA XST
+         STA XST            ; could not open
          JSR CCLOSE
          JSR SAYCIO
          LDA #EFAIL
@@ -486,22 +507,22 @@ PUTF2    LDX K
          .BYTE "Upload",0
          LDA #EFAIL
          RTS
-PUTF3    LDA #0
+PUTF3    LDA #0             ; no net error yet
          STA FERR
 PUTF4    LDA XTEXT
          BEQ PUTF5
-         LDA #<[BUF+256]
-         LDY #>[BUF+256]
-         LDX #1
+         LDA #<[BUF+256]    ; text: 1 page at
+         LDY #>[BUF+256]    ; BUF+256, as CR LF
+         LDX #1             ; can double it
          BNE PUTF6
-PUTF5    LDA #<BUF
+PUTF5    LDA #<BUF          ; else 2 pages
          LDY #>BUF
          LDX #2
 PUTF6    JSR CREAD
-         STA XST
+         STA XST            ; CIO status
          LDA CGOT
          ORA CGOT+1
-         BEQ PUTF8
+         BEQ PUTF8          ; none came
          LDA CGOT
          STA XLEN
          STA XN
@@ -512,21 +533,21 @@ PUTF6    JSR CREAD
          BEQ PUTF7
          JSR TOSERV
 PUTF7    JSR FWRITE
-         BCS PUTF10
+         BCS PUTF10         ; net failed
          JSR XMOVED
-         BNE PUTF9
+         BNE PUTF9          ; ESC
 PUTF8    LDA XST
          CMP #128
-         BCC PUTF4
+         BCC PUTF4          ; no error: more
 PUTF9    JSR CCLOSE
          LDA XST
-         CMP #136
+         CMP #136           ; end of file,
          BNE PUTF11
-         LDA FERR
+         LDA FERR           ; no net error
          BNE PUTF11
-         LDA XSTOP
+         LDA XSTOP          ; and no ESC:
          BNE PUTF11
-         JSR FDONE
+         JSR FDONE          ; all of it went
          BCC PUTF13
          STA FERR
          JSR XERRI
@@ -535,31 +556,33 @@ PUTF9    JSR CCLOSE
          RTS
 PUTF10   STA FERR
          JMP PUTF9
-PUTF11   JSR FABORT
+PUTF11   JSR FABORT         ; it failed
          LDA FERR
          BEQ PUTF12
          JSR XERRI
          .BYTE "Upload",0
          LDA #EFAIL
          RTS
-PUTF12   LDA XST
+PUTF12   LDA XST            ; a disk error?
          CMP #128
          BCC PUTF12A
          CMP #136
-         BEQ PUTF12A
+         BEQ PUTF12A        ; EOF is not one
          JSR SAYCIO
 PUTF12A  LDA #EFAIL
          RTS
 PUTF13   LDA #EDONE
          RTS
 ;
-; XDRAW: the transfers area, what the last transfer did
+; XDRAW - the transfers area: what
+; the last transfer did, or how to
+; start one
 ;
 XDRAW    LDX #XROW+1
          LDY #SCRL
          JSR AT
          LDA SUMMARY
-         BEQ XDRAW1
+         BEQ XDRAW1         ; none yet
          LDA #<SUMMARY
          LDY #>SUMMARY
          JMP PUTS
