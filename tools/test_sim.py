@@ -204,6 +204,12 @@ def main():
         check('About in HELP', 'EFTP_XL ' in t and 'Erez Yaary' in t
               and 'GPL-2.0-or-later' in t and 'github.com/whomper/EFTP_XL' in t, t)
 
+        # the load check (xl's AXLOAD): MEMLO above $4000, nothing loaded
+        s = sim.Sim(XEX, [], 0x4100, sim.FujiNet(), sim.Disks({1: d1}))
+        s.run()
+        check('load check: DOS too big', s.to_dos and b'MEMLO is above it' in s.eout
+              and s.mem[0x4000] == 0, repr(bytes(s.eout)[:80]))
+
         # AERA.FNT on D1: is read over the built-in font
         fnt = bytes((i * 29 + 3) & 255 for i in range(1024))
         open(os.path.join(d1, 'AERA.FNT'), 'wb').write(fnt)

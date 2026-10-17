@@ -382,13 +382,16 @@ class Sim:
     def _cio(self):
         x = self.mpu.x
         if x == 0:
-            if self.mem[IOCB + 2] == 0x0B:                  # put to E:
+            if self.mem[IOCB + 2] in (0x09, 0x0B):          # put to E:
                 n = self.word(IOCB + 8)
                 if n == 0:
                     self.eout.append(self.mpu.a)
                 else:
                     a = self.word(IOCB + 4)
-                    self.eout += self.mem[a:a + n]
+                    d = bytes(self.mem[a:a + n])
+                    if self.mem[IOCB + 2] == 0x09 and b'\x9b' in d:
+                        d = d[:d.index(b'\x9b') + 1]   # a record: to its EOL
+                    self.eout += d
             return 1
         st = self.disks.cio(self, x)
         self.mem[IOCB + x + 3] = st

@@ -275,7 +275,7 @@ every FTP command sent.
 **The checks.** `make test` runs xl's own tests, then
 `tools/test_sim.py`: the program that way against an FTP server it
 starts, looking at the screen, at memory and at the files on both
-sides, 40 checks:
+sides, 41 checks:
 
 | | |
 |---|---|
@@ -287,6 +287,7 @@ sides, 40 checks:
 | DOS 2.5 | its listing; no folders made, none sent, and the error's text |
 | RESET | back to the main screen, disconnected, `N1:` and `N2:` closed, the keys working; ^Q still back to DOS |
 | HELP, AERA.FNT | the About lines; the font read from the disk, or the built-in one |
+| Loading | the load check refuses a DOS whose MEMLO is above $4000, says so and goes back to DOS |
 
 CI (`.github/workflows/ci.yml`) builds the program and the disk
 (checking the disk gives the same program) and runs these on every
