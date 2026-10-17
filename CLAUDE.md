@@ -28,7 +28,7 @@
   tokenized (`tools/mac65tok.py`, checked byte for byte against what
   MAC/65 1.01 saves); an operator or directive not used before needs
   its token checked against Mac/65 the same way. `make atr` checks the
-  disk gives the same program. The C version in `C/` is kept for reference only.
+  disk gives the same program.
 - **Comments** in the sources are short, in the usual Atari way: each
   file starts with the header `; NAME.M65 - EFTP_XL x.y`, a line on
   what is in it and the copyright line (`make atr` checks the name and

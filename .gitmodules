@@ -1,3 +1,0 @@
-[submodule "fujinet-lib"]
-	path = C/fujinet-lib
-	url = https://github.com/FujiNetWIFI/fujinet-lib

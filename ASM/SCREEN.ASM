@@ -314,7 +314,7 @@ KEYG1    JSR KEYHIT
 ; KEYBDV: +4 is its address-1, so
 ; push it and RTS into it
 ;
-         LDA #12            ; ICAX1Z as cc65 sets
+         LDA #12            ; K: open mode: R+W
          STA ICAX1Z
          LDA KEYBDV+5       ; RTS to K: get, which
          PHA

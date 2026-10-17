@@ -155,8 +155,8 @@ Notes:
 
 The program is 6502 assembly in Mac/65's form, in [ASM](ASM):
 `EFTPXL.ASM` is the main file and includes the others. It is 13.8K, the
-font included; the first version, in C with cc65, was 27K, and is kept
-in [C](C) for reference.
+font included; the first version, in C with cc65, was 27K (it is in
+the git history, up to v0.2).
 
 **On another computer** with [ATasm](https://github.com/CycoPH/atasm), a
 cross-assembler that takes Mac/65's source:
@@ -282,8 +282,7 @@ marked with the Withdraw workflow
 ([`.github/workflows/withdraw.yml`](.github/workflows/withdraw.yml)):
 a notice at the top of its notes names the release to use instead.
 
-The C version in `C/` uses [fujinet-lib](https://github.com/FujiNetWIFI/fujinet-lib),
-a submodule (GPL-3.0); the program in assembly uses no library.
+The program uses no library.
 
 ## Licence
 
@@ -295,9 +294,6 @@ but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See [COPYING](COPYING).
 
 Copyright (C) 2026 AERA | Erez Yaary.
-
-The C version, linked with fujinet-lib (GPL-3.0), is distributed as a
-whole under the GPL version 3.
 
 `EFTPXL.ATR` carries SpartaDOS 3.2 (`tools/disk/X32G.DOS`) and its
 boot sectors (`tools/disk/SPARTA.BOOT`), as EDOS's disks do; they stay

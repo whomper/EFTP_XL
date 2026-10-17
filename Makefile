@@ -8,8 +8,7 @@
 #
 # bin/ and dist/ are what make builds, never committed: releases carry
 # the program (.github/workflows/release.yml). VERSION in ASM/EFTPXL.ASM
-# holds the last release, which every build shows. The first version,
-# in C, is in C/.
+# holds the last release, which every build shows.
 
 ATASM      ?= atasm
 PYTHON     ?= python3
