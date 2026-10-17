@@ -9,10 +9,11 @@ through a8run (build.sh). From EFTP_XL's build-machine checks.
       TEXT (e.g. the title "EFTP_XL 1.1") must come on the screen
   a8check.py mac65 A8RUN DISK.ATR MAIN.M65 PROGRAM CART
       MAC/65 (CART: Erez's MAC/65 1.01 cartridge image, type 15, never
-      in git) LOADs MAIN.M65 from the disk and assembles it with
-      ASM ,,#D:A8CHECK.OBJ; it must report 0 errors, and the object must
-      load the same bytes as PROGRAM on the disk (MAC/65 cuts its
-      segments differently, so the files are compared as memory)
+      in git) LOADs MAIN.M65 from the disk and assembles it over
+      PROGRAM, as on the Atari (ASM ,,#D:PROGRAM), on a copy without
+      PROGRAM so a full disk has room; it must report 0 errors, and what
+      it wrote must load the same bytes as the disk's PROGRAM (MAC/65
+      cuts its segments differently, so they are compared as memory)
 
 Both work on a copy of the disk. Exit 0 when the check passes.
 """
@@ -86,16 +87,23 @@ def check_mac65(a8run, disk, main, program, cart):
     try:
         t = os.path.join(tmp, 'T.ATR')
         shutil.copy(disk, t)
+        prg = get(t, program)
+        if not prg:
+            print(f'no {program} on the disk')
+            return False
+        d = sparta.Disk(t)
+        d.remove(program)
+        d.save()
         code, out = run(a8run, f'until Edit 200\nclear\ntype LOAD #D:{main}\\n\nuntil Edit 3000\n'
-                               'clear\ntype ASM ,,#D:A8CHECK.OBJ\\n\nuntil ERRORS 60000\n'
+                               f'clear\ntype ASM ,,#D:{program}\\n\nuntil ERRORS 60000\n'
                                'wait 300\nscreen\n',      # 300: MAC/65 closes the file
                         ['-xl', '-nobasic', '-cart', cart, '-cart-type', '15', t])
         print(out)
         if code or 'ERRORS: 0' not in out.replace('  ', ' '):
             return False
-        obj, prg = get(t, 'A8CHECK.OBJ'), get(t, program)
-        if not obj or not prg:
-            print(f'no A8CHECK.OBJ or {program} on the disk')
+        obj = get(t, program)
+        if not obj:
+            print(f'MAC/65 wrote no {program}')
             return False
         diff = same_load(obj, prg)
         print(f'MAC/65 on the Atari: {len(diff)} bytes differ from {program}'
