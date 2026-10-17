@@ -1,0 +1,52 @@
+;
+; AXFONT.M65 - AERA XL shared code
+; AERA.FNT, the family's font, from
+; the current drive (guidelines 5.3)
+; Copyright (C) 2026 AERA | Erez Yaary
+;
+; AXFONT - read D:AERA.FNT (1K) to a
+; page. The program sets CHBAS to it,
+; and again after RESET; without the
+; file it keeps the ROM font or its
+; own copy. A short or bad file may
+; leave the page part-written.
+; A: the page, 1K aligned ($xC, $x0,
+;    $x4, $x8)
+; X: the IOCB to use, times 16
+; Exit: C=0 read, C=1 not (Y: CIO's
+;       status); the IOCB is closed;
+;       A changed
+;
+AXFONT   PHA                ; the page
+         LDA #<AXFNAME
+         STA ICBAL,X
+         LDA #>AXFNAME
+         STA ICBAH,X
+         LDA #AXOPNIN
+         STA ICAX1,X
+         LDA #0
+         STA ICAX2,X
+         LDA #AXOPEN
+         JSR AXFCIO
+         PLA
+         CPY #$80           ; C=1: not there
+         BCS AXFONT1
+         STA ICBAH,X        ; 1K to the page
+         LDA #0
+         STA ICBAL,X
+         STA ICBLL,X
+         LDA #4
+         STA ICBLH,X
+         LDA #AXGETCHR
+         JSR AXFCIO
+AXFONT1  TYA                ; keep the status
+         PHA
+         LDA #AXCLOSE
+         JSR AXFCIO
+         PLA
+         TAY
+         CPY #$80           ; C=1: an error
+         RTS
+AXFCIO   STA ICCOM,X        ; CIO command A
+         JMP CIOV
+AXFNAME  .BYTE "D:AERA.FNT",EOL

@@ -1,0 +1,143 @@
+;
+; AXEQU.M65 - AERA XL shared code
+; The OS and hardware, by the Atari's
+; own names; the family's constants
+; Copyright (C) 2026 AERA | Erez Yaary
+;
+; Include it first: its zero page
+; names must come before any use.
+; The addresses keep the names of the
+; Atari OS manual; a program defines
+; none of them again. CIO's command
+; and mode values have the Atari's
+; names with AX in front, as plain
+; words such as CLOSE or DELETE are
+; a program's own routines.
+;
+; Zero page
+;
+DOSVEC   =   $0A        ; DOS's start
+DOSINI   =   $0C        ; DOS's init (RESET)
+POKMSK   =   $10
+BRKKEY   =   $11        ; 0: BREAK pressed
+RTCLOK   =   $12        ; jiffies, $14 low
+ICAX1Z   =   $2A        ; AUX1 for a handler
+ATRACT   =   $4D        ; colour-shift timer
+LMARGN   =   $52
+RMARGN   =   $53
+ROWCRS   =   $54
+COLCRS   =   $55
+SAVMSC   =   $58        ; screen memory
+RAMTOP   =   $6A        ; pages of RAM
+;
+; Pages 2 and 3
+;
+VDSLST   =   $0200
+SDLSTL   =   $0230
+SHFLOK   =   $02BE      ; $40: capitals
+COLOR0   =   $02C4
+COLOR1   =   $02C5
+COLOR2   =   $02C6
+COLOR3   =   $02C7
+COLOR4   =   $02C8      ; border, background
+HELPFG   =   $02DC      ; HELP pressed
+RUNAD    =   $02E0
+INITAD   =   $02E2
+RAMSIZ   =   $02E4
+MEMTOP   =   $02E5
+MEMLO    =   $02E7
+DVSTAT   =   $02EA
+CRSINH   =   $02F0      ; 1: no cursor
+CHBAS    =   $02F4      ; font, its page
+CH       =   $02FC      ; key; $FF none
+DSPFLG   =   $02FE
+;
+; SIO's device control block
+;
+DDEVIC   =   $0300
+DUNIT    =   $0301
+DCOMND   =   $0302
+DSTATS   =   $0303
+DBUFLO   =   $0304
+DBUFHI   =   $0305
+DTIMLO   =   $0306      ; timeout, seconds
+DUNUSE   =   $0307
+DBYTLO   =   $0308
+DBYTHI   =   $0309
+DAUX1    =   $030A
+DAUX2    =   $030B
+;
+; IOCB 0; IOCB n is at +n*16 (X)
+;
+ICHID    =   $0340
+ICDNO    =   $0341
+ICCOM    =   $0342
+ICSTA    =   $0343
+ICBAL    =   $0344
+ICBAH    =   $0345
+ICPTL    =   $0346
+ICPTH    =   $0347
+ICBLL    =   $0348
+ICBLH    =   $0349
+ICAX1    =   $034A
+ICAX2    =   $034B
+;
+; Hardware
+;
+PAL      =   $D014      ; bits 1-3 0: PAL
+COLPF0   =   $D016
+COLPF1   =   $D017
+COLPF2   =   $D018
+COLPF3   =   $D019
+COLBK    =   $D01A
+PORTB    =   $D301      ; XL/XE: banks, ROM
+WSYNC    =   $D40A
+NMIEN    =   $D40E
+;
+; The OS ROM's vectors
+;
+KEYBDV   =   $E420      ; K: handler table
+DSKINV   =   $E453
+CIOV     =   $E456
+SIOV     =   $E459
+;
+; CIO commands (ICCOM)
+;
+AXOPEN   =   $03
+AXGETREC =   $05        ; get a line
+AXGETCHR =   $07        ; get bytes
+AXPUTREC =   $09        ; put a line
+AXPUTCHR =   $0B        ; put bytes
+AXCLOSE  =   $0C
+AXSTATIS =   $0D
+AXRENAME =   $20        ; DOS's XIOs
+AXDELETE =   $21
+AXLOCK   =   $23
+AXUNLOCK =   $24
+AXPOINT  =   $25
+AXNOTE   =   $26
+AXMKDIR  =   $2A        ; SpartaDOS only:
+AXRMDIR  =   $2B        ; else error 146
+AXFORMAT =   $FE
+;
+; How to open (ICAX1)
+;
+AXDIRECT =   $02        ; with AXOPNIN: dir
+AXOPNIN  =   $04
+AXOPNOT  =   $08
+AXAPPEND =   $09
+AXUPDATE =   $0C
+;
+; ATASCII, CIO's answers
+;
+EOL      =   $9B
+AXEOF    =   136        ; end of file
+AXNOFUNC =   146        ; not on this DOS
+;
+; The family's colours (guidelines
+; 3.1), for COLOR4
+;
+AXCWAIT  =   $00        ; black: waiting
+AXCREAD  =   $C8        ; green: reading
+AXCWRITE =   $40        ; red: writing
+AXCAPS   =   $40        ; SHFLOK: capitals
