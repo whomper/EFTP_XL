@@ -7,9 +7,9 @@
 ;
 DOSVEC   =   $0A
 RTCLOK   =   $12        ; $14 is the low byte
-ICAX1Z   =   $2A
-ATRACT   =   $4D
-SAVMSC   =   $58
+ICAX1Z   =   $2A        ; AUX1 for a handler
+ATRACT   =   $4D        ; colour-shift timer
+SAVMSC   =   $58        ; screen memory
 ;
 ; SIO block
 ;
@@ -19,7 +19,7 @@ DCOMND   =   $0302
 DSTATS   =   $0303
 DBUFLO   =   $0304
 DBUFHI   =   $0305
-DTIMLO   =   $0306
+DTIMLO   =   $0306      ; timeout, about 1 s
 DBYTLO   =   $0308
 DBYTHI   =   $0309
 DAUX1    =   $030A
@@ -43,16 +43,16 @@ ICAX2    =   $039B
 COLOR1   =   $02C5
 COLOR2   =   $02C6
 COLOR4   =   $02C8
-HELPFG   =   $02DC
+HELPFG   =   $02DC      ; HELP pressed
 RUNAD    =   $02E0
 INITAD   =   $02E2
 MEMTOP   =   $02E5
 MEMLO    =   $02E7
-CRSINH   =   $02F0
-CHBAS    =   $02F4
-CH       =   $02FC
+CRSINH   =   $02F0      ; 1: no cursor
+CHBAS    =   $02F4      ; font, its page
+CH       =   $02FC      ; key; $FF none
 PAL      =   $D014      ; bits 1-3 0: PAL
-KEYBDV   =   $E420
+KEYBDV   =   $E420      ; K: handler table
 CIOV     =   $E456
 SIOV     =   $E459
 ;

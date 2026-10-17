@@ -15,9 +15,11 @@
 ; NETCALL - SIO call to N1:/N2:
 ; A=command, Y=DSTATS ($40 in, $80
 ; out), CONN, NBUF/NLEN=buffer
+; AUX: 'O' 12 (read and write), 'R'
+; and 'W' the byte count, else 0
 ; Exit: C=1 failed
 ;
-NETCALL  STA DCOMND
+NETCALL  STA DCOMND         ; O S R W or C
          STY DSTATS
          LDA CONN
          CLC
@@ -49,11 +51,12 @@ NETC2    LDX NLEN           ; how many
          LDY NLEN+1
 NETC3    STX DAUX1
          STY DAUX2
-         JSR SIOV
+         JSR SIOV           ; Y=SIO status
          CPY #128           ; C=1: SIO error
          RTS
 ;
 ; NSETB - NBUF=A/Y, NLEN=X
+; (more than 255: set NLEN+1 after)
 ;
 NSETB    STA NBUF
          STY NBUF+1
@@ -77,7 +80,7 @@ NSTATUS  LDA #<NSTAT
 ; NREAD, NWRITE - NLEN bytes at NBUF
 ; DCLOSE - close N2:
 ;
-NCLOSE   LDX #0
+NCLOSE   LDX #0             ; no data
          JSR NSETB
          LDA #'C
          LDY #0
@@ -90,13 +93,14 @@ NWRITE   LDA #'W
          JMP NETCALL
 DCLOSE   LDA #1
          STA CONN
-         BNE NCLOSE
+         BNE NCLOSE         ; always
 ;
 ; CONOPEN - open CONN to HOST,
 ; A/Y=port: "N1:TCP://HOST:PORT"
+; The spec goes out 0-padded in SPEC
 ; Exit: C=1 failed
 ;
-CONOPEN  STA PTR3
+CONOPEN  STA PTR3           ; port (SBADD uses PTR)
          STY PTR3+1
          LDA #0
          TAX
@@ -110,7 +114,7 @@ CONO1    STA SPEC,X         ; 256 bytes, zeroed
          JSR SBCH
          LDA CONN
          CLC
-         ADC #'1
+         ADC #'1            ; "1" or "2"
          JSR SBCH
          JSR SBI
          .BYTE ":TCP://",0
@@ -128,8 +132,8 @@ CONO1    STA SPEC,X         ; 256 bytes, zeroed
          STA CLEN,X
          LDA #<SPEC
          LDY #>SPEC
-         JSR NSETB
-         INC NLEN+1         ; 256
+         JSR NSETB          ; NLEN=X, still CONN
+         INC NLEN+1         ; NLEN=X+256
          LDA #'O
          LDY #$80
          JMP NETCALL
@@ -143,9 +147,10 @@ TSTART   LDA RTCLOK+2       ; low byte
          RTS
 ;
 ; TIMEUP - C=1 when TOUT ticks have
-; gone since TSTART
+; gone since TSTART (60 a second,
+; 50 on PAL)
 ;
-TIMEUP   LDA RTCLOK+2
+TIMEUP   LDA RTCLOK+2       ; YX = now - T0
          SEC
          SBC T0
          TAX
@@ -153,7 +158,7 @@ TIMEUP   LDA RTCLOK+2
          SBC T0+1
          TAY
          CPX TOUT           ; YX >= TOUT?
-         TYA
+         TYA                ; CPX's C is the borrow
          SBC TOUT+1
          RTS
 ;
@@ -167,11 +172,15 @@ GETC     LDX CONN
          CMP CLEN,X
          BCS GETC1          ; buffer empty
          INC CPOS,X
-         TAY
+         TAY                ; Y=the old CPOS
          JSR CBUFP
          LDA (PTR3),Y
          CLC
          RTS
+;
+; Empty: wait up to TOUT for bytes,
+; then read up to 128 into CBUF
+;
 GETC1    JSR TSTART
 GETC2    JSR NSTATUS
          BCS GETC5
@@ -186,28 +195,29 @@ GETC2    JSR NSTATUS
          RTS
 GETC3    LDA NSTAT          ; at most 128
          LDX NSTAT+1
-         BNE GETC4
+         BNE GETC4          ; 256 or more
          CMP #128
          BCC GETC4A
 GETC4    LDA #128
 GETC4A   LDX CONN
-         STA CLEN,X
+         STA CLEN,X         ; bytes it will hold
          PHA
          LDA #0
          STA CPOS,X
          JSR CBUFP
          PLA
-         TAX
+         TAX                ; X=count, for NSETB
          LDA PTR3
          LDY PTR3+1
          JSR NSETB
          JSR NREAD
          BCC GETC           ; now take one
-GETC5    LDA #ECLOSED
+GETC5    LDA #ECLOSED       ; SIO failed or closed
          SEC
          RTS
 ;
 ; CBUFP - PTR3=buffer of connection X
+; (CBUF0 for N1:, CBUF1 for N2:)
 ;
 CBUFP    LDA CBUFL,X
          STA PTR3
@@ -227,7 +237,7 @@ GETS     STA PTR2
          STY PTR2+1
          STX GMAX
          LDA #0
-         STA GLEN
+         STA GLEN           ; bytes kept
 GETS1    JSR GETC
          BCS GETS3
          CMP #10            ; LF: end
@@ -235,26 +245,26 @@ GETS1    JSR GETC
          CMP #13            ; CR: skip
          BEQ GETS1
          LDY GLEN
-         INY
+         INY                ; room for it and 0?
          CPY GMAX
          BCS GETS1          ; full: drop it
          DEY
          STA (PTR2),Y
          INC GLEN
-         BNE GETS1
+         BNE GETS1          ; always
 GETS2    LDY GLEN
          LDA #0
          STA (PTR2),Y
          CLC
          RTS
-GETS3    PHA
-         JSR GETS2
+GETS3    PHA                ; the error code
+         JSR GETS2          ; 0-end what came
          PLA
          CMP #ECLOSED
          BNE GETS4
          LDY GLEN           ; closed after text?
          BNE GETS5
-GETS4    SEC
+GETS4    SEC                ; CMP may clear C
          RTS
 GETS5    CLC
          RTS
@@ -263,12 +273,14 @@ GETS5    CLC
 ; all lines of a long one
 ; Exit: FTPMSG=its last line, RCHI=
 ;       1st digit, RCLO=other two
+;       (as BCD: 257 is 2 and $57)
+;       C=1 on error, A=code
 ;
 REPLY    LDA #0
          STA CONN
          LDA #<FTPMSG
          LDY #>FTPMSG
-         LDX #80
+         LDX #80            ; FTPMSG's size
          JSR GETS
          BCS REPLY9
          LDA FTPMSG
@@ -276,13 +288,17 @@ REPLY    LDA #0
          BCC REPLYX
          CMP #'6
          BCS REPLYX
-         LDA FTPMSG+1
+         LDA FTPMSG+1       ; 3 characters at least
          BEQ REPLYX
          LDA FTPMSG+2
          BEQ REPLYX
          LDA FTPMSG+3
          CMP #'-            ; "220-": more lines
          BNE REPLY4
+;
+; A long reply ends with a line of
+; the same code and a space
+;
 REPLY1   LDA #<FLINE        ; up to "220 ..."
          LDY #>FLINE
          LDX #160
@@ -296,7 +312,7 @@ REPLY2   LDA FLINE,X        ; same code?
          BPL REPLY2
          LDA FLINE+3
          CMP #32
-         BNE REPLY1
+         BNE REPLY1         ; "220-" again: on
          LDX #0
 REPLY3   LDA FLINE,X        ; into FTPMSG
          STA FTPMSG,X
@@ -304,16 +320,16 @@ REPLY3   LDA FLINE,X        ; into FTPMSG
          INX
          CPX #79
          BNE REPLY3
-         LDA #0
+         LDA #0             ; cut at 79 and 0
          STA FTPMSG,X
 REPLY4   LDA FTPMSG+1       ; digits to BCD
          ASL A
          ASL A
          ASL A
-         ASL A
+         ASL A              ; "5" ($35) is now $50
          STA RCLO
          LDA FTPMSG+2
-         AND #$0F
+         AND #$0F           ; "7" is 7
          ORA RCLO
          STA RCLO
          LDA FTPMSG
@@ -321,7 +337,7 @@ REPLY4   LDA FTPMSG+1       ; digits to BCD
          STA RCHI
          CLC
          RTS
-REPLYX   LDA #EREPLY
+REPLYX   LDA #EREPLY        ; not a reply line
          SEC
 REPLY9   RTS
 ;
@@ -337,10 +353,12 @@ RCIS1    RTS
 ; SEND - command A/Y, then ARGP if
 ; ARGP+1 is not 0; then its REPLY
 ; SEND0 - the same, no argument
+; Builds "VERB arg" CR LF in CMDB
+; Exit: as REPLY
 ;
 SEND0    LDX #0
          STX ARGP+1
-SEND     PHA
+SEND     PHA                ; keep A/Y over SBSTART
          TYA
          PHA
          LDA #<CMDB
@@ -364,7 +382,7 @@ SEND1    LDA #13            ; CR LF
          STA CONN
          LDA SBP            ; its length
          SEC
-         SBC #<CMDB
+         SBC #<CMDB         ; under 256 bytes
          TAX
          LDA #<CMDB
          LDY #>CMDB
@@ -385,8 +403,9 @@ FOK      CLC
          RTS
 ;
 ; MSGI - FTPMSG=string after the JSR
+; (our own message for the error)
 ;
-MSGI     JSR INLINE
+MSGI     JSR INLINE         ; A/Y=the string
          LDX #<FTPMSG
          STX PTR2
          LDX #>FTPMSG
@@ -395,18 +414,19 @@ MSGI     JSR INLINE
 ;
 ; FCONN - connect to HOST, wait for
 ; 220; A/Y=port ("": 21)
+; Exit: C=1, A=EOPEN or code
 ;
 FCONN    STA PTR
          STY PTR+1
          LDY #0
          LDA (PTR),Y
-         BNE FCONN1
+         BNE FCONN1         ; a port given
          LDA #<P21
          LDY #>P21
-         BNE FCONN2
+         BNE FCONN2         ; always
 FCONN1   LDA PTR
          LDY PTR+1
-FCONN2   LDX #0
+FCONN2   LDX #0             ; N1:
          STX CONN
          JSR CONOPEN
          BCC FCONN3
@@ -415,7 +435,7 @@ FCONN2   LDX #0
          LDA #EOPEN
          SEC
          RTS
-FCONN3   JSR REPLY
+FCONN3   JSR REPLY          ; the welcome
          BCS FCONN4
          LDX #2
          LDA #$20           ; 220: ready
@@ -427,6 +447,7 @@ P21      .BYTE "21",0
 ;
 ; FLOGIN - USER A/Y ("": anonymous),
 ; PASS from PASSW, then TYPE I
+; Exit: C=1 on error, A=code
 ;
 FLOGIN   STA ARGP
          STY ARGP+1
@@ -444,7 +465,7 @@ FLOG1    LDA #<VUSER
          LDX #3
          LDA #$31           ; 331: needs PASS
          JSR RCIS
-         BNE FLOG2
+         BNE FLOG2          ; no PASS asked for
          LDA #<PASSW
          STA ARGP
          LDA #>PASSW
@@ -453,7 +474,7 @@ FLOG1    LDA #<VUSER
          LDY #>VPASS
          JSR SEND
          BCS FLOG9
-FLOG2    LDX #2
+FLOG2    LDX #2             ; to USER or PASS
          LDA #$30           ; 230: logged in
          JSR RCIS
          BNE FNO2
@@ -471,20 +492,21 @@ FLOG2    LDX #2
          BNE FNO2
          CLC
 FLOG9    RTS
-FNO2     LDA #EREPLY
+FNO2     LDA #EREPLY        ; FNO, in branch reach
          SEC
          RTS
 ;
 ; FDO - command A/Y with ARGP;
 ; a 2xx or 3xx reply is all well
+; Exit: C=1 on error, A=code
 ;
 FDO      JSR SEND
          BCS FDO9
          LDA RCHI
          CMP #2
-         BCC FNO2
+         BCC FNO2           ; 1xx
          CMP #4
-         BCS FNO2
+         BCS FNO2           ; 4xx, 5xx
          CLC
 FDO9     RTS
 ;
@@ -515,9 +537,9 @@ FPWD     LDA #<VPWD
          JSR FINDCH
          BCS FNO2
          LDY #1             ; past it
-         LDX #0
+         LDX #0             ; X: into PATH1
 FPWD1    LDA (PTR),Y
-         BEQ FNO2
+         BEQ FNO2           ; no closing quote
          CMP #$22           ; closing quote
          BEQ FPWD2
          STA PATH1,X
@@ -536,7 +558,7 @@ FPWD9    RTS
 ; 227 ... (h1,h2,h3,h4,p1,p2)
 ; (the data goes to HOST all the same)
 ;
-PASV0    RTS
+PASV0    RTS                ; for BCS reach
 PASV     LDA #<VEPSV
          LDY #>VEPSV
          JSR SEND0
@@ -549,10 +571,10 @@ PASV     LDA #<VEPSV
          STA PTR3
          LDA #>FTPMSG
          STA PTR3+1
-         JSR STRSTRI
+         JSR STRSTRI        ; PTR3 on "|||"
          .BYTE "|||",0
          BCS PASV1
-         LDA PTR3
+         LDA PTR3           ; PTR past it
          CLC
          ADC #3
          STA PTR
@@ -561,6 +583,10 @@ PASV     LDA #<VEPSV
          STA PTR+1
          JSR ATOL           ; the port
          JMP PASV6
+;
+; PASV: PTR on to h1, past the "("
+; or at the first digit after 227
+;
 PASV1    LDA #<VPASV
          LDY #>VPASV
          JSR SEND0
@@ -575,7 +601,7 @@ PASV1    LDA #<VPASV
          STA PTR+1
          LDA #'(
          JSR FINDCH
-         BCS PASV2
+         BCS PASV2          ; PTR is at the 0
          JSR INCPTR
          JMP PASV4
 PASV2    LDA #<[FTPMSG+4]   ; no "(": 1st digit
@@ -584,13 +610,13 @@ PASV2    LDA #<[FTPMSG+4]   ; no "(": 1st digit
          STA PTR+1
 PASV3    LDY #0
          LDA (PTR),Y
-         BEQ PASV4
+         BEQ PASV4          ; end: PASV5 says no
          JSR ISDIG
          BCS PASV4
          JSR INCPTR
          JMP PASV3
 PASV4    LDA #4             ; past h1,h2,h3,h4
-         STA PCOMMA
+         STA PCOMMA         ; commas to pass
 PASV5    LDA #',
          JSR FINDCH
          BCS PASVNO
@@ -601,23 +627,25 @@ PASV5    LDA #',
          LDA NUM
          STA PHI
          LDA #',
-         JSR FINDCH
+         JSR FINDCH         ; ATOL left PTR on it
          BCS PASVNO
          JSR INCPTR
          JSR ATOL           ; p2
          LDA PHI            ; NUM=p1*256+p2
          STA NUM+1
-PASV6    LDA #<DPORT
+PASV6    LDA #<DPORT        ; DPORT=NUM in digits
          LDY #>DPORT
          JSR SBSTART
          JSR SBNUM
          CLC
 PASV9    RTS
-PASVNO   JMP FNO
+PASVNO   JMP FNO            ; FNO is out of reach
 ;
 ; DOPEN - PASV, open N2:, then the
 ; command A/Y with ARGP: LIST, RETR
 ; or STOR
+; Exit: C=0 data on its way (1xx);
+;       C=1, A=code, N2: closed
 ;
 DOPEN    STA DVERB
          STY DVERB+1
@@ -645,7 +673,7 @@ DOPEN1   LDA DARG
          LDA DVERB
          LDY DVERB+1
          JSR SEND
-         BCS DOPEN2
+         BCS DOPEN2         ; A=the error
          LDA RCHI           ; 1xx: data coming
          CMP #1
          BNE DOPEN1A
@@ -660,6 +688,7 @@ DOPEN9   RTS
 ;
 ; FLIST - LIST the folder, RADD for
 ; each line
+; Exit: as FDONE
 ;
 FLIST    LDA #0             ; no argument
          STA ARGP+1
@@ -667,7 +696,7 @@ FLIST    LDA #0             ; no argument
          LDY #>VLIST
          JSR DOPEN
          BCS DOPEN9
-FLIST1   LDA #1
+FLIST1   LDA #1             ; N2:, each line
          STA CONN
          LDA #<FLINE
          LDY #>FLINE
@@ -682,6 +711,7 @@ FLIST2   LDA FLINE          ; skip empty lines
 ;
 ; FRETR, FSTOR - start getting or
 ; sending the file A/Y
+; Exit: as DOPEN
 ;
 FRETR    STA ARGP
          STY ARGP+1
@@ -696,7 +726,8 @@ FSTOR    STA ARGP
 ;
 ; FREAD - what has come of the file
 ; into BUF, 512 bytes at most
-; Exit: NLEN=bytes, 0 at its end
+; Exit: NLEN=bytes, 0 at its end;
+;       C=1, A=ETIME or ECLOSED
 ;
 FREAD    JSR TSTART
 FREAD1   LDA #1
@@ -707,7 +738,7 @@ FREAD1   LDA #1
          ORA NSTAT+1
          BNE FREAD3
          LDA NSTAT+2        ; connected?
-         BEQ FREAD2
+         BEQ FREAD2         ; no, all read: end
          JSR TIMEUP
          BCC FREAD1
          LDA #ETIME
@@ -720,9 +751,9 @@ FREAD3   LDA NSTAT
          LDX NSTAT+1
          CPX #2             ; 512 at most
          BCC FREAD4
-         LDA #0
+         LDA #0             ; XA=$0200
          LDX #2
-FREAD4   STX TMP
+FREAD4   STX TMP            ; high byte
          TAX
          LDA #<BUF
          LDY #>BUF
@@ -738,6 +769,7 @@ FCLOSED1 LDA #ECLOSED
          RTS
 ;
 ; FWRITE - XLEN bytes of BUF to N2:
+; Exit: C=1, A=ECLOSED failed
 ;
 FWRITE   LDA #1
          STA CONN
@@ -753,15 +785,16 @@ FWRITE   LDA #1
 ;
 ; FDONE - a file's end: close N2:,
 ; then 226 or 250
+; Exit: C=1 on error, A=code
 ;
 FDONE    JSR DCLOSE
          JSR REPLY
          BCS FDONE9
          LDX #2
-         LDA #$26
+         LDA #$26           ; 226: done
          JSR RCIS
          BEQ FDONE8
-         LDA #$50
+         LDA #$50           ; 250 (X still 2)
          JSR RCIS
          BEQ FDONE8
          JMP FNO
@@ -771,7 +804,8 @@ FDONE9   RTS
 ; FABORT - stop a file early: close
 ; N2:, then read the server's 426 (at
 ; times 226 too) for 2 s, so it isn't
-; taken for the next reply
+; taken for the next reply; then on
+; into FTOUT
 ;
 FABORT   JSR DCLOSE
          LDA #121           ; 2 s
@@ -793,7 +827,7 @@ FTOUT    LDA #<1201         ; 20 seconds
 ;
 FQUIT    LDA #<VQUIT
          LDY #>VQUIT
-         JSR SEND0
+         JSR SEND0          ; any reply will do
          LDA #0
          STA CONN
          JMP NCLOSE

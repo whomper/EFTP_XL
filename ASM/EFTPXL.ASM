@@ -16,39 +16,43 @@ LOAD     =   $4000      ; above DOS and EDOS
 ; the program loads: MEMLO must be
 ; at most LOAD and MEMTOP above
 ; BSSEND, else say so and go to DOS
+; At $9A00: past BSSEND, below the
+; screen. DOS runs it (INITAD) as
+; soon as it is in, so the rest of
+; the file is not yet loaded
 ;
          *=  $9A00
-CHECK    LDA MEMLO+1
+CHECK    LDA MEMLO+1        ; MEMLO <= $4000?
          CMP #>LOAD
-         BCC CHECK1
-         BNE CHECK2
-         LDA MEMLO
+         BCC CHECK1         ; below $4000: fine
+         BNE CHECK2         ; $4100 up: too big
+         LDA MEMLO          ; $40xx: only $4000
          BNE CHECK2
 CHECK1   LDA MEMTOP         ; room up to BSSEND?
-         CMP #<BSSEND
-         LDA MEMTOP+1
-         SBC #>BSSEND
+         CMP #<BSSEND       ; 16-bit compare:
+         LDA MEMTOP+1       ; C=1 if MEMTOP is
+         SBC #>BSSEND       ; BSSEND or more
          BCS CHECK3
          LDA #<NOROOM
          LDY #>NOROOM
-         BNE CHECK4
+         BNE CHECK4         ; always
 CHECK2   LDA #<LOW          ; DOS too big
          LDY #>LOW
 CHECK4   STA ICBAL0         ; print it on E:
          STY ICBAH0
-         LDA #$FF
-         STA ICBLL0
+         LDA #$FF           ; up to 255 bytes,
+         STA ICBLL0         ; to the EOL
          LDA #0
          STA ICBLH0
-         LDA #9
+         LDA #9             ; PUT RECORD
          STA ICCOM0
-         LDX #0
+         LDX #0             ; IOCB 0
          JSR CIOV
          JMP (DOSVEC)       ; back to DOS
-CHECK3   RTS
+CHECK3   RTS                ; all well: load on
 LOW      .BYTE "EFTP_XL loads at $4000: MEMLO is above it",EOL
 NOROOM   .BYTE "EFTP_XL: not enough memory",EOL
-         *=  INITAD
+         *=  INITAD         ; DOS calls CHECK
          .WORD CHECK
 ;
 ; The program; the font first, as

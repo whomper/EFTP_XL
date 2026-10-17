@@ -11,6 +11,11 @@
 ; past the 0
 ; Exit: A/Y=PTR=string
 ;
+; On the stack: our return (into the
+; ...I routine), under it the
+; caller's: the JSR's last byte, one
+; before the string
+;
 INLINE   PLA                ; our return
          STA IRET
          PLA
@@ -20,18 +25,22 @@ INLINE   PLA                ; our return
          PLA
          STA PTR+1
          JSR INCPTR         ; string starts here
+;
+; Caller's return = string + length,
+; the 0: RTS adds 1, so on past it
+;
          LDA PTR
          LDY PTR+1
          JSR STRLEN
          CLC
-         ADC PTR
+         ADC PTR            ; 16-bit: X/A = the 0
          TAX
          LDA PTR+1
          ADC #0
          PHA                ; return to the 0
          TXA
          PHA
-         LDA IRET+1
+         LDA IRET+1         ; ours back on top
          PHA
          LDA IRET
          PHA
@@ -43,7 +52,7 @@ INLINE   PLA                ; our return
 ;
 INCPTR   INC PTR
          BNE INCP1
-         INC PTR+1
+         INC PTR+1          ; low wrapped: carry
 INCP1    RTS
 ;
 ; STRLEN - length of a string
@@ -55,7 +64,7 @@ STRLEN   STA PTR
          STY PTR+1
          LDY #0
 STRL1    LDA (PTR),Y
-         BEQ STRL2
+         BEQ STRL2          ; the 0: Y=length
          INY
          BNE STRL1
 STRL2    TYA
@@ -69,7 +78,7 @@ STRCPY   STA PTR
          STY PTR+1
          LDY #0
 STRC1    LDA (PTR),Y
-         STA (PTR2),Y
+         STA (PTR2),Y       ; the 0 goes too
          BEQ STRC2
          INY
          BNE STRC1
@@ -84,9 +93,9 @@ STRCMP   STA PTR
          LDY #0
 STRM1    LDA (PTR),Y
          CMP (PTR2),Y
-         BNE STRM2
+         BNE STRM2          ; differ: Z=0
          TAX                ; both ended?
-         BEQ STRM2
+         BEQ STRM2          ; yes: Z=1, same
          INY
          BNE STRM1
 STRM2    RTS
@@ -95,10 +104,10 @@ STRM2    RTS
 ; string
 ; Exit: C=0 found, C=1 none
 ;
-FINDCH   STA TMP4
-FINDC1   LDY #0
+FINDCH   STA TMP4           ; the char sought
+FINDC1   LDY #0             ; PTR walks, Y stays 0
          LDA (PTR),Y
-         BEQ FINDC2
+         BEQ FINDC2         ; end of string
          CMP TMP4
          BEQ FINDC3
          JSR INCPTR
@@ -110,36 +119,41 @@ FINDC3   CLC
 ;
 ; STRSTR - find A/Y in the string
 ; at PTR3
+; STRSTRI: A/Y inline
 ; Exit: C=0 found, PTR3 on it;
 ;       C=1 not there
 ;
 STRSTRI  JSR INLINE
 STRSTR   STA PTR2
          STY PTR2+1
-STRS1    JSR PREFIX1
-         BCC STRS3
+;
+; Try each place in PTR3 in turn
+;
+STRS1    JSR PREFIX1        ; A/Y here?
+         BCC STRS3          ; yes: C=0
          LDY #0
          LDA (PTR3),Y
          BEQ STRS2          ; end: not there
          INC PTR3
          BNE STRS1
          INC PTR3+1
-         BNE STRS1
+         BNE STRS1          ; always
 STRS2    SEC
 STRS3    RTS
 ;
 ; PREFIX - string at PTR3 starts
 ; with A/Y?
+; PREFIXI: A/Y inline
 ; Exit: C=0 yes, C=1 no
 ;
 PREFIXI  JSR INLINE
 PREFIX   STA PTR2
          STY PTR2+1
-PREFIX1  LDY #0
+PREFIX1  LDY #0             ; Y: same place in both
 PREF1    LDA (PTR2),Y
          BEQ PREF2          ; all of A/Y matched
          CMP (PTR3),Y
-         BNE STRS2
+         BNE STRS2          ; differ: SEC, RTS
          INY
          BNE PREF1
 PREF2    CLC
@@ -148,9 +162,9 @@ PREF2    CLC
 ; UPPER - A in capitals
 ;
 UPPER    CMP #'a
-         BCC UPP1
+         BCC UPP1           ; below a
          CMP #'z+1
-         BCS UPP1
+         BCS UPP1           ; above z
          SBC #31            ; carry is clear: - 32
 UPP1     RTS
 ;
@@ -161,7 +175,7 @@ UPSTR    STA PTR
          STY PTR+1
          LDY #0
 UPS1     LDA (PTR),Y
-         BEQ UPP1
+         BEQ UPP1           ; the 0: RTS there
          JSR UPPER
          STA (PTR),Y
          INY
@@ -172,23 +186,23 @@ UPS1     LDA (PTR),Y
 ; Exit: C=1 yes, A kept
 ;
 ISDIG    CMP #'9+1
-         BCS ISNOT
+         BCS ISNOT          ; above 9
          CMP #'0            ; C=1 if 0-9
          RTS
 ISNOT    CLC
          RTS
-ISALPH   PHA
+ISALPH   PHA                ; keep A: UPPER
          JSR UPPER
          CMP #'Z+1
-         BCS ISAL1
-         CMP #'A
-         PLA
+         BCS ISAL1          ; above Z
+         CMP #'A            ; C=1 if A-Z
+         PLA                ; A back, C kept
          RTS
 ISAL1    PLA
          CLC
          RTS
 ISALNUM  JSR ISDIG
-         BCC ISALPH
+         BCC ISALPH         ; not a digit
          RTS
 ;
 ; Building a line at SBP: SBSTART,
@@ -214,7 +228,7 @@ SBADD    STA PTR
          LDY #0
 SBA1     LDA (PTR),Y
          BEQ SBA2
-         JSR SBCH
+         JSR SBCH           ; keeps Y
          INY
          BNE SBA1
 SBA2     RTS
@@ -223,9 +237,9 @@ SBA2     RTS
 ; X and Y kept
 ;
 SBCH     STY PCY
-         LDY #0
+         LDY #0             ; SBP points at the 0
          STA (SBP),Y
-         INC SBP
+         INC SBP            ; SBP on to the next
          BNE SBC1
          INC SBP+1
 SBC1     TYA                ; new 0 after it
@@ -237,34 +251,42 @@ SBC1     TYA                ; new 0 after it
 ; digits, no leading 0s
 ; NUM is lost
 ;
-SBNUM    LDX #0
+; Each digit, 10000 down to 1: take
+; 10^n off NUM as often as it goes
+;
+SBNUM    LDX #0             ; X: which 10^n
          STX TMP2           ; a digit seen yet
-SBN1     LDA #'0
-         STA TMP3
+SBN1     LDA #'0            ; TMP3 = the digit,
+         STA TMP3           ; as ATASCII
+;
+; 16-bit NUM - 10^n into Y (low) and
+; A (high); C=0: it went under 0
+;
 SBN2     LDA NUM            ; take off 10^n
          SEC
          SBC POWLO,X
          TAY
          LDA NUM+1
          SBC POWHI,X
-         BCC SBN3
-         STA NUM+1
+         BCC SBN3           ; under: digit done
+         STA NUM+1          ; it went: keep it
          STY NUM
-         INC TMP3
-         BNE SBN2
+         INC TMP3           ; digit + 1
+         BNE SBN2           ; always
 SBN3     LDA TMP3
-         CPX #4             ; always the last
+         CPX #4             ; units: always shown
          BEQ SBN4
          CMP #'0
          BNE SBN4
          LDY TMP2
          BEQ SBN5           ; leading 0
-SBN4     STA TMP2
+SBN4     STA TMP2           ; not 0: digits seen
          JSR SBCH
 SBN5     INX
-         CPX #5
+         CPX #5             ; 5 digits: 65535
          BNE SBN1
          RTS
+; 10^4 .. 10^0, low and high bytes
 POWLO    .BYTE <10000,<1000,<100,<10,<1
 POWHI    .BYTE >10000,>1000,>100,>10,>1
 ;
@@ -272,12 +294,12 @@ POWHI    .BYTE >10000,>1000,>100,>10,>1
 ; SB2 - the same, two digits at least
 ;
 SB2      CMP #10
-         BCS SBBYTE
-         PHA
-         LDA #'0
+         BCS SBBYTE         ; 10 up: as it is
+         PHA                ; SBCH loses A
+         LDA #'0            ; a 0 in front
          JSR SBCH
          PLA
-SBBYTE   STA NUM
+SBBYTE   STA NUM            ; NUM = A, 16 bits
          LDA #0
          STA NUM+1
          JMP SBNUM
@@ -286,25 +308,25 @@ SBBYTE   STA NUM
 ; most: "999", "244K", "13M"
 ; NUM is lost
 ;
-SBSIZE   LDA #0
+SBSIZE   LDA #0             ; no unit: bytes
          STA SUNIT
          JSR GE1000
-         BCC SBS1
+         BCC SBS1           ; under 1000: bytes
          LDA #<1023         ; K, rounded up
          LDX #>1023
-         JSR SHR10
+         JSR SHR10          ; NUM = K
          LDA #'K
          STA SUNIT
          JSR GE1000
-         BCC SBS1
+         BCC SBS1           ; under 1000K
          LDA #<512          ; M, rounded
          LDX #>512
-         JSR SHR10
+         JSR SHR10          ; NUM = M
          LDA #'M
          STA SUNIT
 SBS1     JSR SBNUM
          LDA SUNIT
-         BEQ SBS2
+         BEQ SBS2           ; bytes: no letter
          JSR SBCH
 SBS2     RTS
 ;
@@ -313,21 +335,23 @@ SBS2     RTS
 ;
 GE1000   LDA NUM+2
          ORA NUM+3
-         BNE GE1
-         LDA NUM
-         CMP #<1000
+         BNE GE1            ; 64K up: yes
+         LDA NUM            ; 16-bit compare:
+         CMP #<1000         ; C from the low,
          LDA NUM+1
-         SBC #>1000
+         SBC #>1000         ; C=1 if NUM>=1000
          RTS
 GE1      SEC
          RTS
 ;
 ; SHR10 - NUM = (NUM + X/A) / 1024
 ; A=low, X=high
+; X/A is the rounding: 1023 up,
+; 512 nearest
 ;
 SHR10    JSR ADDNUM
          LDX #0             ; down a byte
-SHR1     LDA NUM+1,X
+SHR1     LDA NUM+1,X        ; /256
          STA NUM,X
          INX
          CPX #3
@@ -335,9 +359,13 @@ SHR1     LDA NUM+1,X
          LDA #0
          STA NUM+3
          JSR LSR32          ; and two bits
-LSR32    LSR NUM+3
-         ROR NUM+2
-         ROR NUM+1
+;
+; LSR32 - NUM / 2; SHR10 calls it
+; and then falls in: / 4 in all
+;
+LSR32    LSR NUM+3          ; top byte down,
+         ROR NUM+2          ; its bit 0 into
+         ROR NUM+1          ; the next byte
          ROR NUM
          RTS
 ;
@@ -350,9 +378,9 @@ ADDNUM   CLC
          TXA
          ADC NUM+1
          STA NUM+1
-         BCC ADDN1
-         INC NUM+2
-         BNE ADDN1
+         BCC ADDN1          ; no carry up
+         INC NUM+2          ; carry into the
+         BNE ADDN1          ; top 16 bits
          INC NUM+3
 ADDN1    RTS
 ;
@@ -360,14 +388,14 @@ ADDN1    RTS
 ;
 ADDTO    STA PTR
          STY PTR+1
-         LDY #0
-         LDX #4
-         CLC
+         LDY #0             ; Y: byte, low first
+         LDX #4             ; X counts 4 bytes
+         CLC                ; one carry through all
 ADDT1    LDA (PTR),Y
          ADC NUM,Y
          STA (PTR),Y
          INY
-         DEX
+         DEX                ; INY, DEX keep C
          BNE ADDT1
          RTS
 ;
@@ -405,20 +433,32 @@ NUM2L1   LDA (PTR),Y
 ; DIV32 - NUM = NUM / NUM2
 ; Exit: REM=remainder
 ;
+; Shift and take off, 32 times: NUM
+; and REM, just after it, shift left
+; as one 64-bit number, so NUM's top
+; bit goes into REM. When REM >=
+; NUM2, REM -= NUM2 and NUM gets a 1
+; at the bottom: NUM fills up with
+; the quotient as the dividend goes
+;
 DIV32    LDX #3
          LDA #0
-DIV1     STA REM,X
+DIV1     STA REM,X          ; REM = 0
          DEX
          BPL DIV1
          LDA #32            ; bits
-         STA TMP4
+         STA TMP4           ; TMP4 counts down
 DIV2     LDX #0             ; NUM,REM left 1
-         LDY #8
-         CLC
+         LDY #8             ; 8 bytes, low first
+         CLC                ; a 0 in at the bottom
 DIV3     ROL NUM,X
          INX
          DEY
          BNE DIV3
+;
+; 32-bit REM - NUM2 into DVT; C=0
+; at the end: it went under 0
+;
          LDX #0             ; DVT = REM - NUM2
          LDY #4
          SEC
@@ -429,7 +469,7 @@ DIV4     LDA REM,X
          DEY
          BNE DIV4
          BCC DIV6           ; doesn't go
-         LDX #3
+         LDX #3             ; it goes: REM = DVT
 DIV5     LDA DVT,X
          STA REM,X
          DEX
@@ -442,7 +482,11 @@ DIV6     DEC TMP4
 ; MUL8 - NUM = NUM * A
 ; NUM2 is lost
 ;
-MUL8     STA TMP4
+; Shift and add: for each 1 bit of A,
+; low first, add NUM2 to NUM; NUM2
+; doubles each step
+;
+MUL8     STA TMP4           ; TMP4 = A, its bits
          LDX #3
 MUL1     LDA NUM,X          ; NUM2 = NUM, NUM 0
          STA NUM2,X
@@ -450,8 +494,8 @@ MUL1     LDA NUM,X          ; NUM2 = NUM, NUM 0
          STA NUM,X
          DEX
          BPL MUL1
-MUL2     LSR TMP4
-         BCC MUL4
+MUL2     LSR TMP4           ; next bit into C
+         BCC MUL4           ; 0: no add
          LDX #0             ; bit set: add
          LDY #4
          CLC
@@ -466,27 +510,28 @@ MUL4     ASL NUM2           ; NUM2 * 2
          ROL NUM2+2
          ROL NUM2+3
          LDA TMP4
-         BNE MUL2
+         BNE MUL2           ; 1 bits left
          RTS
 ;
 ; ATOL - digits at PTR into NUM
+; "1234 " -> 1234, PTR on the space
 ; Exit: PTR past them
 ;
 ATOL     LDX #3
          LDA #0
-ATOL1    STA NUM,X
+ATOL1    STA NUM,X          ; NUM = 0
          DEX
          BPL ATOL1
 ATOL2    LDY #0
          LDA (PTR),Y
          JSR ISDIG
-         BCC ATOL3
-         AND #$0F
-         PHA
+         BCC ATOL3          ; not a digit: done
+         AND #$0F           ; '0'-'9' to 0-9
+         PHA                ; MUL8 loses A
          LDA #10            ; NUM*10 + digit
          JSR MUL8
          PLA
-         LDX #0
+         LDX #0             ; X/A = 0/digit
          JSR ADDNUM
          JSR INCPTR
          JMP ATOL2
@@ -503,12 +548,13 @@ ATOIP    STA PTR
 ;
 ; SKIPW - PTR on to the next word,
 ; past this one and its spaces
+; "226 Done" -> PTR on "Done"
 ; Exit: C=1 no next word
 ;
-SKIPW    LDY #0
+SKIPW    LDY #0             ; Y stays 0, PTR walks
          LDA (PTR),Y
-         BEQ SKIPW2
-         CMP #32
+         BEQ SKIPW2         ; end: no next word
+         CMP #32            ; space: word done
          BEQ SKIPW1
          JSR INCPTR
          JMP SKIPW
@@ -516,7 +562,7 @@ SKIPW1   JSR INCPTR         ; skip spaces
          LDA (PTR),Y
          CMP #32
          BEQ SKIPW1
-         TAX
+         TAX                ; Z=1: the 0, no word
          BEQ SKIPW2
          CLC
          RTS

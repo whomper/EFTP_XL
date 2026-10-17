@@ -15,18 +15,22 @@ SCRINIT  LDA CHBAS
          STA OCOL2
          LDA COLOR4
          STA OCOL4
-         LDA SAVMSC
+         LDA SAVMSC         ; screen memory
          STA PTR
          LDA SAVMSC+1
          STA PTR+1
+;
+; ROWLO/ROWHI: the 24 rows, 40
+; bytes apart
+;
          LDX #0
 SCRI1    LDA PTR            ; row starts
          STA ROWLO,X
          CLC
          ADC #40
          STA PTR
-         LDA PTR+1
-         STA ROWHI,X
+         LDA PTR+1          ; LDA, STA keep the
+         STA ROWHI,X        ; carry for the ADC
          ADC #0
          STA PTR+1
          INX
@@ -38,13 +42,13 @@ SCRI2    JSR CLRROW
          BPL SCRI2
          LDA #1             ; no cursor
          STA CRSINH
-         LDA #>FONT
+         LDA #>FONT         ; the font's page
          STA CHBAS
          LDA #$CA           ; light text
          STA COLOR1
          LDA #$94           ; on blue
          STA COLOR2
-         LDA #0             ; in black
+         LDA #0             ; black border
          STA COLOR4
          RTS
 ;
@@ -61,6 +65,10 @@ SCRDONE  LDA OCHBAS
          STA COLOR4
          LDA #0
          STA CRSINH
+;
+; PUT BYTES of length 0: CIO sends
+; the one byte in A, to E: (IOCB 0)
+;
          STA ICBLL0
          STA ICBLH0
          LDA #11            ; PUT BYTES
@@ -74,9 +82,9 @@ SCRDONE  LDA OCHBAS
 ;
 AT       STX SROW
          STY SCOL
-         LDA ROWLO,X
-         STA SCRP
-         LDA ROWHI,X
+         LDA ROWLO,X        ; SCRP: the row's
+         STA SCRP           ; start; SCOL is
+         LDA ROWHI,X        ; the Y into it
          STA SCRP+1
          RTS
 ;
@@ -93,6 +101,10 @@ INVOFF   LDA #0
 ; SCOL; SCOL moves on
 ; Exit: A, X, Y kept
 ;
+; ATASCII to screen code, by bits
+; 5-6: $00-1F +$40, $20-5F -$20,
+; $60-7F as is; bit 7 stays
+;
 PUTCH    STA PCA
          STX PCX
          STY PCY
@@ -107,7 +119,7 @@ PUTCH    STA PCA
          PLA
          CLC
          ADC SCRADJ,X       ; to screen code
-         EOR SINV
+         EOR SINV           ; $80: inverse
          LDY SCOL
          STA (SCRP),Y
          INC SCOL
@@ -115,7 +127,7 @@ PUTCH    STA PCA
          LDX PCX
          LDY PCY
          RTS
-SCRADJ   .BYTE $40,$E0,$E0,$00
+SCRADJ   .BYTE $40,$E0,$E0,$00 ; $E0 is -$20
 ;
 ; PUTS - string A/Y, to column 39
 ; at most; PUTSI: string inline
@@ -129,7 +141,7 @@ PUTS1    LDA (PTR),Y
          LDX SCOL
          CPX #40
          BCS PUTS2          ; end of the row
-         JSR PUTCH
+         JSR PUTCH          ; Y kept
          INY
          BNE PUTS1
 PUTS2    RTS
@@ -140,19 +152,20 @@ PUTS2    RTS
 PUTW     STA PTR
          STY PTR+1
          LDY #0
-         LDX SW
+         LDX SW             ; X: columns left
          BEQ PUTW3
 PUTW1    LDA (PTR),Y
          BEQ PUTW2          ; ended: spaces
          INY
          .BYTE $2C          ; BIT: skip LDA #32
-PUTW2    LDA #32
+PUTW2    LDA #32            ; Y stays on the 0
          JSR PUTCH
          DEX
          BNE PUTW1
 PUTW3    RTS
 ;
 ; REP - char A, SW times
+; Exit: Y kept
 ;
 REP      LDX SW
          BEQ REP2
@@ -164,7 +177,7 @@ REP2     RTS
 ; SPACES - SW spaces
 ;
 SPACES   LDA #32
-         BNE REP
+         BNE REP            ; always
 ;
 ; CLRROW - blank row X
 ; Exit: X kept
@@ -192,10 +205,15 @@ RULE     LDY #SCRL
 ;
 BOX      STA PTR3
          STY PTR3+1
-         LDA #SCRW-2
+         LDA #SCRW-2        ; inside width
          STA SW
          LDA #3
          STA TMP            ; row
+;
+; Each row: left edge, SW of the
+; middle, right edge; Y picks the
+; three in BOXCH
+;
 BOX1     LDX TMP
          LDY #SCRL
          JSR AT
@@ -210,15 +228,15 @@ BOX2     CMP #22
 BOX3     LDA BOXCH,Y        ; edge, middle, edge
          JSR PUTCH
          LDA BOXCH+1,Y
-         JSR REP
+         JSR REP            ; Y kept
          LDA BOXCH+2,Y
          JSR PUTCH
          INC TMP
          LDA TMP
          CMP #23
          BNE BOX1
-         LDX #3
-         LDY #SCRL+2
+         LDX #3             ; " title " on the
+         LDY #SCRL+2        ; top line
          JSR AT
          JSR INVON
          JSR PUTSP
@@ -227,6 +245,9 @@ BOX3     LDA BOXCH,Y        ; edge, middle, edge
          JSR PUTS
          JSR PUTSP
          JMP INVOFF
+;
+; Side, top, bottom: 3 each
+;
 BOXCH    .BYTE CHVLINE,32,CHVLINE,CHTL,CHHLINE,CHTR,CHBL,CHHLINE,CHBR
 ;
 ; PUTSP - a space
@@ -249,7 +270,7 @@ KEYB1    LDY #0
          JSR INVON
          JSR KEYB2          ; key in inverse
          JSR INVOFF
-         INC SCOL
+         INC SCOL           ; a column between
          JSR KEYB2          ; what it does
          INC SCOL
          JMP KEYB1
@@ -274,20 +295,25 @@ KEYB3    RTS
 ; (tools/sim.py watches LDX CH)
 ;
 KEYHIT   LDX CH
-         CPX #$FF
+         CPX #$FF           ; $FF: no key
          RTS
 ;
 ; KEYGET - wait for a key
 ; Exit: A=key, KHELP for HELP
 ;
-KEYGET   LDA HELPFG
+KEYGET   LDA HELPFG         ; HELP, set by OS
          BEQ KEYG1
-         LDA #0
+         LDA #0             ; seen
          STA HELPFG
          LDA #KHELP
          RTS
 KEYG1    JSR KEYHIT
-         BEQ KEYGET
+         BEQ KEYGET         ; wait
+;
+; K:'s get byte, from its table at
+; KEYBDV: +4 is its address-1, so
+; push it and RTS into it
+;
          LDA #12            ; ICAX1Z as cc65 sets
          STA ICAX1Z
          LDA KEYBDV+5       ; RTS to K: get, which
@@ -326,7 +352,12 @@ EDIT2    PHA
          JSR EDDRAW
          PLA
          RTS
-EDIT3    LDY EDLEN
+;
+; Backspace: a 0 one back. Else a
+; char at the end, if there is room
+; for it and the 0
+;
+EDIT3    LDY EDLEN          ; Y: the end
          CMP #KBKSP
          BNE EDIT4
          TYA
@@ -334,10 +365,10 @@ EDIT3    LDY EDLEN
          DEY
          STY EDLEN
          LDA #0
-         BEQ EDIT5
+         BEQ EDIT5          ; always
 EDIT4    AND #$7F           ; no inverse in names
          CMP #32
-         BCC EDIT1
+         BCC EDIT1          ; control keys
          CMP #$7B           ; printable only
          BCS EDIT1
          INY
@@ -362,9 +393,14 @@ EDDRAW   STA EDCUR
          LDA EDLEN
          CMP SW
          BCC EDD1           ; it all fits
-         SBC SW
+         SBC SW             ; C=1 from the CMP
          ADC #0             ; C=1: len-w+1
-         STA TMP
+         STA TMP            ; (room for cursor)
+;
+; SW columns from char TMP: the
+; chars (or *s), then spaces; the
+; one at EDLEN in EDCUR's inverse
+;
 EDD1     LDA SW
          STA TMP2           ; columns left
 EDD2     LDY TMP
@@ -384,4 +420,4 @@ EDD4     JSR PUTCH
          INC TMP
          DEC TMP2
          BNE EDD2
-         JMP INVOFF
+         JMP INVOFF         ; SINV back to 0

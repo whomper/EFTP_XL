@@ -16,16 +16,16 @@ RREAD    LDA #REMOTE
          CMP #'/
          BNE RREAD1
          LDA PATH1+1
-         BEQ RREAD1A
+         BEQ RREAD1A        ; "/": the top
 RREAD1   LDA #EUP
          STA NFLAGS
          LDA #<DOTDOT
          LDY #>DOTDOT
          JSR PADD
-RREAD1A  JSR FLIST
+RREAD1A  JSR FLIST          ; RADD for each line
          PHP                ; keep its C and A
          PHA
-         LDA #REMOTE
+         LDA #REMOTE        ; SIDE, BASE again
          JSR PUSE
          JSR PSORT
          PLA
@@ -35,6 +35,9 @@ RREAD2   RTS
 ; RADD - LIST line in FLINE into the
 ; pane; DOS or Unix style (LIST has
 ; no standard), others left out
+; The name is the last word: WORDS
+; stops there, so it runs to the end
+; of the line, spaces and all
 ;
 RADD0    RTS
 RADD     LDA FLINE
@@ -50,20 +53,20 @@ RADD     LDA FLINE
          JSR WORDS
          LDA WCNT
          CMP #4
-         BCC RADD0
+         BCC RADD0          ; too few: skip it
          LDX #2
-         JSR WCH0
+         JSR WCH0           ; PTR on word 2 too
          CMP #'<            ; "<DIR>"
          BNE RADD1
          LDA #EDIR
          STA NFLAGS
-         BNE RADD2
+         BNE RADD2          ; always
 RADD1    JSR ATOL           ; the size
          JSR NSIZEW
 RADD2    LDX #0
-         JSR WDATE
+         JSR WDATE          ; the time is left out
          LDX #3             ; name: word 3
-         BNE RADD7
+         BNE RADD7          ; always
 ;
 ; Unix: flags, links, owner, group,
 ; size, month, day, time or year,
@@ -75,7 +78,7 @@ RADD3    CMP #'-            ; file, folder, link
          CMP #'d
          BEQ RADD4
          CMP #'l
-         BNE RADD0
+         BNE RADD0          ; "total 12" and such
 RADD4    LDA #<FLINE
          LDY #>FLINE
          LDX #9
@@ -85,10 +88,10 @@ RADD4    LDA #<FLINE
          BCC RADD0
          LDA FLINE
          CMP #'d
-         BNE RADD5
+         BNE RADD5          ; file or link
          LDA #EDIR
          STA NFLAGS
-         BNE RADD6
+         BNE RADD6          ; always
 RADD5    LDX #4             ; the size
          JSR WPTR
          JSR ATOL
@@ -99,19 +102,19 @@ RADD6    JSR UDATE
          BNE RADD6A
          LDX #8
          JSR WPTR
-         LDA PTR
+         LDA PTR            ; look from the name on
          STA PTR3
          LDA PTR+1
          STA PTR3+1
          JSR STRSTRI
          .BYTE " -> ",0
          BCS RADD6A
-         LDA #0
+         LDA #0             ; 0 on its space
          TAY
          STA (PTR3),Y
 RADD6A   LDX #8             ; name: word 8
 RADD7    JSR WPTR           ; not "." or ".."
-         LDA #<DOTDOT+1
+         LDA #<DOTDOT+1     ; "." is its tail
          STA PTR2
          LDA #>[DOTDOT+1]
          STA PTR2+1
@@ -130,13 +133,15 @@ RADD7    JSR WPTR           ; not "." or ".."
          LDA PTR
          LDY PTR+1
          JMP PADD
-RADD8    JMP NCLEAR
+RADD8    JMP NCLEAR         ; drop size, flags
 RADD9    RTS
 ;
 ; UDATE - Unix date, words 5 to 7,
 ; into NMON, NDAY and NHOUR, NMIN or
 ; NYEAR: "Oct 15 15:20" (this year)
 ; or "Apr 22 2024"
+; NMON 0: month not known; NO in
+; NYEAR or NHOUR: not given
 ;
 UDATE    LDX #5
          JSR WPTR
@@ -145,6 +150,10 @@ UDATE1   LDA (PTR),Y        ; month name to MW
          STA MW,Y
          DEY
          BPL UDATE1
+;
+; Find MW in MONTHS: X steps 3 in the
+; table, Y counts the month 1 to 12
+;
          LDX #0
          LDY #1
 UDATE2   LDA MONTHS,X
@@ -155,7 +164,7 @@ UDATE2   LDA MONTHS,X
          BNE UDATE3
          LDA MONTHS+2,X
          CMP MW+2
-         BEQ UDATE4
+         BEQ UDATE4         ; found: Y=month
 UDATE3   INX
          INX
          INX
@@ -175,14 +184,14 @@ UDATE4   STY NMON
          LDA (PTR),Y
          CMP #':            ; "15:20"?
          BNE UDATE5
-         JSR ATOL
+         JSR ATOL           ; the hour, to the ":"
          LDA NUM
          STA NHOUR
          JSR INCPTR         ; past the ":"
          JSR ATOL
          LDA NUM
          STA NMIN
-         LDA #NO
+         LDA #NO            ; this year: none given
          STA NYEAR
          RTS
 UDATE5   JSR ATOL           ; the year, 2024 as 24
@@ -192,10 +201,10 @@ UDATE5   JSR ATOL           ; the year, 2024 as 24
          STA NUM2+1
          STA NUM2+2
          STA NUM2+3
-         JSR DIV32
+         JSR DIV32          ; REM=year mod 100
          LDA REM
          STA NYEAR
-         LDA #NO
+         LDA #NO            ; no time with a year
          STA NHOUR
          RTS
 MONTHS   .BYTE "JanFebMarAprMayJunJulAugSepOctNovDec"

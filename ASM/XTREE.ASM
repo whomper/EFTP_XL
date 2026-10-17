@@ -3,16 +3,23 @@
 ; Folder transfers, depth first
 ; Copyright (C) 2026 AERA | Erez Yaary
 ;
+; The walk keeps no names: XIDX+d is
+; the next entry to take in the
+; folder at depth d. Going in or up
+; reads both panes again, and the
+; walk goes on by that number.
+;
 XDEEP    =   8          ; max folder depth
 ;
 ; XTREE - send folder K and all in it
 ; to the other pane's side
+; XDOWN=way, XSTOP=1 stops it
 ; Exit: A=EDONE, or EFAIL if any
 ;       part of it failed
 ;
 XTREE    LDX #1             ; save both cursors
-XTREEC   LDA PCUR,X
-         STA XCURS,X
+XTREEC   LDA PCUR,X         ; (reading a pane
+         STA XCURS,X        ; clears them)
          LDA PTOP,X
          STA XTOPS,X
          DEX
@@ -20,30 +27,35 @@ XTREEC   LDA PCUR,X
          LDA #0
          STA XTFAIL
          STA XDEPTH
-         STA XIDX
+         STA XIDX           ; depth 0: entry 0
          LDX #3             ; clear the totals
-XTREE0   STA FSIZEB,X
+XTREE0   STA FSIZEB,X       ; (32 bits each)
          STA FDONEB,X
          DEX
          BPL XTREE0
          LDX K
          JSR XFOLDER        ; into the top folder
          BCC XTREE0A
-         JMP XTREE8
-XTREE0A  LDA #1
-         STA XWALK
+         JMP XTREE8         ; can't: it failed
+XTREE0A  LDA #1             ; DROW: the row now
+         STA XWALK          ; shows file K
+;
+; Take the next entry of the folder
+; at XDEPTH; at its end (or on ESC)
+; go up a level
+;
 XTREE1   LDA XSTOP          ; ESC: back up and out
          BNE XTREE5
          LDA XDOWN          ; source pane
-         JSR PUSE
+         JSR PUSE           ; SIDE, BASE
          LDX XDEPTH
          LDA XIDX,X         ; next entry here
          LDY SIDE
          CMP PCOUNT,Y
          BCS XTREE5         ; folder done
-         INC XIDX,X
+         INC XIDX,X         ; on, for next time
          CLC
-         ADC BASE
+         ADC BASE           ; K = BASE+index
          STA K
          TAX
          LDA EFLAG,X
@@ -51,27 +63,31 @@ XTREE1   LDA XSTOP          ; ESC: back up and out
          BNE XTREE1
          LDA EFLAG,X
          AND #EDIR
-         BEQ XTREE3
+         BEQ XTREE3         ; a file
          LDA XDEPTH         ; folder: go in
-         CMP #XDEEP-1
+         CMP #XDEEP-1       ; XIDX has XDEEP
          BCS XTREE2         ; too deep
          JSR XFOLDER
-         BCS XTREE2
-         INC XDEPTH
-         LDX XDEPTH
+         BCS XTREE2         ; can't go in
+         INC XDEPTH         ; a level down, from
+         LDX XDEPTH         ; its first entry
          LDA #0
          STA XIDX,X
          JMP XTREE1
-XTREE2   INC XTFAIL
+XTREE2   INC XTFAIL         ; left out: a failure
          JMP XTREE1
 XTREE3   JSR XFILE          ; file: send it
          CMP #EFAIL
-         BNE XTREE1
+         BNE XTREE1         ; sent or skipped
          INC XTFAIL
          JMP XTREE1
+;
+; A folder ended: up one. Up out of
+; the top one (depth -1): all done
+;
 XTREE5   JSR XUP            ; up one level
          DEC XDEPTH
-         BPL XTREE1
+         BPL XTREE1         ; on in the parent
          LDA #0
          STA XWALK
          LDX #1             ; restore cursors
@@ -82,7 +98,7 @@ XTREE6   LDA XCURS,X
          DEX
          BPL XTREE6
          LDA XTFAIL
-         BNE XTREE8
+         BNE XTREE8         ; any part failed
          LDA #EDONE
          RTS
 XTREE8   LDA #EFAIL
@@ -95,96 +111,99 @@ XTREE8   LDA #EFAIL
 ; Exit: C=1 failed (XERROR says why),
 ;       nothing changed
 ;
-XFOLDER  JSR ENAME          ; XFN = its name
-         LDX #<XFN
-         STX PTR2
-         LDX #>XFN
-         STX PTR2+1
+XFOLDER  JSR ENAME          ; XFN = its name: a
+         LDX #<XFN          ; new listing will
+         STX PTR2           ; reuse the room
+         LDX #>XFN          ; (X: A/Y hold the
+         STX PTR2+1         ; name)
          JSR STRCPY
          LDA XDOWN
-         BNE XFOLD3
+         BNE XFOLD3         ; 1: server to Atari
 ;
 ; Atari to server: MKD, then CWD
 ;
-         LDA #<XFN
+         LDA #<XFN          ; ARGP = the name
          STA ARGP
          LDA #>XFN
          STA ARGP+1
          LDA #<VMKD
          LDY #>VMKD
-         JSR FDO
+         JSR FDO            ; MKD name
          BCC XFOLD1
-         CMP #EREPLY        ; exists: go in
-         BNE XFOLD2
-XFOLD1   LDA #<XFN
+         CMP #EREPLY        ; said no: most
+         BNE XFOLD2         ; likely it is there,
+XFOLD1   LDA #<XFN          ; so go in
          LDY #>XFN
          JSR FCWD
          BCS XFOLD2
-         LDA #<XFN
+         LDA #<XFN          ; PATH0 into it
          LDY #>XFN
          JSR LINTO
          JMP XFOLD5
-XFOLD2   STA FERR
-         JSR XERRI
+XFOLD2   STA FERR           ; FTP error
+         JSR XERRI          ; "Folder: why"
          .BYTE "Folder",0
          SEC
          RTS
 ;
 ; Server to Atari: XIO 42 (MKDIR)
-; with an 8.3 name, then CWD
+; with an 8.3 name, then CWD. Any
+; error but 146 is taken as "it is
+; there": go in
 ;
 XFOLD3   LDA #<XFN
          LDY #>XFN
          JSR ANAMES         ; ANAME = 8.3 name
          LDA #<ANAME
          LDY #>ANAME
-         JSR LSPECN
+         JSR LSPECN         ; FSPEC = PATH0+ANAME
          LDA #<FSPEC
          LDY #>FSPEC
          LDX #42
          JSR CXIO
-         BCC XFOLD4         ; any other error:
-         CMP #146           ; exists, go in
-         BNE XFOLD4
+         BCC XFOLD4         ; made it
+         CMP #146           ; 146: not supported
+         BNE XFOLD4         ; other: go in
          STA XST            ; 146: no folders
-         JMP SAYCIO1        ; (DOS 2.5)
-XFOLD4   LDA #<XFN
-         LDY #>XFN
+         JMP SAYCIO1        ; (DOS 2.5); C=1
+XFOLD4   LDA #<XFN          ; CWD by the server's
+         LDY #>XFN          ; name
          JSR FCWD
          BCS XFOLD2
-         LDA #<ANAME
-         LDY #>ANAME
+         LDA #<ANAME        ; PATH0 into the 8.3
+         LDY #>ANAME        ; one
          JSR LINTO
 ;
 ; Read both sides; back up if
 ; either can't be read
 ;
 XFOLD5   JSR LREAD
-         BCS XFOLD6
+         BCS XFOLD6         ; A=CIO status
          JSR RREAD
-         BCS XFOLD7
+         BCS XFOLD7         ; A=FTP error
          CLC
          RTS
 XFOLD6   STA XST
-         JSR LSPECN0
+         JSR LSPECN0        ; FSPEC = PATH0
          JSR SAYCIO
          JMP XFOLD8
 XFOLD7   STA FERR
          JSR XERRI
          .BYTE "List",0
-XFOLD8   JSR XUP
+XFOLD8   JSR XUP            ; out of it again
          SEC
          RTS
 ;
 ; XUP - both sides up one folder,
-; and read again
+; and read again (errors are not
+; looked at)
 ;
-XUP      JSR LUP
+XUP      JSR LUP            ; PATH0 up one
          LDA #<DOTDOT       ; CWD ..
          LDY #>DOTDOT
          JSR FCWD
          JSR LREAD
-         JMP RREAD
+         JMP RREAD          ; and return
 ;
 ; SAYCIO1 - report CIO error XST
 ; Exit: C=1
@@ -196,6 +215,6 @@ SAYCIO1  JSR SAYCIO
 ; LSPECN0 - FSPEC = current Atari
 ; folder, for SAYCIO
 ;
-LSPECN0  LDA #<NOTHING
+LSPECN0  LDA #<NOTHING      ; PATH0 + ""
          LDY #>NOTHING
          JMP LSPECN
