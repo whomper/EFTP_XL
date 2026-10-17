@@ -1,0 +1,141 @@
+;
+; SIMTEST.M65 - SIMTEST 1.0
+; A program for a8sim's tests: E:, K:,
+; D: files and listings, CIO errors,
+; RESET and the load check
+; Copyright (C) 2026 AERA | Erez Yaary
+;
+         .INCLUDE #D:AXEQU.M65
+AXPTR    =   $80
+AXERRS   =   2
+AXLOW    =   $3000
+AXHIGH   =   $3800
+AXWARM   =   STWARM
+         *=  $3700
+AXLOWM   .BYTE "SIMTEST: DOS too big",EOL
+AXROOMM  .BYTE "SIMTEST: no room",EOL
+         .INCLUDE #D:AXLOAD.M65
+         *=  $3000
+         .INCLUDE #D:AXRESET.M65
+         .INCLUDE #D:AXERR.M65
+;
+; STSTART - run address
+;
+STSTART  JSR AXSTART
+         LDA #<STHI
+         LDY #>STHI
+         JSR STSAY
+         LDX #$10           ; a key from K:
+         LDA #<STK
+         LDY #>STK
+         JSR STOPEN
+         LDA #AXGETCHR
+         STA ICCOM,X
+         LDA #0
+         STA ICBLL,X
+         STA ICBLH,X
+         JSR CIOV
+         STA STKEY+4
+         JSR STCLOSE
+         LDA #<STKEY
+         LDY #>STKEY
+         JSR STSAY
+         LDX #$20           ; a line of a file
+         LDA #<STFILE
+         LDY #>STFILE
+         JSR STOPEN
+         JSR STLINE
+         LDX #$20           ; the listing: 2 lines
+         LDA #<STDIR
+         LDY #>STDIR
+         JSR STOPENX
+         JSR STLINE2
+         LDX #$20           ; no such file
+         LDA #<STNONE
+         LDY #>STNONE
+         JSR STOPEN
+         JSR AXERRT         ; Y: its status
+         BCS STWAIT
+         JSR STSAY
+STWAIT   LDX CH             ; a key, or RESET
+         CPX #$FF
+         BEQ STWAIT
+         JMP (DOSVEC)
+;
+; STWARM - after RESET: say so, to DOS
+;
+STWARM   LDA #<STWMSG
+         LDY #>STWMSG
+         JSR STSAY
+         JMP (DOSVEC)
+;
+; STSAY - the line at A/Y on E:
+;
+STSAY    STA ICBAL
+         STY ICBAH
+         LDA #$FF
+         STA ICBLL
+         LDA #0
+         STA ICBLH
+         LDA #AXPUTREC
+         STA ICCOM
+         LDX #0
+         JMP CIOV
+;
+; STOPEN - open A/Y for reading on
+; IOCB X; STOPENX: as a directory
+; Exit: Y the status
+;
+STOPEN   PHA
+         LDA #AXOPNIN
+         BNE STOPEN1        ; always
+STOPENX  PHA
+         LDA #AXOPNIN+AXDIRECT
+STOPEN1  STA ICAX1,X
+         LDA #$80           ; long listing
+         STA ICAX2,X
+         PLA
+         STA ICBAL,X
+         TYA
+         STA ICBAH,X
+         LDA #AXOPEN
+         STA ICCOM,X
+         JMP CIOV
+;
+; STLINE - a line from IOCB X onto
+; E:, then close; STLINE2: two lines
+;
+STLINE2  JSR STGET
+STLINE   JSR STGET
+STCLOSE  LDA #AXCLOSE
+         STA ICCOM,X
+         JMP CIOV
+STGET    LDA #<STBUF
+         STA ICBAL,X
+         LDA #>STBUF
+         STA ICBAH,X
+         LDA #40
+         STA ICBLL,X
+         LDA #0
+         STA ICBLH,X
+         LDA #AXGETREC
+         STA ICCOM,X
+         JSR CIOV
+         TXA
+         PHA
+         LDA #<STBUF
+         LDY #>STBUF
+         JSR STSAY
+         PLA
+         TAX
+         RTS
+STHI     .BYTE "HI",EOL
+STKEY    .BYTE "KEY ?",EOL
+STWMSG   .BYTE "WARM",EOL
+STK      .BYTE "K:",EOL
+STFILE   .BYTE "D:HELLO.TXT",EOL
+STDIR    .BYTE "D:*.*",EOL
+STNONE   .BYTE "D:NONE.TXT",EOL
+STBUF    *=  *+41
+         *=  RUNAD
+         .WORD STSTART
