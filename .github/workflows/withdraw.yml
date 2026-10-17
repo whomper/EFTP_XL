@@ -1,5 +1,8 @@
 name: Withdraw
 
+# AERA XL (AERA-Atari xl/workflows/withdraw.yml, copied here by
+# tools/sync-xl.sh: change it there).
+
 # Marks releases that must not be used: puts a notice at the top of
 # each one's notes, naming the release to use instead and why. The
 # files stay, so old links still work. Actions > Withdraw > Run workflow.

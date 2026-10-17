@@ -1,10 +1,10 @@
 ;
 ; FONT.M65 - EFTP_XL 1.1
-; The font: EDOS's, plus EFTP_XL's own
+; The font: AERA.FNT, built in
 ; Copyright (C) 2026 AERA | Erez Yaary
 ;
-; From fonts/EFTPXL.FNT by
-; tools/font2asm.py; 1K aligned
+; Made by xl/tools/font.py; it
+; must be 1K aligned
 ;
 FONT     .BYTE $00,$00,$00,$00,$00,$00,$00,$00
          .BYTE $00,$0C,$0C,$0C,$0C,$00,$0C,$00

@@ -8,29 +8,19 @@ on:
 permissions:
   contents: read
 
-env:
-  ATASM_REV: 46be895a4312205dbcc4cf7a4a6721d72219d711
-
 jobs:
   build:
     name: Atari 8-bit build
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: ATasm
-        run: |
-          git init -q "$RUNNER_TEMP/atasm"
-          git -C "$RUNNER_TEMP/atasm" fetch -q --depth 1 https://github.com/CycoPH/atasm "$ATASM_REV"
-          git -C "$RUNNER_TEMP/atasm" checkout -q FETCH_HEAD
-          make -C "$RUNNER_TEMP/atasm/src" -j"$(nproc)" >/dev/null
-          echo "$RUNNER_TEMP/atasm/src" >> "$GITHUB_PATH"
-      - name: Build, and the source disk (the same program from it)
-        run: make atr
-      - name: Test
-        run: |
-          python3 -m venv "$RUNNER_TEMP/venv"
-          "$RUNNER_TEMP/venv/bin/pip" install -q py65 pyftpdlib
-          make test PYTHON="$RUNNER_TEMP/venv/bin/python"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Tools
+        run: pip install -q -r xl/requirements.txt -r requirements.txt
+      - name: Build, the disk (the same program from it), and test
+        run: make test
       - name: The build changed no tracked file (and CI publishes nothing)
         run: |
           git status --porcelain

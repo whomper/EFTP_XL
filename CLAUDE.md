@@ -1,14 +1,14 @@
 # Notes for working on EFTP_XL
 
 - **Releases carry the program.** `bin/` and `dist/` are build output,
-  never committed. `VERSION` in `ASM/EFTPXL.ASM` holds the last release
+  never committed. `VERSION` in `ASM/EFTPXL.M65` holds the last release
   (every build shows `x.y`; there is no -dev label). A release:
-  raise `VERSION` and the version in every source file's header,
-  commit, push, then run the Release workflow on main
-  with the notes; `.github/workflows/release.yml` builds ATasm at
-  `ATASM_REV` and the program, tags vX.Y and publishes `EFTPXL.PRG` and
-  the disk `EFTPXL.ATR` (the sources and the program, so not
-  `-SRC`; always this name). Never reuse a number.
+  raise `VERSION` and the version in every source file's header
+  (`make font` for FONT.M65), commit, push, then run the Release
+  workflow on main with the notes; `.github/workflows/release.yml`
+  (xl's) runs `make test` and `make dist`, tags vX.Y and publishes
+  `EFTPXL.PRG`, the disk `EFTPXL.ATR` (the sources and the program, so
+  not `-SRC`; always this name) and `AERA.FNT`. Never reuse a number.
 - **Only formal releases leave the build machine.** Erez gets vX.Y
   releases made by the Release workflow from `main`, nothing else: no
   test builds, no CI artifacts, no builds from a branch. Work lands on
@@ -17,25 +17,29 @@
   next number, and run the Withdraw workflow
   (`.github/workflows/withdraw.yml`) on the bad ones: it puts a
   "Withdrawn: use vX.Y" notice at the top of their notes.
-- **The program is Mac/65 source** in `ASM/`, built here with ATasm
-  (`-mac65`) and on the Atari with Mac/65. Keep to what both take:
-  labels of letters and digits only, unique across all files (no
-  `.LOCAL`, no `?` labels); `*=*+n` for room, never `.DS`; no `.INCBIN`,
-  `.REPT`, `%%`, `<<`; `[ ]` around an expression after `<` or `>`;
-  only `EFTPXL.ASM` has `.INCLUDE #D:NAME.M65` lines; no TAB or `{ } ~ \``
-  (not ATASCII); a file stays under about 14K as `tools/atari_src.py`
-  writes it, so Mac/65 can ENTER it. The source disk carries them
-  tokenized (`tools/mac65tok.py`, checked byte for byte against what
-  MAC/65 1.01 saves); an operator or directive not used before needs
-  its token checked against Mac/65 the same way. `make atr` checks the
-  disk gives the same program.
+- **xl/ is the AERA 8-bit shared code and tools** (AERA-Atari, the
+  `xl` branch; the rules are AERA-Atari's
+  `standards/ATARI-XL-GUIDELINES.md`). It is read-only here: change it
+  in AERA-Atari and bring it in with `tools/sync-xl.sh` (commit as
+  AERA, as always). Something in xl/ that doesn't fit: tell the hub,
+  don't change the copy.
+- **The program is Mac/65 source** in `ASM/` (NAME.M65, no line
+  numbers in git), built here with `xl/tools/mac65.py` and on the
+  Atari with MAC/65 1.01; both give the same bytes. The main file
+  `EFTPXL.M65` is the only one with `.INCLUDE #D:NAME.M65` lines, its
+  own files and xl's `AX*.M65` (AXEQU first). Labels of letters and
+  digits, unique across all files; `*=*+n` for room; `[ ]` around an
+  expression after `<` or `>`; a zero-page name defined before it is
+  used; no TAB or `{ } ~ \`` (not ATASCII). `make atr` makes the disk
+  (`xl/tools/atari_src.py`: numbered and tokenized, headers and sizes
+  checked) and checks it gives the same program.
 - **Comments** in the sources are short, in the usual Atari way: each
   file starts with the header `; NAME.M65 - EFTP_XL x.y`, a line on
   what is in it and the copyright line (`make atr` checks the name and
   version); each routine has a few lines on what it does, its inputs
   and `Exit:`; short end-of-line comments where the code doesn't say it
   itself. Comment lines fit 38 columns.
-- **Test** with `make test` (tools/test_sim.py, the real program on py65
+- **Test** with `make test` (xl's tests, then tools/test_sim.py: the real program on py65
   against pyftpdlib): all its checks pass before a push.
 - **The README's pictures** are the real program in tools/sim.py:
   `tools/screenshots.py` takes them again (docs/screens); take them

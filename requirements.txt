@@ -1,0 +1,4 @@
+# EFTP_XL's own, besides xl/requirements.txt: the FTP server the
+# tests run against, and the README's pictures (tools/screenshots.py)
+pyftpdlib==2.2.0
+pillow==12.3.0
