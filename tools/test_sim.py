@@ -210,6 +210,24 @@ def main():
         check('load check: DOS too big', s.to_dos and b'MEMLO is above it' in s.eout
               and s.mem[0x4000] == 0, repr(bytes(s.eout)[:80]))
 
+        # EFTPXL.CFG: SSAVE writes the note first; lines that start with
+        # ; are skipped when read; 1.2's file (no note) still reads
+        cfg = os.path.join(d1, 'EFTPXL.CFG')
+        saved = open(cfg, 'rb').read()
+        check('CFG: the note on top', saved.startswith(b'; EFTPXL.CFG - ')
+              and all(len(x) <= 38 for x in saved.split(b'\x9b')
+                      if x.startswith(b';')), repr(saved[:80]))
+        site_line = [x for x in saved.split(b'\x9b') if x and not x.startswith(b';')][0]
+        open(cfg, 'wb').write(b'; a note\x9b;\x9b' + site_line + b'\x9b; another\x9b')
+        shots = run('^K\\s\\e^Q', d1)
+        check('CFG: notes skipped', 'Test' in shots[0] and 'note' not in shots[0]
+              and 'another' not in shots[0], shots[0])
+        open(cfg, 'wb').write(site_line + b'\x9b')               # as 1.2 wrote it
+        shots = run('^K\\n\\w\\s^Q', d1)
+        check('CFG: 1.2\'s file still read', 'readme.txt' in shots[0] or 'games' in shots[0],
+              shots[0][:200])
+        open(cfg, 'wb').write(saved)
+
         # AERA.FNT on D1: is read over the built-in font
         fnt = bytes((i * 29 + 3) & 255 for i in range(1024))
         open(os.path.join(d1, 'AERA.FNT'), 'wb').write(fnt)

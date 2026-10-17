@@ -1,0 +1,99 @@
+EFTP_XL TEST PLAN (EFTPTEST.ATR)
+Copyright (C) 2026 AERA | Erez Yaary
+
+Boot this disk in D1: (SpartaDOS 3.2)
+with the FujiNet on, and an FTP server
+on your network (the README says how).
+Tick each one; note what you saw when
+it isn't as written.
+
+ON THE DISK
+ EFTPXL.PRG  the program
+ AERA.FNT    the font
+ EFTPXL.CFG  one site: edit it first
+ TEXT.TXT    text, a few lines
+ BIN.DAT     8K binary
+ EMPTY.DAT   0 bytes
+ BIG.DAT     64K binary
+ TREE>       a folder: A.TXT, and
+ TREE>SUB>   a folder in it: B.DAT
+
+1 START
+[ ] EFTPXL.PRG at the D1: prompt:
+    the title "EFTP_XL 1.3 ... (C)
+    AERA 2026", the disk in the left
+    pane.
+[ ] With BASIC on, the same.
+[ ] RENAME AERA.FNT AERA.OFF, start
+    it: the same font (its own copy).
+    RENAME AERA.OFF AERA.FNT after.
+
+2 HELP
+[ ] HELP (or ?): the keys, then
+    EFTP_XL 1.3, File transfer over
+    FujiNet, the copyright line,
+    GPL-2.0-or-later, the GitHub page.
+[ ] Any key: back.
+[ ] BREAK: back, as ESC.
+
+3 THE SITE
+[ ] ^K, the site, ^E: set the server
+    (PI_IP) to your server's address,
+    the port and the user. Leave the
+    password empty. RETURN goes field
+    by field; the last one saves.
+[ ] TYPE EFTPXL.CFG (after ^Q): the
+    note on top, then the site line.
+[ ] ^K, RETURN: the password is asked;
+    the server's files come on the
+    right.
+[ ] ^K, the site, ^E, then BREAK: no
+    change, as ESC.
+
+4 FILES
+[ ] TEXT.TXT across (RETURN): on the
+    server with CR LF line ends.
+[ ] BIN.DAT across: the same 8192
+    bytes on the server.
+[ ] EMPTY.DAT across: 0 bytes there.
+[ ] Back down, each: replace? Y. The
+    same files as before.
+[ ] BIG.DAT down, ESC half way:
+    Stopped, and no half file left.
+[ ] BIG.DAT down, BREAK half way: it
+    stops too (Stopped, or an error
+    line if BREAK came during SIO);
+    the program goes on.
+[ ] BIG.DAT down in full: the speed
+    and the sums at the end.
+
+5 FOLDERS
+[ ] TREE across (SPACE, ^T): on the
+    server TREE, A.TXT, SUB, B.DAT.
+[ ] Back down into D1:>DOWN> (^N
+    DOWN, go in, TAB, ^T on TREE).
+[ ] ^N, ^E, DEL on both sides: a
+    folder made, renamed, deleted.
+
+6 RESET
+[ ] RESET on the main screen: the
+    main screen again, not connected.
+[ ] Connect, start BIG.DAT, RESET half
+    way: the main screen, not
+    connected; connecting works again.
+[ ] RESET at the sites screen and at
+    HELP: the main screen.
+
+7 DOS 2.5 (if you have its disk)
+[ ] Copy EFTPXL.PRG and EFTPXL.CFG to
+    it, L from the menu: it starts.
+[ ] ^N: "this DOS has no folders".
+
+8 QUIT
+[ ] ^Q: back at DOS, its own font and
+    colours.
+[ ] RESET now: DOS again, not
+    EFTP_XL (DOSINI is DOS's again).
+
+When it all holds, tell Claude which
+release you tried and what was off.

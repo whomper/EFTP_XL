@@ -83,6 +83,8 @@ SLOAD1   LDA SCOUNT
          BCS SLOAD9         ; end of file
          LDA SLINE
          BEQ SLOAD1         ; skip empty lines
+         CMP #';            ; and the notes
+         BEQ SLOAD1
          LDX SCOUNT         ; a new site, all 0
          JSR SCLEAR
          INC SCOUNT
@@ -133,13 +135,22 @@ SLOAD7   LDY #SMODE
          JMP SLOAD1
 SLOAD9   JMP CCLOSE
 ;
-; SSAVE - write the sites to the file
+; SSAVE - write the sites to the file,
+; after the note on what it is
 ; Exit: C=1 on error, A=CIO code
 ;
 SSAVE    LDA #<CFG
          LDY #>CFG
          LDX #8             ; write: a new file
          JSR COPEN
+         BCS SSAVE4
+         LDA #CFGNOTEN      ; the note first
+         STA XLEN
+         LDA #0
+         STA XLEN+1
+         LDA #<CFGNOTE
+         LDY #>CFGNOTE
+         JSR CWRITE
          BCS SSAVE4
          LDA #0
          STA SSI
@@ -182,6 +193,15 @@ SSAVE4   PHA                ; keep the error
          PLA
          SEC
          RTS
+;
+; The note at the top of EFTPXL.CFG:
+; lines that start with ; are skipped
+;
+CFGNOTE  .BYTE "; EFTPXL.CFG - EFTP_XL's sites",EOL
+         .BYTE "; name|server|port|user|password|",EOL
+         .BYTE "; folder|Atari folder|mode",EOL
+         .BYTE "; a password here is plain text",EOL
+CFGNOTEN =   *-CFGNOTE
 ;
 ; SSAVEUI - SSAVE; on error say so
 ; and wait for a key

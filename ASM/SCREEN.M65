@@ -291,17 +291,30 @@ KEYB2    LDA PTR3
          INC PTR3+1
 KEYB3    RTS
 ;
-; KEYHIT - Z=0 when a key waits
+; KEYHIT - Z=0 when a key waits, or
+; BREAK was pressed (the OS puts 0
+; in BRKKEY; CH stays $FF)
 ; (tools/sim.py watches LDX CH)
 ;
-KEYHIT   LDX CH
+KEYHIT   LDX BRKKEY         ; 0: BREAK
+         BNE KEYH1
+         INX                ; X=1: Z=0
+         RTS
+KEYH1    LDX CH
          CPX #$FF           ; $FF: no key
          RTS
 ;
 ; KEYGET - wait for a key
-; Exit: A=key, KHELP for HELP
+; Exit: A=key, KHELP for HELP, KESC
+;       for BREAK
 ;
-KEYGET   LDA HELPFG         ; HELP, set by OS
+KEYGET   LDA BRKKEY         ; BREAK: as ESC
+         BNE KEYG0
+         LDA #$80           ; BREAK seen
+         STA BRKKEY
+         LDA #KESC
+         RTS
+KEYG0    LDA HELPFG         ; HELP, set by OS
          BEQ KEYG1
          LDA #0             ; seen
          STA HELPFG
