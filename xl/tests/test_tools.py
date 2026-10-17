@@ -55,6 +55,18 @@ class TestAssembler(unittest.TestCase):
         _, b = assemble({'MAIN.M65': ' *= $2000\n JSR SUB\nSUB RTS\n'})   # absolute: fine
         self.assertEqual(b[6:9], bytes([0x20, 0x03, 0x20]))
 
+    def test_equate_from_a_later_symbol(self):
+        # MAC/65 1.01 takes it (EFTP_XL tried the cartridge): A9 34 A9 12 60
+        _, b = assemble({'MAIN.M65': ' *= $4000\nXA = YB\n LDA #<XA\n LDA #>XA\n RTS\n'
+                                     'YB = $1234\n'})
+        self.assertEqual(b[6:], bytes([0xA9, 0x34, 0xA9, 0x12, 0x60]))
+        _, b = assemble({'MAIN.M65': 'AXHIGH = BSSEND\n *= $2000\n .WORD AXHIGH\nBSSEND *= *+2\n'})
+        self.assertEqual(b[6:], bytes([0x02, 0x20]))
+        with self.assertRaisesRegex(mac65.AsmError, 'phase error'):   # zero page: not safe
+            assemble({'MAIN.M65': 'XA = YB\n *= $2000\n LDA XA\nYB = $80\n'})
+        with self.assertRaisesRegex(mac65.AsmError, r'\.IF'):
+            assemble({'MAIN.M65': 'XA = YB\n .IF XA\n .ENDIF\nYB = 1\n'})
+
     def test_if_on_a_later_symbol(self):
         with self.assertRaisesRegex(mac65.AsmError, r'\.IF'):
             assemble({'MAIN.M65': ' *= $2000\n .IF LATER\n NOP\n .ENDIF\nLATER = 1\n'})

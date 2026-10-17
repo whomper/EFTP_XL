@@ -1,0 +1,30 @@
+;
+; HELLO.M65 - HELLO 1.0
+; A program for the atari800 check:
+; it says so on E:, then waits
+; Copyright (C) 2026 AERA | Erez Yaary
+;
+         .INCLUDE #D:AXEQU.M65
+AXLOW    =   $3000
+AXHIGH   =   $3100
+         *=  $9000
+AXLOWM   .BYTE "HELLO: DOS too big",EOL
+AXROOMM  .BYTE "HELLO: no room",EOL
+         .INCLUDE #D:AXLOAD.M65
+         *=  $3000
+AXHELLO  LDA #<AXHMSG
+         STA ICBAL
+         LDA #>AXHMSG
+         STA ICBAH
+         LDA #$FF
+         STA ICBLL
+         LDA #0
+         STA ICBLH
+         LDA #AXPUTREC
+         STA ICCOM
+         LDX #0
+         JSR CIOV
+AXHWAIT  JMP AXHWAIT        ; for ever
+AXHMSG   .BYTE "AERA XL OK",EOL
+         *=  RUNAD
+         .WORD AXHELLO
