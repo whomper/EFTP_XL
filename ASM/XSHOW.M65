@@ -101,7 +101,7 @@ DROW2    STA DRFILL
          SEC
          SBC DRFILL         ; 16 - done
          STA SW
-         LDA #CHSHADE       ; to go: shaded
+         LDA ICSHADE        ; to go: shaded
          JSR REP
          LDA #100
          JSR XRATIO         ; done*100/size

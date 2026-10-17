@@ -10,6 +10,10 @@ BSS      =   *
 ;
 ; Screen and text
 ;
+ICFOLD   *=  *+1        ; the icons for the
+ICFILE   *=  *+1        ; font in use
+ICMORE   *=  *+1        ; (SCRINIT)
+ICSHADE  *=  *+1
 OCHBAS   *=  *+1        ; DOS's font, colours
 OCOL1    *=  *+1
 OCOL2    *=  *+1

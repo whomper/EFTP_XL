@@ -4,82 +4,11 @@
 ; Copyright (C) 2026 AERA | Erez Yaary
 ;
 ;
-; FONTLD - the font for the screen,
-; in the 1K below it, as EDOS's:
-; (RAMTOP-8) AND $FC. D:AERA.FNT
-; when it is there, else a copy of
-; the font in use (CHBAS); then the
-; icons, ours, put over it
-;
-FONTLD   LDA RAMTOP
-         SEC
-         SBC #8
-         AND #$FC
-         STA FONTPG
-         LDX #IOCB
-         JSR AXFONT         ; A: the page
-         BCC FONTL2         ; read
-         LDA CHBAS          ; none: copy the
-         STA PTR+1          ; font in use, 4
-         LDA FONTPG         ; pages
-         STA PTR2+1
-         LDY #0
-         STY PTR
-         STY PTR2
-         LDX #4
-FONTL1   LDA (PTR),Y
-         STA (PTR2),Y
-         INY
-         BNE FONTL1
-         INC PTR+1
-         INC PTR2+1
-         DEX
-         BNE FONTL1
-;
-; ICONS' 32 bytes to their glyphs:
-; byte X is row X AND 7 of icon
-; X/8, at ICONLO/ICONHI in the page
-;
-FONTL2   LDX #0
-FONTL3   TXA
-         LSR A
-         LSR A
-         LSR A
-         TAY                ; Y: the icon
-         LDA ICONLO,Y
-         STA PTR2
-         LDA ICONHI,Y
-         CLC
-         ADC FONTPG
-         STA PTR2+1
-         TXA
-         AND #7
-         TAY                ; Y: its row
-         LDA ICONS,X
-         STA (PTR2),Y
-         INX
-         CPX #32
-         BNE FONTL3
-         RTS
-;
-; The icons, on rarely used
-; characters (screen code: ATASCII):
-; $40 (^, heart) a folder, $46 (^F)
-; the "more" mark, $50 (^P, club) a
-; file, $7B (^;, spade) a bar's fill
-; (AERA.FNT has them there too)
-;
-ICONLO   .BYTE <[$40*8],<[$46*8],<[$50*8],<[$7B*8]
-ICONHI   .BYTE >[$40*8],>[$46*8],>[$50*8],>[$7B*8]
-ICONS    .BYTE $00,$70,$7E,$42,$42,$7E,$00,$00
-         .BYTE $00,$00,$00,$00,$00,$00,$54,$00
-         .BYTE $00,$78,$4C,$44,$44,$7C,$00,$00
-         .BYTE $AA,$55,$AA,$55,$AA,$55,$AA,$55
-FONTPG   .BYTE 0            ; the font's page
-;
 ; SCRINIT - take over DOS's GR.0
 ; screen: row table, cleared, the
-; font (FONTPG) and colours (the
+; font (AERA.FNT below the screen if
+; it is there, else the ROM's) with
+; the icons for it, the colours (the
 ; old ones kept)
 ;
 SCRINIT  LDA CHBAS
@@ -117,8 +46,17 @@ SCRI2    JSR CLRROW
          BPL SCRI2
          LDA #1             ; no cursor
          STA CRSINH
-         LDA FONTPG         ; the font's page
-         STA CHBAS
+         LDX #IOCB          ; xl's AXFONT: C=0
+         JSR AXFONT         ; AERA.FNT, C=1 ROM
+         LDX #3             ; AERA.FNT's icons,
+         BCC SCRI3
+         LDX #7             ; or the ROM's
+SCRI3    LDY #3
+SCRI4    LDA ICONSET,X      ; to ICFOLD..ICSHADE
+         STA ICFOLD,Y
+         DEX
+         DEY
+         BPL SCRI4
          LDA #$CA           ; light text
          STA COLOR1
          LDA #$94           ; on blue
@@ -324,6 +262,14 @@ BOX3     LDA BOXCH,Y        ; edge, middle, edge
 ; Side, top, bottom: 3 each
 ;
 BOXCH    .BYTE CHVLINE,32,CHVLINE,CHTL,CHHLINE,CHTR,CHBL,CHHLINE,CHBR
+;
+; The icons: AERA.FNT has its own;
+; the ROM font has these, alike in
+; what they say (folder, file, name
+; cut short, a bar's part to go)
+;
+ICONSET  .BYTE CHFOLDER,CHFILE,CHMORE,CHSHADE
+         .BYTE ROMFOLD,ROMFILE,ROMMORE,ROMSHADE
 ;
 ; PUTSP - a space
 ;

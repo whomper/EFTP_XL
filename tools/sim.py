@@ -36,10 +36,12 @@ from a8sim import parse_keys, Stop  # noqa: E402,F401
 from a8sim.core import CHBAS, DOSINI, DOSINI_TRAP, RAMTOP, RUNAD  # noqa: E402,F401
 from fujinet import FujiNet  # noqa: E402,F401
 
-# EFTP_XL's own characters, as screen_text shows them
+# EFTP_XL's own characters, as screen_text shows them: the icons the same
+# with AERA.FNT ($00 $10 $06 $7B) and with the ROM font ($7F, blank, $1F, $12)
 GLYPHS = {0x12: '-', 0x7C: '|', 0x11: '+', 0x05: '+', 0x1A: '+', 0x03: '+',
           0x01: '+', 0x04: '+', 0x17: '+', 0x18: '+', 0x14: '*', 0x60: '#',
-          0x1C: '^', 0x1D: 'v', 0x00: '[', 0x10: '.', 0x06: '~', 0x7B: ':'}
+          0x1C: '^', 0x1D: 'v', 0x00: '[', 0x10: '.', 0x06: '~', 0x7B: ':',
+          0x7F: '[', 0x1F: '~'}
 
 
 def Disks(drives, dos='sparta'):

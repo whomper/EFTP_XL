@@ -55,10 +55,14 @@ CHDOT    =   $14        ; connected
 CHMARK   =   $60        ; a marked file
 CHUP     =   $1C        ; arrows
 CHDOWN   =   $1D
-CHFOLDER =   $00        ; own (mkfont.py)
+CHFOLDER =   $00        ; AERA.FNT's icons
 CHFILE   =   $10
 CHMORE   =   $06        ; name cut short
 CHSHADE  =   $7B        ; bar fill
+ROMFOLD  =   $7F        ; the ROM's: a right
+ROMFILE  =   $20        ; triangle, blank,
+ROMMORE  =   $1F        ; an arrow, a line
+ROMSHADE =   $12
 ;
 ; Keys
 ;

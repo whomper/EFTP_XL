@@ -3,13 +3,11 @@
 ; The main screen and its keys
 ; Copyright (C) 2026 AERA | Erez Yaary
 ;
-; START - run address: the font, then
-; clear the variables, draw the
-; screen, read the disk, the key loop
-; (RESET comes in at START0)
+; START - run address: clear the
+; variables, draw the screen, read
+; the disk, then the key loop
 ;
-START    JSR FONTLD         ; below the screen
-START0   LDA #<BSS          ; zero BSS..BSSEND
+START    LDA #<BSS          ; zero BSS..BSSEND
          STA PTR
          LDA #>BSS
          STA PTR+1
@@ -50,8 +48,8 @@ MAIN     JSR KEYGET         ; main loop
 ; init (xl's AXRESET): close N2:
 ; and N1: (the FujiNet keeps them
 ; open), then start again, so
-; disconnected; the font is still
-; in its page
+; disconnected (AXFONT only sets
+; CHBAS again: the font is kept)
 ;
 AXWARM   LDX #$FF           ; a fresh stack
          TXS
@@ -59,7 +57,7 @@ AXWARM   LDX #$FF           ; a fresh stack
          LDA #0
          STA CONN
          JSR NCLOSE         ; N1:
-         JMP START0
+         JMP START
 ;
 ; DISP - run the routine for KEY;
 ; it is pushed as address-1, so RTS
@@ -310,11 +308,11 @@ DENT2    STY SINV
          LDA DEF
          AND #EMARK
          BNE DENT3
-         LDY #CHFOLDER      ; folder,
+         LDY ICFOLD         ; folder,
          LDA DEF
          AND #EDIR
          BNE DENT3
-         LDY #CHFILE        ; else a file
+         LDY ICFILE         ; else a file
 DENT3    TYA
          JSR PUTCH
 ; the name; if too long, cut one
@@ -331,7 +329,7 @@ DENT3    TYA
          BEQ DENT4
          DEC SW             ; too long: cut it,
          JSR DENTN
-         LDA #CHMORE        ; then the more mark
+         LDA ICMORE         ; then the more mark
          JSR PUTCH
          JMP DENT5
 DENT4    JSR DENTN
@@ -554,8 +552,8 @@ DPANE4   STY SINV
          STA DPP
          BCC DPANE4A
          INC DPP+1
-DPANE4A  DEC SW             ; CHMORE, then w-1
-         LDA #CHMORE
+DPANE4A  DEC SW             ; ICMORE, then w-1
+         LDA ICMORE
          JSR PUTCH
 DPANE5   LDA DPP
          LDY DPP+1

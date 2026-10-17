@@ -307,34 +307,37 @@ def main():
         else:
             check('test disk: made', False, td)
 
-        # the font: D:AERA.FNT read into the 1K below the screen, else a
-        # copy of the font in use; EFTP_XL's four icons over it either way
-        page = ((LAST.mem[sim.RAMTOP] - 8) & 0xFC) << 8
-        icons = {0x40: b'\x00\x70\x7E\x42\x42\x7E\x00\x00',
-                 0x46: b'\x00\x00\x00\x00\x00\x00\x54\x00',
-                 0x50: b'\x00\x78\x4C\x44\x44\x7C\x00\x00',
-                 0x7B: b'\xAA\x55\xAA\x55\xAA\x55\xAA\x55'}
-
-        def with_icons(font):
-            font = bytearray(font)
-            for c, g in icons.items():
-                font[c * 8:c * 8 + 8] = g
-            return bytes(font)
+        # the font: D:AERA.FNT read into the 1K below the screen (xl's
+        # AXFONT) and used, set again after RESET without reading it
+        # again; without it the ROM font, with the ROM's icons
+        def font_run(keys):
+            disks = sim.Disks({1: d1})
+            opened = []
+            real_open = disks.open
+            disks.open = lambda spec, a1, a2: (opened.append(spec), real_open(spec, a1, a2))[1]
+            s = sim.Sim(XEX, sim.parse_keys(keys), 0x1D00, sim.FujiNet(), disks)
+            seen = []
+            base = lambda: s.word(0x58)
+            s.snapshot = lambda: seen.append((s.mem[sim.CHBAS], bytes(s.mem[base():base() + 960])))
+            s.run()
+            return s, seen, [x for x in opened if 'AERA.FNT' in x.upper()]
         fnt = bytes((i * 29 + 3) & 255 for i in range(1024))
         open(os.path.join(d1, 'AERA.FNT'), 'wb').write(fnt)
-        run('^Q', d1)
-        check('AERA.FNT read below the screen, the icons on it',
-              bytes(LAST.mem[page:page + 1024]) == with_icons(fnt))
-        check('the font page used, and DOS\'s back after ^Q',
-              LAST.to_dos and LAST.mem[sim.CHBAS] == 0xE0)
+        s, seen, opened = font_run('\\s\\!\\w\\s^Q')
+        page = (s.mem[sim.RAMTOP] - 8) & 0xFC
+        check('AERA.FNT read below the screen and used',
+              bytes(s.mem[page << 8:(page << 8) + 1024]) == fnt and seen[0][0] == page,
+              f'{seen[0][0]:02X} {page:02X}')
+        check('AERA.FNT: its icons, folder and file', b'\x40' in seen[0][1]
+              and b'\x50' in seen[0][1])
+        check('RESET: the font set again, not read again',
+              len(seen) == 2 and seen[1][0] == page and len(opened) == 1, f'{opened}')
+        check('^Q: DOS\'s font back', s.to_dos and s.mem[sim.CHBAS] == 0xE0)
         os.remove(os.path.join(d1, 'AERA.FNT'))
-        run('^Q', d1)
-        rom = bytes(LAST.mem[0xE000:0xE400])
-        check('no AERA.FNT: the font in use, and the icons',
-              bytes(LAST.mem[page:page + 1024]) == with_icons(rom))
-        aera = open(BUILTIN, 'rb').read() if os.path.exists(BUILTIN) else b''
-        check('AERA.FNT has the icons where EFTP_XL puts them',
-              aera and with_icons(aera) == aera)
+        s, seen, opened = font_run('\\s^Q')
+        check('no AERA.FNT: the ROM font, with its icons', seen[0][0] == 0xE0
+              and b'\x7F' in seen[0][1] and b'\x40' not in seen[0][1]
+              and b'\x50' not in seen[0][1])
         check('no font in the program', len(open(XEX, 'rb').read()) < 15360)
 
     finally:
