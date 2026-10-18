@@ -10,6 +10,15 @@
   `EFTPXL.PRG`, the disk `EFTPXL.ATR` (the sources and the program, so
   not `-SRC`; always this name), `AERA.FNT` and `EFTPTEST.ATR` (the
   test disk, with docs/TESTPLAN.TXT). Never reuse a number.
+- **Talking with Erez.** No progress or in-between messages: write to
+  him when he has to decide something, with a short context and the
+  decision. Findings: the information, your assessment, what he should
+  do. Messages to the hub stay complete, with the evidence.
+- **Push to `main` without asking** (Erez, 2026-10-18), once `make
+  test` passes. A release still needs Erez's yes in this session.
+  A change to the docs alone (README, docs/, CLAUDE.md) takes the
+  short path: pushed once it reads right, without `make test`; a
+  docs-only release, too, with his yes.
 - **Only formal releases leave the build machine.** Erez gets vX.Y
   releases made by the Release workflow from `main`, nothing else: no
   test builds, no CI artifacts, no builds from a branch. Work lands on
