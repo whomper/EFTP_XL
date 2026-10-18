@@ -3,9 +3,10 @@
 ; The Sites screen and EFTPXL.CFG
 ; Copyright (C) 2026 AERA | Erez Yaary
 ;
-SITESZ   =   159        ; bytes SREC holds
+SITESZ   =   160        ; bytes SREC holds
 SPOOLSZ  =   640        ; the sites' lines
-SMODE    =   158        ; its mode, last
+SMODE    =   158        ; its mode
+SPROTO   =   159        ; its protocol
 SLROW    =   4          ; the list
 SEPROW   =   SLROW+MAXSITES ; line under it
 FROW     =   SEPROW+1   ; the fields
@@ -60,6 +61,8 @@ SSEL     JSR SCLEAR
 ;
 ; The 7 fields, each to its '|':
 ; "Home|ftp.x.org|21|erez||/|D1:|0"
+; then the mode, and "|1" or "|2"
+; for SFTP or FTPS (none: FTP)
 ; PTR walks the line, TMP is where
 ; in the site, TMP2 the room left
 ;
@@ -91,11 +94,23 @@ SSEL5    JSR INCPTR         ; past the '|'
          JMP SSEL2
 SSEL6    LDY #0             ; mode digit
          LDA (PTR),Y
+         BEQ SSEL8          ; none: binary
          AND #$0F           ; '0'-'2' to 0-2
          CMP #MODETYPE+1
          BCC SSEL7
          LDA #MODEBIN       ; bad: binary
 SSEL7    LDY #SMODE
+         STA (SITEP),Y
+         LDY #1             ; "|" and the
+         LDA (PTR),Y        ; protocol, if
+         CMP #'|            ; there
+         BNE SSEL8
+         INY
+         LDA (PTR),Y
+         AND #$0F
+         CMP #PROFTPS+1
+         BCS SSEL8          ; bad: FTP
+         LDY #SPROTO
          STA (SITEP),Y
 SSEL8    RTS
 ;
@@ -128,7 +143,8 @@ SCLEAR1  STA (SITEP),Y
 ;
 ; SPACK - BUF = SITEP as a line: the
 ; 7 fields, a '|' after each, then
-; the mode digit
+; the mode digit, and "|" and the
+; protocol's if it isn't FTP
 ;
 SPACK    LDA #<BUF
          LDY #>BUF
@@ -147,17 +163,30 @@ SPACK1   LDX SFI            ; field, then '|'
          LDY #SMODE
          LDA (SITEP),Y
          ORA #'0            ; mode as a digit
+         JSR SBCH
+         LDY #SPROTO        ; FTP: nothing, so
+         LDA (SITEP),Y      ; the line is as
+         BEQ SPACK2         ; 1.3 wrote it
+         PHA
+         LDA #'|
+         JSR SBCH
+         PLA
+         ORA #'0
          JMP SBCH
+SPACK2   RTS
 ;
 ; SLOAD - read the sites from
 ; D:EFTPXL.CFG into SPOOL, a line
 ; each (empty lines and notes, ;,
-; skipped); D: is where EFTP_XL was
-; run from
+; skipped), and the gateway, @, into
+; GW; D: is the DOS's current drive
 ; Exit: SCOUNT = sites read
 ;
 SLOAD    LDA #0
          STA SCOUNT
+         STA GW             ; no gateway yet
+         LDA #'@            ; for SSAVE
+         STA GWAT
          LDA #<SPOOL
          STA SPEND
          LDA #>SPOOL
@@ -196,6 +225,8 @@ SLOAD2   CPX #8
          LDA (PTR),Y
          CMP #';
          BEQ SLOAD1         ; a note: dropped
+         CMP #'@
+         BEQ SLOADG         ; the gateway
          LDA SPEND          ; kept: SPEND past
          SEC                ; it and its 0
          ADC TMP
@@ -205,6 +236,22 @@ SLOAD2   CPX #8
 SLOAD3   INC SCOUNT
          BNE SLOAD1         ; always
 SLOAD9   JMP CCLOSE
+;
+; "@10.0.0.5:2121": all after the @
+; into GW, cut to fit
+;
+SLOADG   LDX #0
+         LDY #1
+SLOADG1  LDA (PTR),Y
+         STA GW,X
+         BEQ SLOADG2        ; its 0 copied
+         INY
+         INX
+         CPX #GWLEN-1
+         BCC SLOADG1
+         LDA #0             ; too long: cut
+         STA GW,X
+SLOADG2  JMP SLOAD1
 ;
 ; SSAVE - write the sites to the file,
 ; after the note on what it is, with
@@ -227,7 +274,13 @@ SSAVE    STA SOP
          LDY #>CFGNOTE
          JSR CWRITE
          BCS SSAVE5
-         LDA #<SPOOL        ; PTR3 walks SPOOL
+         LDA GW             ; then the gateway,
+         BEQ SSAVE0         ; if there is one
+         LDA #<GWAT
+         LDY #>GWAT
+         JSR CPUTLN
+         BCS SSAVE5
+SSAVE0   LDA #<SPOOL        ; PTR3 walks SPOOL
          STA PTR3           ; (CPUTLN takes PTR)
          LDA #>SPOOL
          STA PTR3+1
@@ -302,7 +355,8 @@ SROOM1   LDA #<[SPOOL+SPOOLSZ]
 ;
 CFGNOTE  .BYTE "; EFTPXL.CFG - EFTP_XL's sites",EOL
          .BYTE "; name|server|port|user|password|",EOL
-         .BYTE "; folder|Atari folder|mode",EOL
+         .BYTE "; folder|Atari folder|mode|protocol",EOL
+         .BYTE "; @: the Pi gateway, address:port",EOL
          .BYTE "; a password here is plain text",EOL
 CFGNOTEN =   *-CFGNOTE
 ;
@@ -333,17 +387,25 @@ SSAVEUI  JSR SSAVE
          JSR KEYGET
 SSAVEU1  RTS
 ;
-; SHMODE - the three modes, mode A
-; in inverse
+; SHMODE - the three choices of
+; field X, 7 the Files: mode, 8 the
+; protocol; choice A in inverse
 ;
 SHMODE   STA SMD
-         LDX #FROW+7        ; the Files: row
+         LDA #<MODES
+         LDY #>MODES
+         CPX #8
+         BNE SHMODE0
+         LDA #<PROTS
+         LDY #>PROTS
+SHMODE0  STA PTR3
+         STY PTR3+1
+         TXA                ; its row
+         CLC
+         ADC #FROW
+         TAX
          LDY #VALCOL
          JSR AT
-         LDA #<MODES
-         STA PTR3
-         LDA #>MODES
-         STA PTR3+1
          LDA #0
          STA SMI            ; mode drawn
 SHMODE1  LDA SMI
@@ -402,11 +464,22 @@ SHFLD3   JSR SHFAT
          BEQ SHFLD6
          LDX SFI
          CPX #7
-         BNE SHFLD4
-         LDY #SMODE         ; row 7: the mode
+         BCC SHFLD4
+         TXA                ; rows 7, 8: the
+         CLC                ; mode, protocol
+         ADC #SMODE-7
+         TAY
+         LDA PTR3+1         ; the labels'
+         PHA                ; place kept
+         LDA PTR3
+         PHA
          LDA (SITEP),Y
-         JSR SHMODE         ; last row: PTR3
-         JMP SHFLD6         ; not needed now
+         JSR SHMODE         ; walks PTR3
+         PLA
+         STA PTR3
+         PLA
+         STA PTR3+1
+         JMP SHFLD6
 SHFLD4   JSR SHFAT
          LDX SFI
          JSR SFIELD
@@ -424,9 +497,10 @@ SHFLD4A  STA SW
 SHFLD5   JSR PUTW
 SHFLD6   INC SFI
          LDA SFI
-         CMP #8             ; 7 fields, mode
-         BNE SHFLD1
-         LDA SHS
+         CMP #9             ; 7, the 2 choices
+         BEQ SHFLD6A
+         JMP SHFLD1
+SHFLD6A  LDA SHS
          BEQ SHFLD7
          LDX #4
          JSR SFIELD
@@ -554,8 +628,9 @@ SEDIT    STX SEDI
          STA SFI
 ;
 ; Field SFI: 0-6 typed in by EDIT,
-; 7 the mode, by keys; then the key
-; that ended it says where to go
+; 7 the mode and 8 the protocol, by
+; keys; then the key that ended it
+; says where to go
 ;
 SEDIT1   LDA SFI            ; field SFI
          CMP #7
@@ -585,13 +660,18 @@ SEDIT4   STA EDMASK
          STX EDMASK
          JMP SEDIT6
 ;
-; The mode: SPACE or right is the
+; The choices: SPACE or right is the
 ; next, left the one before (+2,
 ; mod 3); others as after EDIT
 ;
-SEDIT5   JSR INFOI
+SEDIT5   CMP #8
+         BEQ SEDIT5C
+         JSR INFOI
+         .BYTE "SPACE changes, RETURN: the next",0
+         JMP SEDIT5D
+SEDIT5C  JSR INFOI
          .BYTE "SPACE changes, RETURN saves",0
-         JSR KEYGET
+SEDIT5D  JSR KEYGET
          LDX #1             ; next mode
          CMP #32
          BEQ SEDIT5A
@@ -601,7 +681,10 @@ SEDIT5   JSR INFOI
          CMP #KLEFT
          BNE SEDIT6
 SEDIT5A  STX TMP
-         LDY #SMODE
+         LDA SFI            ; its byte: the
+         CLC                ; mode's, or the
+         ADC #SMODE-7       ; protocol's
+         TAY
          LDA (SITEP),Y
          CLC
          ADC TMP
@@ -609,6 +692,7 @@ SEDIT5A  STX TMP
          BCC SEDIT5B
          SBC #3             ; C=1 here
 SEDIT5B  STA (SITEP),Y
+         LDX SFI
          JSR SHMODE
          JMP SEDIT1
 SEDITJ   JMP SEDIT1         ; for far branches
@@ -623,22 +707,26 @@ SEDIT7   CMP #KUP
          DEC SFI
          JMP SEDIT1
 SEDIT8   LDX SFI
-         CPX #7
-         BCS SEDIT9         ; on the mode
+         CPX #8
+         BCS SEDIT9         ; on the protocol
          INC SFI            ; any other: next
          JMP SEDIT1
 SEDIT9   CMP #KRETURN       ; RETURN on the
-         BNE SEDITJ         ; mode saves
+         BNE SEDITJ         ; protocol saves
 ;
 ; To be saved: blanks filled in, the
 ; line made, and is there room?
 ;
-         LDA SREC+48        ; no port: 21
-         BNE SEDIT10
+         LDA SREC+48        ; no port: 21, or
+         BNE SEDIT10        ; 22 for SFTP
+         LDX #'1
+         LDA SREC+SPROTO
+         CMP #PROSFTP
+         BNE SEDIT9A
+         LDX #'2
+SEDIT9A  STX SREC+49
          LDA #'2
          STA SREC+48
-         LDA #'1
-         STA SREC+49
          LDA #0
          STA SREC+50
 SEDIT10  LDA SREC           ; no name: use server
@@ -673,7 +761,7 @@ SITES1   LDA SCUR
          LDY #>LKEYS
          JSR KEYBAR
          JSR INFOI
-         .BYTE "Pick a site. ESC goes back.",0
+         .BYTE "Pick a site. ^G: the Pi gateway",0
          JSR KEYGET
          CMP #KESC
          BNE SITES2
@@ -740,7 +828,7 @@ SITESK   JMP SITES1         ; for far branches
 SITES8   CMP #KDEL
          BEQ SITES8A
          CMP #KDEL2
-         BNE SITESK
+         BNE SITESG
 SITES8A  LDA SCOUNT
          BEQ SITESK
          JSR MSGSTART
@@ -774,16 +862,41 @@ SITES8A  LDA SCOUNT
          DEC SCUR           ; was the last
 SITES11  JMP SITES1
 ;
+; ^G: the Pi gateway, for SFTP and
+; FTPS sites, edited and saved; ESC
+; reads it back as it was
+;
+SITESG   CMP #7
+         BNE SITESK
+         LDA #GWLEN
+         STA EDMAX
+         LDA #<GW
+         STA ASKB
+         LDA #>GW
+         STA ASKB+1
+         JSR ASKI
+         .BYTE "Pi gateway:",0
+         BEQ SITESG1        ; ESC
+         LDA #$FF           ; no site changed
+         STA SEDI
+         LDA #0
+         JSR SSAVEUI
+         JMP SITES1
+SITESG1  JSR SLOAD
+         JMP SITES1
+;
 CFG      .BYTE "D:EFTPXL.CFG",0
 STITLE   .BYTE "Sites",0
 NOTHING  .BYTE 0
 ;
-; SHFLD's labels; the modes, by
-; their number (MODEBIN ...)
+; SHFLD's labels; the modes and the
+; protocols, by number (MODEBIN ...,
+; PROFTP ...)
 ;
 LABELS   .BYTE "Name:",0,"Server:",0,"Port:",0,"User:",0,"Password:",0
-         .BYTE "Folder:",0,"Atari:",0,"Files:",0
+         .BYTE "Folder:",0,"Atari:",0,"Files:",0,"Protocol:",0
 MODES    .BYTE "Binary",0,"Text",0,"By type",0
+PROTS    .BYTE "FTP",0,"SFTP",0,"FTPS",0
 ;
 ; Key bars: list, then editing
 ;

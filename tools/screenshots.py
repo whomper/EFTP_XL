@@ -61,7 +61,7 @@ def main():
     server = Server(srv, 2121)
     try:
         site = (f'^K^NMac\\n127.0.0.1\\n{server.port}\\n{USER}\\n{PASSWORD}\\n/\\n'
-                'D1:>DOWNLOAD>\\n  \\n')
+                'D1:>DOWNLOAD>\\n  \\n\\n')
         # the sites, and connected
         shots(site + '\\s\\n\\w\\s^Q', d1, out, ['2-sites', '1-main'])
         # a file going down (a third of it), and the sums after

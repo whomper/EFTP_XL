@@ -21,13 +21,24 @@ DISC1    LDA #0
 ; Site fields (SITEF X): 0 name,
 ; 1 host, 2 port, 3 user, 4 password,
 ; 5 server folder, 6 Atari folder
+; SFTP and FTPS go to the Pi gateway,
+; GW, which logs in to the server
 ;
 CONNECT  PHA                ; DISC loses A
          JSR DISC
          PLA
          STA SITE
          JSR DALL
-         LDX #4             ; its password
+         JSR SNAME          ; SREC = the site
+         LDA SREC+SPROTO
+         STA GWAY
+         BEQ CONNECT0       ; FTP: no gateway
+         LDA GW
+         BNE CONNECT0
+         JSR INFOI
+         .BYTE "No Pi gateway yet: ^G in Sites",0
+         RTS
+CONNECT0 LDX #4             ; its password
          JSR SITEF
          LDX #<PASSW
          STX PTR2
@@ -72,7 +83,10 @@ CONNECT1 JSR MSGSTART
          JSR SBI
          .BYTE "...",0
          JSR INFOMSG
-         LDX #1             ; host
+         LDA GWAY
+         BEQ CONN1A
+         JMP CONNGW         ; to the gateway
+CONN1A   LDX #1             ; host
          JSR SITEF
          LDX #<HOST
          STX PTR2
@@ -81,7 +95,7 @@ CONNECT1 JSR MSGSTART
          JSR STRCPY
          LDX #2             ; port
          JSR SITEF
-         JSR FCONN          ; A/Y=port
+CONNC    JSR FCONN          ; A/Y=port
          BCC CONNECT2
          STA FERR
          JSR REPORTI
@@ -89,7 +103,10 @@ CONNECT1 JSR MSGSTART
          JMP FQUIT
 CONNECT2 LDX #3             ; user
          JSR SITEF
-         JSR FLOGIN
+         LDX GWAY
+         BEQ CONNU
+         JSR GWUSER         ; "sftp:user@..."
+CONNU    JSR FLOGIN
          PHP                ; keep its C and A
          PHA                ; over the wipe
          LDX #19            ; wipe the password
@@ -133,6 +150,75 @@ CONNECT6 JSR READREM
          LDA CONNECTD       ; 0 if it was lost
          STA ACTIVE         ; else server pane
          RTS
+;
+; CONNGW - HOST and the port from
+; GW, "10.0.0.5:2121" (no port: 2121),
+; then on as for the server
+;
+CONNGW   LDX #0
+CONNGW1  LDA GW,X           ; the address,
+         STA HOST,X         ; up to its :
+         BEQ CONNGW2        ; none: 2121
+         INX
+         CMP #':
+         BNE CONNGW1
+         LDA #0             ; the : ends HOST
+         STA HOST-1,X
+         LDA GW,X           ; "addr:": 2121
+         BEQ CONNGW2
+         TXA                ; A/Y = after it
+         CLC
+         ADC #<GW
+         LDY #>GW
+         BCC CONNGW3
+         INY
+         BNE CONNGW3        ; always
+CONNGW2  LDA #<P2121
+         LDY #>P2121
+CONNGW3  JMP CONNC
+P2121    .BYTE "2121",0
+;
+; GWUSER - FSPEC = the gateway's
+; login, "sftp:" or "ftps:", the
+; user A/Y, "@", the server and
+; ":port" (if given), from SREC
+; Exit: A/Y=FSPEC
+;
+GWUSER   PHA                ; the user kept
+         TYA
+         PHA
+         LDA #<FSPEC
+         LDY #>FSPEC
+         JSR SBSTART
+         LDA #<GWSFTP
+         LDY #>GWSFTP
+         LDX GWAY
+         CPX #PROSFTP
+         BEQ GWUSER1
+         LDA #<GWFTPS
+         LDY #>GWFTPS
+GWUSER1  JSR SBADD
+         PLA
+         TAY
+         PLA
+         JSR SBADD          ; the user
+         LDA #'@
+         JSR SBCH
+         LDX #1             ; the server
+         JSR SITEF
+         JSR SBADD
+         LDA SREC+48        ; the port, if
+         BEQ GWUSER2        ; there is one
+         LDA #':
+         JSR SBCH
+         LDX #2
+         JSR SITEF
+         JSR SBADD
+GWUSER2  LDA #<FSPEC
+         LDY #>FSPEC
+         RTS
+GWSFTP   .BYTE "sftp:",0
+GWFTPS   .BYTE "ftps:",0
 ;
 ; SITEF - field X of site SITE
 ; SNAME - its name (field 0)

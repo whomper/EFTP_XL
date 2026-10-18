@@ -711,19 +711,49 @@ FLIST2   LDA FLINE          ; skip empty lines
          JMP FLIST1
 ;
 ; FRETR, FSTOR - start getting or
-; sending the file A/Y
+; sending the file A/Y; through the
+; gateway TYPE A first for a text
+; file (eftpgate turns the line ends
+; for SFTP), TYPE I for the others
 ; Exit: as DOPEN
 ;
 FRETR    STA ARGP
          STY ARGP+1
          LDA #<VRETR
          LDY #>VRETR
-         JMP DOPEN
+         JMP FXFER
 FSTOR    STA ARGP
          STY ARGP+1
          LDA #<VSTOR
          LDY #>VSTOR
-         JMP DOPEN
+FXFER    LDX GWAY
+         BEQ FXFER2         ; FTP: as it is
+         STA DVERB          ; kept over TYPE
+         STY DVERB+1
+         LDA ARGP
+         STA DARG
+         LDA ARGP+1
+         STA DARG+1
+         LDA #<TYPEI
+         LDY #>TYPEI
+         LDX XTEXT
+         BEQ FXFER1
+         LDA #<TYPEA
+         LDY #>TYPEA
+FXFER1   STA ARGP
+         STY ARGP+1
+         LDA #<VTYPE
+         LDY #>VTYPE
+         JSR FDO
+         BCS FXFER3
+         LDA DARG
+         STA ARGP
+         LDA DARG+1
+         STA ARGP+1
+         LDA DVERB
+         LDY DVERB+1
+FXFER2   JMP DOPEN
+FXFER3   RTS
 ;
 ; FREAD - what has come of the file
 ; into BUF, 512 bytes at most
@@ -846,3 +876,4 @@ VSTOR    .BYTE "STOR",0
 VQUIT    .BYTE "QUIT",0
 ANON     .BYTE "anonymous",0
 TYPEI    .BYTE "I",0        ; binary
+TYPEA    .BYTE "A",0        ; text

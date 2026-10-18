@@ -1,4 +1,7 @@
 # EFTP_XL's own, besides xl/requirements.txt: the FTP server the
-# tests run against, and the README's pictures (tools/screenshots.py)
+# tests run against, the README's pictures (tools/screenshots.py), and
+# for the SFTP and FTPS checks what eftpgate and its test servers need
 pyftpdlib==2.2.0
 pillow==12.3.0
+paramiko==5.1.0
+pyopenssl==26.4.0

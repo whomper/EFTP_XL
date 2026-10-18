@@ -90,7 +90,7 @@ def main():
     server = Server(srv_root)
 
     try:
-        site = f'^K^NTest\\n127.0.0.1\\n{server.port}\\n{USER}\\n{PASSWORD}\\n/\\n\\n  \\n'
+        site = f'^K^NTest\\n127.0.0.1\\n{server.port}\\n{USER}\\n{PASSWORD}\\n/\\n\\n  \\n\\n'
         # make the site (By type) and connect: both panes
         shots = run(site + '\\n\\w\\s^Q', d1)
         t = shots[0]
@@ -273,8 +273,8 @@ def main():
 
         # the sites kept as their lines: edit one (the others as they
         # were, in order), add one, delete one, and no room
-        shots = run('^K^N\\nb.example\\n\\n\\n\\n\\n\\n\\n^K\\d^E\\b\\b\\b\\b\\b\\b\\b\\b\\b'
-                    'c.example\\n\\n\\n\\n\\n\\n\\n\\n^Q', d1)
+        shots = run('^K^N\\nb.example\\n\\n\\n\\n\\n\\n\\n\\n^K\\d^E\\b\\b\\b\\b\\b\\b\\b\\b\\b'
+                    'c.example\\n\\n\\n\\n\\n\\n\\n\\n\\n^Q', d1)
         sites = [x for x in open(cfg, 'rb').read().split(b'\x9b') if x and not x.startswith(b';')]
         check('sites: added and edited, in order', len(sites) == 2 and sites[0] == site_line
               and sites[1].startswith(b'c.example|b.example|21|'), repr(sites))
@@ -282,7 +282,7 @@ def main():
         sites = [x for x in open(cfg, 'rb').read().split(b'\x9b') if x and not x.startswith(b';')]
         check('sites: one deleted', sites == [site_line], repr(sites))
         long = 'L' * 31
-        shots = run(f'^K^N\\n{long}\\n\\n\\n\\n{"F" * 39}\\n{"A" * 23}\\n\\n' * 7 + '\\s^Q', d1)
+        shots = run(f'^K^N\\n{long}\\n\\n\\n\\n{"F" * 39}\\n{"A" * 23}\\n\\n\\n' * 7 + '\\s^Q', d1)
         check('sites: no room for more', 'No room for this site.' in shots[0]
               or 'No room: 8 sites at most.' in shots[0], shots[0][:200])
         sites = [x for x in open(cfg, 'rb').read().split(b'\x9b') if x and not x.startswith(b';')]
@@ -306,6 +306,62 @@ def main():
                   and want <= names, f'{problems} {lost} {sorted(names)}')
         else:
             check('test disk: made', False, td)
+
+        # SFTP and FTPS through the Pi gateway: AERA-Gateway's eftpgate
+        # (its release, in bin/gateway) in front of the SFTP and FTPS
+        # servers of its own tests; ^G sets the gateway, a site's
+        # Protocol picks the way, and EFTP_XL logs in to eftpgate as
+        # sftp:atari@127.0.0.1:port; text files go as TYPE A, so the
+        # line ends are the server's own (LF), binary ones as they are
+        groot, gd1 = os.path.join(tmp, 'gsrv'), os.path.join(tmp, 'gd1')
+        os.makedirs(os.path.join(groot, 'pub'))
+        os.makedirs(gd1)
+        demo = BIG[:5000]
+        open(os.path.join(groot, 'pub', 'demo.bin'), 'wb').write(demo)
+        open(os.path.join(groot, 'notes.txt'), 'wb').write(b'one\ntwo\n')
+        open(os.path.join(gd1, 'UP.BIN'), 'wb').write(BIG[:3000])
+        open(os.path.join(gd1, 'UP.TXT'), 'wb').write(b'A\x9bB\x9b')
+        gw = subprocess.Popen([sys.executable, os.path.join(sim.ROOT, 'tools', 'gwserve.py'),
+                               os.path.join(sim.ROOT, 'bin', 'gateway'), groot],
+                              stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        try:
+            gport, sport, fport = gw.stdout.readline().split()
+            gport, sport, fport = gport.decode(), sport.decode(), fport.decode()
+            no_gw = run('^K^NS\\n127.0.0.1\\n\\natari\\nfalcon\\n\\n\\n\\n \\n\\n\\s^Q', gd1)
+            check('SFTP: no gateway yet, says so', 'No Pi gateway yet' in no_gw[0],
+                  no_gw[0][:200])
+            os.remove(os.path.join(gd1, 'EFTPXL.CFG'))
+            sftp = (f'^K^G127.0.0.1:{gport}\\n'
+                    f'^NSFTP\\n127.0.0.1\\n{sport}\\natari\\nfalcon\\n\\n\\n  \\n \\n')
+            shots = run(sftp + '\\n\\w\\sN\\n\\w\\s^Q', gd1)
+            run('^K\\n\\w\\tU  ^T\\w\\tP\\n\\wD\\n\\w\\s^Q', gd1)
+            cfg = open(os.path.join(gd1, 'EFTPXL.CFG'), 'rb').read().split(b'\x9b')
+            check('SFTP: the gateway and the site saved',
+                  f'@127.0.0.1:{gport}'.encode() in cfg
+                  and any(x.startswith(b'SFTP|') and x.endswith(b'|2|1') for x in cfg),
+                  repr(cfg))
+            check('SFTP: connected through the gateway, the server\'s list',
+                  'pub' in shots[0] and 'notes.txt' in shots[0], shots[0])
+            got = lambda n: open(os.path.join(gd1, n), 'rb').read() \
+                if os.path.exists(os.path.join(gd1, n)) else None
+            sent = lambda n: open(os.path.join(groot, n), 'rb').read() \
+                if os.path.exists(os.path.join(groot, n)) else None
+            check('SFTP: text down, LF to EOL', got('NOTES.TXT') == b'one\x9btwo\x9b',
+                  repr(got('NOTES.TXT')))
+            check('SFTP: up, binary as it is and text with LF',
+                  sent('UP.BIN') == BIG[:3000] and sent('UP.TXT') == b'A\nB\n',
+                  repr(sent('UP.TXT')) + ' ' + str(len(sent('UP.BIN') or b'')))
+            check('SFTP: binary down from a folder', got('DEMO.BIN') == demo,
+                  str(len(got('DEMO.BIN') or b'')))
+            os.remove(os.path.join(gd1, 'NOTES.TXT'))
+            ftps = f'^K^NFTPS\\nlocalhost\\n{fport}\\natari\\nfalcon\\n\\n\\n  \\n  \\n'
+            shots = run(ftps + '\\n\\w\\sN\\n\\w\\s^Q', gd1)
+            check('FTPS: through the gateway, text down',
+                  'pub' in shots[0] and got('NOTES.TXT') == b'one\x9btwo\x9b',
+                  shots[0][:300] + repr(got('NOTES.TXT')))
+        finally:
+            gw.kill()
+            gw.wait()
 
         # the font: D:AERA.FNT read into the 1K below the screen (xl's
         # AXFONT) and used, set again after RESET without reading it
@@ -338,7 +394,10 @@ def main():
         check('no AERA.FNT: the ROM font, with its icons', seen[0][0] == 0xE0
               and b'\x7F' in seen[0][1] and b'\x40' not in seen[0][1]
               and b'\x50' not in seen[0][1])
-        check('no font in the program', len(open(XEX, 'rb').read()) < 15360)
+        aera = open(os.path.join(sim.ROOT, 'xl', 'font', 'AERA.FNT'), 'rb').read()
+        prg = open(XEX, 'rb').read()
+        check('no font in the program', all(aera[i:i + 64] not in prg
+                                            for i in range(0, 1024, 64)))
 
     finally:
         server.close()

@@ -20,6 +20,8 @@ transfers below.
 | A folder coming down with all in it, one file after the other | The sites, saved in `EFTPXL.CFG` |
 
 - Log in to any FTP server with your user and password, over FujiNet
+- SFTP and FTPS servers on the internet too, through the AERA Pi
+  gateway
 - Two panes: the Atari (D1:-D8:, SpartaDOS folders) and the server
 - Files both ways, marked ones one after the other, with progress,
   speed, ESC to stop, and text line ends changed when you want
@@ -47,13 +49,15 @@ design is in [docs/design](docs/design).
    the program was loaded from: on DOS 2.5 that is always D1:, on
    SpartaDOS the drive and folder of the prompt.
 3. Press ^K for the sites, ^N to add one: a name, the server (IP address
-   or name), the port (blank: 21), your user (blank: `anonymous`), the
-   password (blank: asked for each time you connect), the folder on the
-   server to start in (blank: the one the server logs you in to), the
-   folder on the Atari (e.g. `D1:>DOWNLOAD>`; blank: the one shown) and
-   how files are sent (**Files**, below). A name holds up to 15
-   characters, the server 31, the user and the password 19 each, the
-   server's folder 39 and the Atari's 23. RETURN on a site connects.
+   or name), the port (blank: 21, or 22 for SFTP), your user (blank:
+   `anonymous`), the password (blank: asked for each time you connect),
+   the folder on the server to start in (blank: the one the server logs
+   you in to), the folder on the Atari (e.g. `D1:>DOWNLOAD>`; blank: the
+   one shown), how files are sent (**Files**, below) and the
+   **Protocol**: FTP, or SFTP or FTPS through the Pi gateway
+   ([below](#sftp-and-ftps)). A name holds up to 15 characters, the
+   server 31, the user and the password 19 each, the server's folder 39
+   and the Atari's 23. RETURN on a site connects.
 
 **Updating.** Copy the new release's `EFTPXL.PRG` and `AERA.FNT` over
 the old ones. Keep `EFTPXL.CFG`: every release since 0.3 writes its
@@ -147,14 +151,15 @@ Notes:
 - On an error the info line says what went wrong: the server's own
   reply (`530 Login incorrect`), or the Atari's own error with its text
   (`NOTES.TXT: Disk full`).
-- The program takes `$4000`-`$94A6` (the program and its variables),
+- The program takes `$4000`-`$9709` (the program and its variables),
   and the font the 1K just below the screen (`$9800` with BASIC on):
   above EDOS and the MEMLO of DOS 2.5 and SpartaDOS 3, so BASIC can
   stay on. If a DOS's MEMLO is above `$4000`, or there isn't room for
   both, the program says so and goes back to DOS before loading itself.
 - `EFTPXL.CFG` starts with a note on what it is; lines that start with
-  `;` are notes, and EFTP_XL skips them. It holds up to 8 sites, as
-  long as their lines fit in 640 bytes (about 80 each).
+  `;` are notes, and EFTP_XL skips them. A line that starts with `@` is
+  the Pi gateway (`@192.168.1.5:2121`). It holds up to 8 sites, as long
+  as their lines fit in 640 bytes (about 80 each).
 
 ## How it reaches the servers
 
@@ -176,21 +181,41 @@ mkdir -p ~/AtariShare
 ```
 
 FTP is unencrypted: the user, the password and the files go across in
-plain text, so only use it on your home network.
+plain text, so only use it on your home network. For servers on the
+internet use SFTP or FTPS, below. (2121, pyftpdlib's own default port,
+is the Pi gateway's, hence 2100 above.)
 
-EFTP_XL speaks plain FTP only, so a server that wants FTPS or SFTP is
-out of its reach for now. AERA-Gateway's FTP gateway on a Raspberry Pi
-(`eftpgate`, port 2121, with 30000-30099 for data) does that for EFTP
-on the ST, but it takes the server in the login
-(`sftp:erez@my.server.net:22` as the user), which is longer than the 19
-characters of EFTP_XL's user field. Port 2121 is also pyftpdlib's own
-default, hence 2100 above: on a Pi that runs the gateway, 2121 is
-taken.
+### SFTP and FTPS
+
+SSH and TLS are far beyond a 6502, so for SFTP and FTPS servers EFTP_XL
+goes through the AERA Pi gateway: `eftpgate`, from
+[AERA-Gateway](https://github.com/whomper/AERA-Gateway), on a Raspberry
+Pi on your home network. The Atari speaks plain FTP to the Pi, and the
+Pi speaks SFTP or FTPS to the server, checking its certificate or SSH
+key. It is the same gateway EFTP uses on the ST.
+
+```
+Atari (EFTP_XL) --plain FTP, home network--> Pi (eftpgate) --SFTP or FTPS--> the server
+```
+
+1. On the Pi, from AERA-Gateway: `sudo gateway/aera-gateway install ftp`
+   (port 2121, and 30000-30099 for data).
+2. In EFTP_XL's sites (^K), ^G sets the gateway: the Pi's address, and
+   `:port` if it isn't 2121 (`192.168.1.5`, or `192.168.1.5:2121`).
+3. Give the site the server's own name, port, user and password, and
+   SFTP or FTPS as its **Protocol**.
+
+EFTP_XL then connects to the Pi and logs in as `sftp:user@server:port`
+(or `ftps:`), the way eftpgate takes it, with the site's password; you
+type none of that. Through the gateway a text file goes as FTP's text
+(TYPE A), so it gets the server's own line ends (LF on SFTP), and
+binary files as they are. A server on your home network (a NAS) needs
+eftpgate's `--allow-local`.
 
 ## Building
 
 The program is 6502 assembly in Mac/65's form, in [ASM](ASM):
-`EFTPXL.M65` is the main file and includes the others. It is 14.6K (the
+`EFTPXL.M65` is the main file and includes the others. It is 15.1K (the
 font is `AERA.FNT`, read when it is there); the first version, in C with
 cc65, was 27K (it is in the git history, up to v0.2).
 
@@ -233,7 +258,7 @@ shared `AX*.M65` it includes. A release has this disk.
    from `D:` as it assembles. Load the main file first and give no
    source to `ASM`: on SpartaDOS, Mac/65 1.01 can't assemble a main
    file read from disk (as EDOS found). With SpartaDOS 3.2 it reports
-   `ASSEMBLY ERRORS: 0` with about 14K free. Write the program over
+   `ASSEMBLY ERRORS: 0` with about 13K free. Write the program over
    `EFTPXL.PRG` (or to another disk): the disk has no room for a second
    copy.
 
@@ -268,7 +293,8 @@ xl/         the AERA 8-bit shared code and tools, from AERA-Atari
   workflows/ release.yml and withdraw.yml, copied to .github/workflows
 tools/      sim.py (the program on xl's a8sim), fujinet.py (its FujiNet),
             test_sim.py, screenshots.py, testdisk.py (EFTPTEST.ATR's
-            files), sync-xl.sh
+            files), gwserve.py (the gateway the SFTP checks use),
+            sync-xl.sh
 docs/       the pictures, the first design, TESTPLAN.TXT (the test plan)
 ```
 
@@ -306,7 +332,7 @@ every FTP command sent.
 **The checks.** `make test` runs xl's own tests, then
 `tools/test_sim.py`: the program that way against an FTP server it
 starts, looking at the screen, at memory and at the files on both
-sides, 75 checks:
+sides, 82 checks:
 
 | | |
 |---|---|
@@ -321,6 +347,7 @@ sides, 75 checks:
 | ESC and BREAK | each cancels as "no": new folder, rename, delete, HELP, the Sites screen, a site's edit, delete and new, the replace question, the password question; each stops a transfer |
 | The test disk | `EFTPTEST.ATR` clean, with the files the test plan needs |
 | Loading | the load check refuses a DOS whose MEMLO is above $4000, says so and goes back to DOS |
+| SFTP, FTPS | through AERA-Gateway's eftpgate (its latest release, fetched by `make test`) to the SFTP and FTPS servers of its own tests: ^G's gateway and the site saved, no gateway said, the list, text down and up with the server's line ends, binary both ways |
 
 CI (`.github/workflows/ci.yml`) builds the program and the disk
 (checking the disk gives the same program) and runs these on every

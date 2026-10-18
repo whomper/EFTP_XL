@@ -27,6 +27,11 @@ VERSION    := $(shell sed -n 's/^VERSION *\.BYTE "EFTP_XL \([^"]*\)".*/\1/p' ASM
 # the shared includes the program uses, as its main file names them
 AXSRCS     := $(patsubst %,xl/src/%.M65,$(shell sed -n \
                 's/^ *\.INCLUDE #D:\(AX[A-Z0-9]*\)\.M65.*/\1/p' ASM/EFTPXL.M65))
+# the SFTP and FTPS checks run against AERA-Gateway's eftpgate, from
+# its latest release (another program's release, never its main)
+GATEWAY    := v1.0
+GWDIR      := bin/gateway
+GWFILES    := $(GWDIR)/eftpgate.py $(GWDIR)/aeragate.py $(GWDIR)/test_eftpgate.py
 
 .PHONY: all atr test dist version clean
 
@@ -62,7 +67,12 @@ $(TESTDISK): $(PROGRAM) $(FONTFILE) docs/TESTPLAN.TXT tools/testdisk.py xl/tools
 	    --tree bin/testdisk $(PROGRAM) $(FONTFILE) > /dev/null
 	rm -rf bin/testdisk
 
-test: $(PROGRAM) $(DISK) $(TESTDISK)
+$(GWDIR)/%.py:
+	mkdir -p $(GWDIR)
+	curl -sSfL -o $@ \
+	    https://raw.githubusercontent.com/whomper/AERA-Gateway/$(GATEWAY)/gateway/$*.py
+
+test: $(PROGRAM) $(DISK) $(TESTDISK) $(GWFILES)
 	$(PYTHON) xl/tests/test_tools.py
 	$(PYTHON) xl/tests/test_ax.py
 	$(PYTHON) xl/tests/test_sim.py
