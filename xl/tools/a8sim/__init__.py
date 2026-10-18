@@ -10,7 +10,7 @@ from EFTP_XL's tools/sim.py and EDOS's.
     m.cio = CIO(e=E(), k=K(keys), d=Disks({1: 'disk'}))
     m.sio = SIO({0x70: fujinet})              # the program's own devices
     keys.install(m)
-    m.run('bin/EFTPXL.PRG')                   # load as DOS does, then RUNAD
+    m.run('bin/EFTPXL.COM')                   # load as DOS does, then RUNAD
     print(screen_text(m))
 
     m.load('build/EDOS.COM'); m.load_symbols('build/EDOS.SYM')
