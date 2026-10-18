@@ -270,9 +270,7 @@ def main():
                     os.remove(p) if os.path.exists(p) else None
                     shots, ev, low = logged(f'^K\\n\\w\\t{key}\\n\\w\\s^Q', ramtop, memtop)
                     got = open(p, 'rb').read() if os.path.exists(p) else b''
-                    # (a8sim says 136 on a GET after the end; the
-                    # real CIO says it with the last bytes)
-                    gets = [n for n in calls(ev, 'GET', name) if n]
+                    gets = calls(ev, 'GET', name)
                     check(f'5.5: 20K {name} up{way}', got == want, f'{len(got)} bytes')
                     check(f'5.5: {name} up{way}: 1 OPEN, '
                           + (f'{most} GETs' if most else 'BUF\'s 256 a GET'),
