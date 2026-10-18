@@ -185,6 +185,23 @@ class TestParts(unittest.TestCase):
         m.poke(base, [0x28, 0x29, 0x52, 0x40])             # "HI", ^R (a line), ^@
         self.assertEqual(screen_text(m, {0x12: '-'}).split('\n')[0], 'HI-?')
 
+    def test_get_bytes_at_the_end(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp)
+        with open(os.path.join(tmp, 'F.DAT'), 'wb') as fh:
+            fh.write(bytes(range(200)) * 100)       # 20,000 bytes
+        d = Disks({1: tmp})
+        st, f = d.open('D1:F.DAT', 4, 0)
+        self.assertEqual(st, 1)
+        got = [d.get(f, 8960, False) for _ in range(3)]
+        # the last GET asks for more than is left: those bytes, and 136
+        self.assertEqual([(s, len(b)) for s, b in got], [(1, 8960), (1, 8960), (136, 2080)])
+        self.assertEqual(d.get(f, 8960, False), (136, b''))
+        st, f = d.open('D1:F.DAT', 4, 0)
+        self.assertEqual(d.get(f, 20000, False)[0], 1)  # exactly what is left
+        st, f = d.open('D1:F.DAT', 4, 0)
+        self.assertEqual(d.get(f, 300, True)[0], 1)     # GET RECORD as before
+
 
 if __name__ == '__main__':
     unittest.main()

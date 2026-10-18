@@ -230,9 +230,13 @@ class Disks:
         if p >= len(d):
             return 136, b''
         end = (d.find(b'\x9b', p) + 1 or len(d)) if record else len(d)
+        short = not record and p + n > len(d)
         end = min(end, p + n)
         f['pos'] = end
-        return 1, bytes(d[p:end])
+        # GET BYTES asking for more than is left: the bytes there are and
+        # 136 together, as CIO and the FMS give them (not 1, then 136
+        # with nothing on the next GET)
+        return (136 if short else 1), bytes(d[p:end])
 
     def put(self, f, data, record):
         if not f['write']:
