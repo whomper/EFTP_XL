@@ -26,6 +26,10 @@ ON THE DISK
     AERA 2026", the disk in the left
     pane.
 [ ] With BASIC on, the same.
+[ ] ^Q, then back in DOS: its menu or
+    prompt comes back as usual (the
+    program loads at $1E00, over
+    EDOS and DUP).
 [ ] RENAME AERA.FNT AERA.OFF, start
     it: the Atari's own font, folders
     as a right triangle, cut names

@@ -1,5 +1,5 @@
 ;
-; XFER.M65 - EFTP_XL 1.4
+; XFER.M65 - EFTP_XL 1.5
 ; Sending files, one after another
 ; Copyright (C) 2026 AERA | Erez Yaary
 ;
@@ -20,7 +20,7 @@ XSEND    LDA ACTIVE         ; the source pane
          STA XMODE
          LDA ACTIVE
          JSR PUSE           ; SIDE, BASE
-         JSR XINIT          ; XBUF from MEMLO
+         JSR XINIT          ; XBUF, as it is
          LDA #0
          STA XCOUNT
          STA XCUR
@@ -545,28 +545,34 @@ XOUT     LDA PTR2
          STA XLEN+1
          RTS
 ;
-; The file's buffer, XBUF: MEMLO, as
-; it is when a transfer starts, up to
-; the program; the DOS and handlers
-; below MEMLO are never touched. A
+; The file's buffer, XBUF: all the
+; memory above the program, from the
+; page after BSSEND up to the font
+; (AXFPG) or MEMTOP, the lower, as
+; it is when a transfer starts. A
 ; file goes to and from the disk in
 ; it, one PUT or GET for all it holds
 ;
-; XINIT - XBUF = MEMLO, XPAGES its
-; whole pages to LOAD, XEND its end,
-; XCAP 2 (FREAD's 512); under 2
-; pages: BUF's second page, XCAP 1
+; XINIT - XBUF, XPAGES its whole
+; pages, XEND its end, XCAP 2
+; (FREAD's 512); under 2 pages:
+; BUF's second page, XCAP 1
 ;
-XINIT    LDA #<LOAD         ; A = whole pages
-         CMP MEMLO          ; from MEMLO to
-         LDA #>LOAD         ; LOAD
-         SBC MEMLO+1
-         LDX MEMLO
-         LDY MEMLO+1
-         BCC XINIT0         ; MEMLO past LOAD
+XINIT    LDA MEMTOP         ; A = the page of
+         CMP #$FF           ; MEMTOP+1
+         LDA MEMTOP+1
+         ADC #0
+         CMP AXFPG          ; the font lower?
+         BCC XINIT0
+         LDA AXFPG          ; yes: up to it
+XINIT0   SEC                ; A = whole pages
+         SBC #>[BSSEND+255] ; from the page
+         LDX #0             ; after BSSEND
+         LDY #>[BSSEND+255] ; (AXFMIN's)
+         BCC XINITB         ; none at all
          CMP #2
          BCS XINIT1         ; 512 at least
-XINIT0   LDA #1             ; else BUF+256
+XINITB   LDA #1             ; else BUF+256
          LDX #<[BUF+256]
          LDY #>[BUF+256]
 XINIT1   STA XPAGES

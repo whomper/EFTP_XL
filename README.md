@@ -30,7 +30,8 @@ transfers below.
 - Sites, saved on the disk
 - RESET comes back to the main screen (disconnected), never to DOS
 - Works with DOS 2.5 and SpartaDOS 3.x; all file access goes through
-  CIO, so any CIO-compatible DOS should work
+  CIO, so any CIO-compatible DOS with its MEMLO at `$1E00` or below
+  should work
 
 The pictures are of the real program, run by `tools/sim.py` (see
 [Tests](#tests)); `tools/screenshots.py` takes them again. The first
@@ -154,16 +155,18 @@ Notes:
 - On an error the info line says what went wrong: the server's own
   reply (`530 Login incorrect`), or the Atari's own error with its text
   (`NOTES.TXT: Disk full`).
-- The program takes `$4000`-`$97F5` (the program and its variables),
-  and the font the 1K just below the screen (`$9800` with BASIC on):
-  above EDOS and the MEMLO of DOS 2.5 and SpartaDOS 3, so BASIC can
-  stay on. If a DOS's MEMLO is above `$4000`, or there isn't room for
-  both, the program says so and goes back to DOS before loading itself.
-- A file goes to and from the disk through the memory from MEMLO up to
-  `$4000` (8.75K with DOS 2.5), read when a transfer starts, so the
-  DOS and its handlers below MEMLO stay whole: one PUT or GET for all
-  it holds (a 20K file is 3), and each file opened once. With under
-  512 bytes there, it uses 256 at a time of its own.
+- The program takes `$1E00`-`$770C` (the program and its variables),
+  over EDOS and above the MEMLO of DOS 2.5 (`$1CFC`) and SpartaDOS 3.2
+  (`$17A2`), and the font the 1K just below the screen (`$9800` with
+  BASIC on, `$B800` with it off), so BASIC can stay on. If a DOS's
+  MEMLO is above `$1E00` (DOS 2.5 with the 850's R: handler, for one),
+  or there isn't room, the program says so and goes back to DOS before
+  loading itself.
+- A file goes to and from the disk through all the memory between the
+  program and the font, `$7800` up: 8K with BASIC on, 16K with it off,
+  one PUT or GET for all it holds (a 20K file is 3 with BASIC on, 2
+  off), and each file is opened once. A site saved writes
+  `EFTPXL.CFG` and nothing reads it back.
 - `EFTPXL.CFG` starts with a note on what it is; lines that start with
   `;` are notes, and EFTP_XL skips them. A line that starts with `@` is
   the Pi gateway (`@192.168.1.5:2121`). It holds up to 8 sites, as long
@@ -223,7 +226,7 @@ eftpgate's `--allow-local`.
 ## Building
 
 The program is 6502 assembly in Mac/65's form, in [ASM](ASM):
-`EFTPXL.M65` is the main file and includes the others. It is 15.4K (the
+`EFTPXL.M65` is the main file and includes the others. It is 15.6K (the
 font is `AERA.FNT`, read when it is there); the first version, in C with
 cc65, was 27K (it is in the git history, up to v0.2).
 
@@ -340,7 +343,7 @@ every FTP command sent.
 **The checks.** `make test` runs xl's own tests, then
 `tools/test_sim.py`: the program that way against an FTP server it
 starts, looking at the screen, at memory and at the files on both
-sides, 108 checks:
+sides, 121 checks:
 
 | | |
 |---|---|
@@ -354,8 +357,8 @@ sides, 108 checks:
 | HELP, the font | the About lines; `AERA.FNT` read below the screen and its icons used, set again after RESET without reading it again, DOS's font back on quit; without it the ROM font and its icons; no font in the program |
 | ESC and BREAK | each cancels as "no": new folder, rename, delete, HELP, the Sites screen, a site's edit, delete and new, the replace question, the password question; each stops a transfer |
 | The test disk | `EFTPTEST.ATR` clean, with the files the test plan needs |
-| Disk access | 20K down and up, binary and text: the file opened once, 3 PUTs or GETs through the memory from MEMLO, none below it changed; with MEMLO at $3F80, 256 bytes at a time; after an upload the Atari not read again |
-| Loading | the load check refuses a DOS whose MEMLO is above $4000, says so and goes back to DOS |
+| Disk access | 20K down and up, binary and text: the file opened once, 2 PUTs or GETs with BASIC off and 3 on, through the memory above the program; nothing below MEMLO and not the font changed; with MEMTOP just above the program, 256 bytes at a time; after an upload the Atari not read again; a site saved not read back |
+| Loading | the load check refuses a DOS whose MEMLO is above $1E00, says so and goes back to DOS |
 | SFTP, FTPS | through AERA-Gateway's eftpgate (its latest release, fetched by `make test`) to the SFTP and FTPS servers of its own tests: ^G's gateway and the site saved, no gateway said, the list, text down and up with the server's line ends, binary both ways |
 
 CI (`.github/workflows/ci.yml`) builds the program and the disk

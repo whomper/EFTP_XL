@@ -1,5 +1,5 @@
 ;
-; DATA.M65 - EFTP_XL 1.4
+; DATA.M65 - EFTP_XL 1.5
 ; The variables
 ; Copyright (C) 2026 AERA | Erez Yaary
 ;
@@ -215,6 +215,10 @@ SCUR2    *=  *+1        ; SHLIST
 SLI      *=  *+1
 SEDI     *=  *+1        ; SEDIT's site
 SOP      *=  *+1        ; SSAVE: $80 delete
+SMS      *=  *+2        ; SMEM: the line,
+SMN      *=  *+1        ; its new length,
+SNEW     *=  *+2        ; SPEND to be,
+SDOWN    *=  *+1        ; $FF: move down
 GWAY     *=  *+1        ; connected: PRO*
 GWAT     *=  *+1        ; '@', then GW:
 GW       *=  *+GWLEN    ; "10.0.0.5:2121"

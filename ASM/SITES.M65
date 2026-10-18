@@ -1,5 +1,5 @@
 ;
-; SITES.M65 - EFTP_XL 1.4
+; SITES.M65 - EFTP_XL 1.5
 ; The Sites screen and EFTPXL.CFG
 ; Copyright (C) 2026 AERA | Erez Yaary
 ;
@@ -361,18 +361,15 @@ CFGNOTE  .BYTE "; EFTPXL.CFG - EFTP_XL's sites",EOL
 CFGNOTEN =   *-CFGNOTE
 ;
 ; SSAVEUI - SSAVE (A as for SSAVE),
-; then the sites read again, so they
-; are as the file is; on error say so
-; and wait for a key
+; then SPOOL as the file now is
+; (SMEM); on error the sites read
+; again, it said, and a key waited
 ;
 SSAVEUI  JSR SSAVE
-         PHP                ; C and A kept
-         PHA
-         JSR SLOAD
-         PLA
-         PLP
-         BCC SSAVEU1
-         STA FERR           ; the CIO code
+         BCS SSAVEU2
+         JMP SMEM           ; saved
+SSAVEU2  STA FERR           ; the CIO code
+         JSR SLOAD          ; as the file is
          JSR MSGSTART
          JSR SBI
          .BYTE "Could not save ",0
@@ -384,8 +381,8 @@ SSAVEUI  JSR SSAVE
          LDA FERR
          JSR SBBYTE
          JSR INFOMSG
-         JSR KEYGET
-SSAVEU1  RTS
+         JMP KEYGET
+;
 ;
 ; SHMODE - the three choices of
 ; field X, 7 the Files: mode, 8 the

@@ -179,10 +179,18 @@ def main():
               shots[0][:300])
 
         # disk access (the 8-bit guidelines, 5.5): a file is opened
-        # once and goes to and from the disk through XBUF, MEMLO up to
-        # the program, in one PUT or GET for all it holds; below MEMLO
-        # nothing changes; with under 512 bytes there, BUF's second
-        # page; after a transfer only the other side is read again
+        # once and goes to and from the disk through XBUF, all the
+        # memory above the program up to the font or MEMTOP, in one PUT
+        # or GET for all it holds: 16K with BASIC off, 8K on (RAMTOP
+        # $A0); nothing below MEMLO and not the font changed; with
+        # under 512 bytes (MEMTOP low), BUF's second page; after a
+        # transfer only the other side is read again
+        syms = {}
+        for line in open(os.path.join(sim.ROOT, 'bin', 'EFTPXL.SYM')):
+            f = line.split()
+            if len(f) == 2 and f[1].startswith('$'):
+                syms[f[0]] = int(f[1][1:], 16)
+        top = syms['AXFMIN'] * 256          # XBUF's start
         aroot, ad1 = os.path.join(tmp, 'asrv'), os.path.join(tmp, 'ad1')
         os.makedirs(aroot)
         os.makedirs(ad1)
@@ -192,13 +200,18 @@ def main():
         open(os.path.join(aroot, 'big.bin'), 'wb').write(bin20)
         open(os.path.join(aroot, 'text.txt'), 'wb').write(txt20)
         open(os.path.join(ad1, 'UP.BIN'), 'wb').write(bin20)
+        FONT = open(os.path.join(sim.ROOT, 'xl', 'font', 'AERA.FNT'), 'rb').read()
+        open(os.path.join(ad1, 'AERA.FNT'), 'wb').write(FONT)
         open(os.path.join(ad1, 'UP.TXT'), 'wb').write(txt20.replace(b'\n', b'\x9b'))
         aserver = Server(aroot)
 
-        def logged(keys, memlo=0x1D00):
+        def logged(keys, ramtop=0xC0, memtop=0xBC1F):
             """run, with every D: OPEN, GET and PUT in a list"""
+            memlo = 0x1D00
             s = sim.Sim(XEX, sim.parse_keys(keys), memlo, sim.FujiNet(),
                         sim.Disks({1: ad1}))
+            s.mem[sim.RAMTOP] = ramtop
+            s.mem[0x2E5], s.mem[0x2E6] = memtop & 255, memtop >> 8
             dev, ev, names = s.m.cio.devices['D'], [], {}
             o_open, o_get, o_put = dev.open, dev.get, dev.put
 
@@ -223,7 +236,9 @@ def main():
             s.snapshot = lambda: shots.append(s.screen_text())
             s.run()
             shots.append(s.screen_text())
-            return shots, ev, bytes(s.mem[memlo - 256:memlo]) == low
+            font = ((ramtop - 8) & 0xFC) * 256
+            return shots, ev, bytes(s.mem[memlo - 256:memlo]) == low and \
+                bytes(s.mem[font:font + 1024]) == FONT
 
         def calls(ev, kind, name):
             return [n for k, f, n in ev if k == kind and f == 'D1:' + name]
@@ -232,38 +247,52 @@ def main():
             run_site = f'^K^NTest\\n127.0.0.1\\n{aserver.port}\\n{USER}\\n{PASSWORD}' \
                        '\\n/\\n\\n  \\n\\n\\n\\w\\s^Q'
             logged(run_site)
-            for memlo, way in ((0x1D00, ''), (0x3F80, ', in BUF')):
+            for ramtop, memtop, most, way in ((0xC0, 0xBC1F, 2, ''),
+                                              (0xA0, 0x9C1F, 3, ', BASIC on'),
+                                              (0xC0, top + 0xFF, 0, ', in BUF')):
                 for key, name, want in (('B', 'BIG.BIN', bin20),
                                         ('T', 'TEXT.TXT', txt20.replace(b'\n', b'\x9b'))):
                     p = os.path.join(ad1, name)
                     os.remove(p) if os.path.exists(p) else None
-                    shots, ev, low = logged(f'^K\\n\\w{key}\\n\\w\\s^Q', memlo)
+                    shots, ev, low = logged(f'^K\\n\\w{key}\\n\\w\\s^Q', ramtop, memtop)
                     got = open(p, 'rb').read() if os.path.exists(p) else b''
                     puts = calls(ev, 'PUT', name)
                     check(f'5.5: 20K {name} down{way}', got == want, f'{len(got)} bytes')
-                    check(f'5.5: {name} down: 1 OPEN, '
-                          + ('3 PUTs' if not way else 'BUF\'s 256 a PUT'),
+                    check(f'5.5: {name} down{way}: 1 OPEN, '
+                          + (f'{most} PUTs' if most else 'BUF\'s 256 a PUT'),
                           len(calls(ev, 'OPEN', name)) == 1
-                          and (len(puts) <= 3 if not way else max(puts) <= 256),
+                          and (len(puts) <= most if most else max(puts) <= 256),
                           f'{len(calls(ev, "OPEN", name))} OPEN, PUTs {puts}')
-                    check(f'5.5: nothing below MEMLO changed{way}', low)
+                    check(f'5.5: nothing below MEMLO, nor the font, changed{way}', low)
                 for key, name, want in (('U', 'UP.BIN', bin20),
                                         ('UU', 'UP.TXT', txt20.replace(b'\n', b'\r\n'))):
                     p = os.path.join(aroot, name)
                     os.remove(p) if os.path.exists(p) else None
-                    shots, ev, low = logged(f'^K\\n\\w\\t{key}\\n\\w\\s^Q', memlo)
+                    shots, ev, low = logged(f'^K\\n\\w\\t{key}\\n\\w\\s^Q', ramtop, memtop)
                     got = open(p, 'rb').read() if os.path.exists(p) else b''
                     # (a8sim says 136 on a GET after the end; the
                     # real CIO says it with the last bytes)
                     gets = [n for n in calls(ev, 'GET', name) if n]
                     check(f'5.5: 20K {name} up{way}', got == want, f'{len(got)} bytes')
-                    check(f'5.5: {name} up: 1 OPEN, '
-                          + ('3 GETs' if not way else 'BUF\'s 256 a GET'),
+                    check(f'5.5: {name} up{way}: 1 OPEN, '
+                          + (f'{most} GETs' if most else 'BUF\'s 256 a GET'),
                           len(calls(ev, 'OPEN', name)) == 1
-                          and (len(gets) <= 3 if not way else max(gets) <= 256),
+                          and (len(gets) <= most if most else max(gets) <= 256),
                           f'{len(calls(ev, "OPEN", name))} OPEN, GETs {gets}')
                     check(f'5.5: the Atari not read again after {name} up{way}',
                           len(calls(ev, 'OPEN', '*.*')) == 1, str(calls(ev, 'OPEN', '*.*')))
+
+            # a site saved: the file written once, not read back, and
+            # the Sites screen as the file is
+            cfgp = os.path.join(ad1, 'EFTPXL.CFG')
+            keep = open(cfgp, 'rb').read()
+            shots, ev, low = logged('^K^E\\b\\b\\b\\bBest' + '\\n' * 9 + '\\s\\e^Q')
+            cfg_opens = [f for k, f, n in ev if k == 'OPEN' and f.upper().endswith('EFTPXL.CFG')]
+            check('5.5: a site saved: 1 OPEN to write, none to read back',
+                  len(cfg_opens) == 2 and b'Best|127.0.0.1|' in open(cfgp, 'rb').read()
+                  and 'Best' in shots[0] and 'Test' not in shots[0],
+                  f'{cfg_opens} {shots[0][:200]}')
+            open(cfgp, 'wb').write(keep)
 
             # the replace question: A replaces this one and all after it
             for name in ('BIG.BIN', 'TEXT.TXT'):
@@ -305,11 +334,11 @@ def main():
         check('About in HELP', 'EFTP_XL ' in t and 'Erez Yaary' in t
               and 'GPL-2.0-or-later' in t and 'github.com/whomper/EFTP_XL' in t, t)
 
-        # the load check (xl's AXLOAD): MEMLO above $4000, nothing loaded
-        s = sim.Sim(XEX, [], 0x4100, sim.FujiNet(), sim.Disks({1: d1}))
+        # the load check (xl's AXLOAD): MEMLO above $1E00, nothing loaded
+        s = sim.Sim(XEX, [], 0x1E01, sim.FujiNet(), sim.Disks({1: d1}))
         s.run()
         check('load check: DOS too big', s.to_dos and b'MEMLO is above it' in s.eout
-              and s.mem[0x4000] == 0, repr(bytes(s.eout)[:80]))
+              and s.mem[0x1E00] == 0, repr(bytes(s.eout)[:80]))
 
         # EFTPXL.CFG: SSAVE writes the note first; lines that start with
         # ; are skipped when read; 1.2's file (no note) still reads

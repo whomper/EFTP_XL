@@ -1,0 +1,143 @@
+;
+; SPOOL.M65 - EFTP_XL 1.5
+; The sites' lines in memory, after
+; a save
+; Copyright (C) 2026 AERA | Erez Yaary
+;
+; SMEM - SPOOL as SSAVE wrote it, so
+; the file is not read back: site
+; SEDI's line out (SOP $80), or BUF
+; in its place (SEDI=SCOUNT: added);
+; SEDI past SCOUNT: none changed
+;
+SMEM0    RTS
+SMEM     LDX SEDI
+         CPX SCOUNT
+         BEQ SMEM1          ; added at the end
+         BCS SMEM0          ; none changed
+SMEM1    JSR SLINEX         ; PTR3 = its line
+         LDA PTR3           ; SMS = where
+         STA SMS
+         LDA PTR3+1
+         STA SMS+1
+         LDX SEDI
+         CPX SCOUNT
+         BCS SMEM2          ; added: no old one
+         LDX #1
+         JSR SLINEX1        ; PTR3 past it
+SMEM2    LDA #0             ; SMN = new length
+         BIT SOP
+         BMI SMEM3          ; deleted: 0
+         LDA #<BUF
+         LDY #>BUF
+         JSR STRLEN
+         CLC
+         ADC #1             ; with its 0
+SMEM3    STA SMN
+;
+; The rest, PTR3 to SPEND (TMP/TMP2
+; bytes), moves to SMS+SMN (PTR2);
+; SNEW = its new end
+;
+         LDA SPEND
+         SEC
+         SBC PTR3
+         STA TMP
+         LDA SPEND+1
+         SBC PTR3+1
+         STA TMP2
+         LDA SMS
+         CLC
+         ADC SMN
+         STA PTR2
+         LDA SMS+1
+         ADC #0
+         STA PTR2+1
+         LDA PTR2
+         CLC
+         ADC TMP
+         STA SNEW
+         LDA PTR2+1
+         ADC TMP2
+         STA SNEW+1
+         LDA PTR3           ; up or down?
+         STA PTR
+         CMP PTR2
+         LDA PTR3+1
+         STA PTR+1
+         SBC PTR2+1         ; C=0: up, so
+         LDA #0             ; from the end
+         BCS SMEM4
+         LDA SPEND          ; PTR, PTR2 on
+         STA PTR            ; the last bytes
+         LDA SPEND+1
+         STA PTR+1
+         LDA SNEW
+         STA PTR2
+         LDA SNEW+1
+         STA PTR2+1
+         LDA #$FF
+         STA SDOWN
+         LDX #PTR
+         JSR SSTEP
+         LDX #PTR2
+         JSR SSTEP
+         LDA #$FF
+SMEM4    STA SDOWN
+         JSR SMOVE
+         LDA SNEW
+         STA SPEND
+         LDA SNEW+1
+         STA SPEND+1
+         BIT SOP
+         BMI SMEM5          ; deleted: one less
+         LDA SMS            ; BUF in
+         STA PTR2
+         LDA SMS+1
+         STA PTR2+1
+         LDA #<BUF
+         LDY #>BUF
+         JSR STRCPY
+         LDX SEDI
+         CPX SCOUNT
+         BCC SMEM9          ; in its place
+         INC SCOUNT         ; added
+         RTS
+SMEM5    DEC SCOUNT
+SMEM9    RTS
+;
+; SMOVE - TMP/TMP2 bytes from PTR to
+; PTR2, a byte at a time, each on
+; (SSTEP: back when SDOWN is $FF)
+;
+SMOVE    LDA TMP
+         ORA TMP2
+         BEQ SMEM9          ; all moved
+         LDY #0
+         LDA (PTR),Y
+         STA (PTR2),Y
+         LDX #PTR
+         JSR SSTEP
+         LDX #PTR2
+         JSR SSTEP
+         LDA TMP            ; one less
+         BNE SMOVE1
+         DEC TMP2
+SMOVE1   DEC TMP
+         JMP SMOVE
+;
+; SSTEP - the pointer at X (zero
+; page) on a byte, or back one when
+; SDOWN is $FF
+;
+SSTEP    BIT SDOWN
+         BMI SSTEP1
+         INC 0,X
+         BNE SSTEP9
+         INC 1,X
+SSTEP9   RTS
+SSTEP1   LDA 0,X
+         BNE SSTEP2
+         DEC 1,X
+SSTEP2   DEC 0,X
+         RTS

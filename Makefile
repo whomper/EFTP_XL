@@ -43,7 +43,7 @@ $(PROGRAM): Makefile $(SRCS) $(AXSRCS) xl/tools/mac65.py
 	rm -rf bin/src
 	mkdir -p bin/src
 	cp $(SRCS) $(AXSRCS) bin/src/
-	$(MAC65) bin/src/EFTPXL.M65 -o $@ -l bin/EFTPXL.LST > /dev/null
+	$(MAC65) bin/src/EFTPXL.M65 -o $@ -l bin/EFTPXL.LST -s bin/EFTPXL.SYM > /dev/null
 
 # the disk: SpartaDOS 3.2, the sources numbered and tokenized, the
 # program and the font; what is on it must build the same program

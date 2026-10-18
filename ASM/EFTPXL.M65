@@ -1,6 +1,6 @@
          .OPT NO LIST
 ;
-; EFTPXL.M65 - EFTP_XL 1.4
+; EFTPXL.M65 - EFTP_XL 1.5
 ; FTP client for FujiNet
 ; Copyright (C) 2026 AERA | Erez Yaary
 ; GPL-2.0-or-later, see COPYING
@@ -11,7 +11,7 @@
          .INCLUDE #D:AXEQU.M65
          .INCLUDE #D:EQUATES.M65
 ;
-LOAD     =   $4000      ; above DOS and EDOS
+LOAD     =   $1E00      ; over EDOS
 ;
 ; The load check (xl's AXLOAD): an
 ; init segment, which DOS runs
@@ -25,7 +25,7 @@ LOAD     =   $4000      ; above DOS and EDOS
 AXLOW    =   LOAD
 AXHIGH   =   BSSEND
          *=  $9A00
-AXLOWM   .BYTE "EFTP_XL loads at $4000: MEMLO is above it",EOL
+AXLOWM   .BYTE "EFTP_XL loads at $1E00: MEMLO is above it",EOL
 AXROOMM  .BYTE "EFTP_XL: not enough memory",EOL
          .INCLUDE #D:AXLOAD.M65
 ;
@@ -38,7 +38,7 @@ AXROOMM  .BYTE "EFTP_XL: not enough memory",EOL
 ; The last release; every build
 ; shows it
 ;
-VERSION  .BYTE "EFTP_XL 1.4",0
+VERSION  .BYTE "EFTP_XL 1.5",0
 ;
          .INCLUDE #D:UI.M65
          .INCLUDE #D:CMDS.M65
@@ -46,6 +46,7 @@ VERSION  .BYTE "EFTP_XL 1.4",0
          .INCLUDE #D:XSHOW.M65
          .INCLUDE #D:XTREE.M65
          .INCLUDE #D:SITES.M65
+         .INCLUDE #D:SPOOL.M65
          .INCLUDE #D:FTP.M65
          .INCLUDE #D:REMOTE.M65
          .INCLUDE #D:LOCAL.M65

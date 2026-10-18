@@ -52,7 +52,7 @@ def Disks(drives, dos='sparta'):
 class Sim:
     """EFTPXL.COM in a8sim, with the key script, D:, E: and the FujiNet"""
 
-    def __init__(self, xex, keys, memlo=0x1F00, fujinet=None, disks=None, shots=None):
+    def __init__(self, xex, keys, memlo=0x1D00, fujinet=None, disks=None, shots=None):
         self.m = a8sim.Machine(memlo=memlo, clock='wall')
         self.keys = a8sim.Keys(keys, on_shot=lambda m: self.snapshot())
         self.fujinet = fujinet or FujiNet()
@@ -102,7 +102,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('keys', help='keys to type (see above)')
     ap.add_argument('--com', '--xex', dest='xex', default=os.path.join(ROOT, 'bin', 'EFTPXL.COM'))
-    ap.add_argument('--memlo', type=lambda v: int(v, 0), default=0x1F00)
+    ap.add_argument('--memlo', type=lambda v: int(v, 0), default=0x1D00)
     ap.add_argument('--d1', help='folder for D1:')
     ap.add_argument('--d2', help='folder for D2:')
     ap.add_argument('--dos', choices=('sparta', 'dos2'), default='sparta')
