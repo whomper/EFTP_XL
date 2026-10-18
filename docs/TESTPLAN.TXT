@@ -10,7 +10,7 @@ Tick each one; note what you saw when
 it isn't as written.
 
 ON THE DISK
- EFTPXL.PRG  the program
+ EFTPXL.COM  the program
  AERA.FNT    the font
  EFTPXL.CFG  one site: edit it first
  TEXT.TXT    text, a few lines
@@ -21,7 +21,7 @@ ON THE DISK
  TREE>SUB>   a folder in it: B.DAT
 
 1 START
-[ ] EFTPXL.PRG at the D1: prompt:
+[ ] EFTPXL.COM at the D1: prompt:
     the title "EFTP_XL @VERSION@ ... (C)
     AERA 2026", the disk in the left
     pane.
@@ -111,7 +111,7 @@ ON THE DISK
     an FTPS server.
 
 8 DOS 2.5 (if you have its disk)
-[ ] Copy EFTPXL.PRG and EFTPXL.CFG to
+[ ] Copy EFTPXL.COM and EFTPXL.CFG to
     it, L from the menu: it starts.
 [ ] ^N: "this DOS has no folders".
 

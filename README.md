@@ -38,12 +38,12 @@ design is in [docs/design](docs/design).
 
 ## Getting started
 
-1. Get `EFTPXL.PRG` and `AERA.FNT` from the
+1. Get `EFTPXL.COM` and `AERA.FNT` from the
    [latest release](https://github.com/whomper/EFTP_XL/releases) onto a
    disk the Atari can read, e.g. an ATR on the FujiNet SD card or a TNFS
    share. `EFTPXL.ATR`, also in the release, is a bootable SpartaDOS 3.2
    disk with both on it (and the sources).
-2. Load it: `L` from the DOS 2.5 menu, or type `EFTPXL.PRG` at the
+2. Load it: `L` from the DOS 2.5 menu, or type `EFTPXL.COM` at the
    SpartaDOS prompt. EFTP_XL looks for `AERA.FNT` and its sites
    (`EFTPXL.CFG`) on `D:`, the DOS's current drive and folder, not where
    the program was loaded from: on DOS 2.5 that is always D1:, on
@@ -59,9 +59,10 @@ design is in [docs/design](docs/design).
    server 31, the user and the password 19 each, the server's folder 39
    and the Atari's 23. RETURN on a site connects.
 
-**Updating.** Copy the new release's `EFTPXL.PRG` and `AERA.FNT` over
-the old ones. Keep `EFTPXL.CFG`: every release since 0.3 writes its
-sites the same way, so the new one reads them as they are.
+**Updating.** Copy the new release's `EFTPXL.COM` and `AERA.FNT` over
+the old ones (up to 1.4 the program was `EFTPXL.PRG`: delete that one).
+Keep `EFTPXL.CFG`: every release since 0.3 writes its sites the same
+way, so the new one reads them as they are.
 
 **The font.** `AERA.FNT` is the font the AERA 8-bit programs share. It
 isn't in the program: when it is on `D:`, EFTP_XL reads it into the
@@ -234,7 +235,7 @@ which makes the same program as Mac/65 1.01, byte for byte:
 git clone https://github.com/whomper/EFTP_XL
 cd EFTP_XL
 pip install -r xl/requirements.txt -r requirements.txt
-make            # bin/EFTPXL.PRG
+make            # bin/EFTPXL.COM
 make atr        # bin/EFTPXL.ATR: the disk, with the sources for the Atari
 make test       # all the checks (Tests, below)
 make dist       # a release's files in dist/
@@ -248,7 +249,7 @@ sources in Mac/65's own tokenized form, with line numbers (`.M65`, as
 its SAVE writes them), ready to LOAD: EFTP_XL's own files and the
 shared `AX*.M65` it includes. A release has this disk.
 
-1. Boot the disk in D1: with the Mac/65 cartridge in (`EFTPXL.PRG` at
+1. Boot the disk in D1: with the Mac/65 cartridge in (`EFTPXL.COM` at
    the SpartaDOS prompt runs the program; `CAR` goes to Mac/65). Mac/65's
    `D:` is D1:; to work from another disk, copy the files to D1:'s
    current folder.
@@ -256,17 +257,17 @@ shared `AX*.M65` it includes. A release has this disk.
 
    ```
    LOAD #D:EFTPXL.M65
-   ASM ,,#D:EFTPXL.PRG
+   ASM ,,#D:EFTPXL.COM
    ```
 
-   This makes `EFTPXL.PRG`, the program, over the one on the disk: the
+   This makes `EFTPXL.COM`, the program, over the one on the disk: the
    same bytes as the release's, in Mac/65's smaller segments.
    `EFTPXL.M65` is the main file; Mac/65 reads the parts it includes
    from `D:` as it assembles. Load the main file first and give no
    source to `ASM`: on SpartaDOS, Mac/65 1.01 can't assemble a main
    file read from disk (as EDOS found). With SpartaDOS 3.2 it reports
    `ASSEMBLY ERRORS: 0` with about 13K free. Write the program over
-   `EFTPXL.PRG` (or to another disk): the disk has no room for a second
+   `EFTPXL.COM` (or to another disk): the disk has no room for a second
    copy.
 
 | | |
@@ -315,7 +316,7 @@ does, what it takes and what it gives back.
 ## Tests
 
 **The program on an emulated 6502.** `tools/sim.py` runs the real
-`bin/EFTPXL.PRG` on xl's `a8sim` (`xl/tools/a8sim`, on
+`bin/EFTPXL.COM` on xl's `a8sim` (`xl/tools/a8sim`, on
 [py65](https://github.com/mnaberez/py65)), the simulator EDOS's tests
 use too, with EFTP_XL's FujiNet (`tools/fujinet.py`). It stands in for
 the OS calls the program makes: the
@@ -387,7 +388,7 @@ raise the version, commit and push, then run the Release workflow
 (Actions > Release > Run workflow, on main) with what is new:
 [`.github/workflows/release.yml`](.github/workflows/release.yml) (the
 AERA 8-bit one, from `xl/`) runs `make test` and `make dist`, tags the
-commit `vX.Y` and publishes `EFTPXL.PRG`, `EFTPXL.ATR`, `AERA.FNT` and
+commit `vX.Y` and publishes `EFTPXL.COM`, `EFTPXL.ATR`, `AERA.FNT` and
 `EFTPTEST.ATR` as
 a GitHub Release, marked Latest. Pushing a tag made with `git tag -a`
 does the same, with the tag's message as the notes. A release that must

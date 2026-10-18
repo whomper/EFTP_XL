@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-# EFTP_XL - run EFTPXL.PRG on an emulated 6502 against a real FTP server
+# EFTP_XL - run EFTPXL.COM on an emulated 6502 against a real FTP server
 # Copyright (C) 2026 AERA | Erez Yaary. GPL-2.0-or-later, see COPYING.
-"""Run the real EFTPXL.PRG on xl's a8sim (xl/tools/a8sim: py65, with the
+"""Run the real EFTPXL.COM on xl's a8sim (xl/tools/a8sim: py65, with the
 Atari OS calls stood in for) and EFTP_XL's FujiNet (tools/fujinet.py):
 
 - the program is loaded segment by segment as DOS does (its load check
@@ -50,7 +50,7 @@ def Disks(drives, dos='sparta'):
 
 
 class Sim:
-    """EFTPXL.PRG in a8sim, with the key script, D:, E: and the FujiNet"""
+    """EFTPXL.COM in a8sim, with the key script, D:, E: and the FujiNet"""
 
     def __init__(self, xex, keys, memlo=0x1F00, fujinet=None, disks=None, shots=None):
         self.m = a8sim.Machine(memlo=memlo, clock='wall')
@@ -101,7 +101,7 @@ class Sim:
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('keys', help='keys to type (see above)')
-    ap.add_argument('--prg', '--xex', dest='xex', default=os.path.join(ROOT, 'bin', 'EFTPXL.PRG'))
+    ap.add_argument('--com', '--xex', dest='xex', default=os.path.join(ROOT, 'bin', 'EFTPXL.COM'))
     ap.add_argument('--memlo', type=lambda v: int(v, 0), default=0x1F00)
     ap.add_argument('--d1', help='folder for D1:')
     ap.add_argument('--d2', help='folder for D2:')

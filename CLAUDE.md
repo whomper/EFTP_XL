@@ -7,7 +7,7 @@
   commit, push, then run the Release
   workflow on main with the notes; `.github/workflows/release.yml`
   (xl's) runs `make test` and `make dist`, tags vX.Y and publishes
-  `EFTPXL.PRG`, the disk `EFTPXL.ATR` (the sources and the program, so
+  `EFTPXL.COM`, the disk `EFTPXL.ATR` (the sources and the program, so
   not `-SRC`; always this name), `AERA.FNT` and `EFTPTEST.ATR` (the
   test disk, with docs/TESTPLAN.TXT). Never reuse a number.
 - **Talking with Erez.** No progress or in-between messages: write to

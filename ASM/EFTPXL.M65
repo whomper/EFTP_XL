@@ -6,7 +6,7 @@
 ; GPL-2.0-or-later, see COPYING
 ;
 ; Mac/65: LOAD #D:EFTPXL.M65, then
-; ASM ,,#D:EFTPXL.PRG
+; ASM ,,#D:EFTPXL.COM
 ;
          .INCLUDE #D:AXEQU.M65
          .INCLUDE #D:EQUATES.M65

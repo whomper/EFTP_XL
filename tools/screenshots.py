@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # EFTP_XL - the README's pictures
 # Copyright (C) 2026 AERA | Erez Yaary. GPL-2.0-or-later, see COPYING.
-"""Take the README's screenshots: bin/EFTPXL.PRG run in tools/sim.py
+"""Take the README's screenshots: bin/EFTPXL.COM run in tools/sim.py
 against an FTP server started here (pyftpdlib), with a made-up Atari
 disk and server folder, the screens drawn as the Atari shows them.
 
@@ -29,7 +29,7 @@ def files(root, spec):
 
 
 def shots(keys, d1, out, names):
-    s = sim.Sim(sim.ROOT + '/bin/EFTPXL.PRG', sim.parse_keys(keys), 0x1D00,
+    s = sim.Sim(sim.ROOT + '/bin/EFTPXL.COM', sim.parse_keys(keys), 0x1D00,
                 sim.FujiNet(), sim.Disks({1: d1}))
     taken = []
 

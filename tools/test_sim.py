@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-# EFTP_XL - end-to-end tests: the real EFTPXL.PRG in tools/sim.py
+# EFTP_XL - end-to-end tests: the real EFTPXL.COM in tools/sim.py
 # Copyright (C) 2026 AERA | Erez Yaary. GPL-2.0-or-later, see COPYING.
-"""Run bin/EFTPXL.PRG on the emulated 6502 against an FTP server started
+"""Run bin/EFTPXL.COM on the emulated 6502 against an FTP server started
 here (pyftpdlib), with D1: a folder here, and check the screen and the
 files: listing both sides, downloads and uploads (binary and text),
 the replace question, ESC, new folder, rename and delete, DOS 2.5's
@@ -400,7 +400,7 @@ def main():
             disk = sparta.Disk(td)
             problems, lost = disk.fsck()
             names = {p for p, e, folder in disk.walk()}
-            want = {'X32G.DOS', 'EFTPXL.PRG', 'AERA.FNT', 'EFTPXL.CFG', 'TESTPLAN.TXT',
+            want = {'X32G.DOS', 'EFTPXL.COM', 'AERA.FNT', 'EFTPXL.CFG', 'TESTPLAN.TXT',
                     'TEXT.TXT', 'BIN.DAT', 'EMPTY.DAT', 'BIG.DAT', 'TREE', 'TREE>A.TXT',
                     'TREE>SUB', 'TREE>SUB>B.DAT'}
             check('test disk: clean, with its files', not problems and not lost
@@ -511,7 +511,7 @@ def main():
     return 1 if failures else 0
 
 
-XEX = os.path.join(sim.ROOT, 'bin', 'EFTPXL.PRG')
+XEX = os.path.join(sim.ROOT, 'bin', 'EFTPXL.COM')
 BUILTIN = os.path.join(sim.ROOT, 'xl', 'font', 'AERA.FNT')    # make's, the same font
 
 if __name__ == '__main__':

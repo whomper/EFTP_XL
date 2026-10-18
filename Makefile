@@ -1,7 +1,7 @@
 # EFTP_XL build: the Mac/65 sources in ASM/, assembled with xl/'s
 # mac65.py, which makes the same program as MAC/65 1.01 on the Atari.
 #
-#   make            bin/EFTPXL.PRG
+#   make            bin/EFTPXL.COM
 #   make atr        bin/EFTPXL.ATR: the bootable disk, the sources as
 #                   Mac/65 takes them; they must give the same program
 #   make test       xl/'s tests and tools/test_sim.py
@@ -18,7 +18,7 @@
 PYTHON     ?= python3
 MAC65      := $(PYTHON) xl/tools/mac65.py
 SRC        := $(PYTHON) xl/tools/atari_src.py
-PROGRAM    := bin/EFTPXL.PRG
+PROGRAM    := bin/EFTPXL.COM
 FONTFILE   := xl/font/AERA.FNT
 DISK       := bin/EFTPXL.ATR
 TESTDISK   := bin/EFTPTEST.ATR
@@ -55,8 +55,8 @@ $(DISK): $(PROGRAM) $(FONTFILE) $(SRCS) $(AXSRCS) xl/tools/*.py
 	rm -rf bin/atr
 	mkdir -p bin/atr
 	$(SRC) check --to bin/atr $@ > /dev/null
-	$(MAC65) bin/atr/EFTPXL.M65 -o bin/atr/CHECK.PRG > /dev/null
-	cmp bin/atr/CHECK.PRG $(PROGRAM)
+	$(MAC65) bin/atr/EFTPXL.M65 -o bin/atr/CHECK.COM > /dev/null
+	cmp bin/atr/CHECK.COM $(PROGRAM)
 	rm -rf bin/atr
 
 # the test disk for real hardware: the program, the font, the test
