@@ -151,7 +151,7 @@ Notes:
 - On an error the info line says what went wrong: the server's own
   reply (`530 Login incorrect`), or the Atari's own error with its text
   (`NOTES.TXT: Disk full`).
-- The program takes `$4000`-`$9709` (the program and its variables),
+- The program takes `$4000`-`$9708` (the program and its variables),
   and the font the 1K just below the screen (`$9800` with BASIC on):
   above EDOS and the MEMLO of DOS 2.5 and SpartaDOS 3, so BASIC can
   stay on. If a DOS's MEMLO is above `$4000`, or there isn't room for

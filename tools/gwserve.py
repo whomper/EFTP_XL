@@ -3,7 +3,7 @@
 # Copyright (C) 2026 AERA | Erez Yaary. GPL-2.0-or-later, see COPYING.
 """AERA-Gateway's eftpgate and, behind it, the SFTP and FTPS servers of
 eftpgate's own tests (user atari, password falcon), all from
-AERA-Gateway's latest release (the Makefile fetches it to bin/gateway),
+AERA-Gateway's latest release (make test fetches it to bin/gateway),
 in a process of their own, so they don't wait on the emulator for
 Python's lock. Prints the ports, the gateway's then the SFTP and FTPS
 servers', and serves until it is stopped.

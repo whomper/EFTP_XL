@@ -321,8 +321,11 @@ def main():
         open(os.path.join(groot, 'notes.txt'), 'wb').write(b'one\ntwo\n')
         open(os.path.join(gd1, 'UP.BIN'), 'wb').write(BIG[:3000])
         open(os.path.join(gd1, 'UP.TXT'), 'wb').write(b'A\x9bB\x9b')
+        gwdir = os.path.join(sim.ROOT, 'bin', 'gateway')
+        print('      eftpgate from AERA-Gateway '
+              + open(os.path.join(gwdir, 'AERA-GATEWAY.VERSION')).read().strip())
         gw = subprocess.Popen([sys.executable, os.path.join(sim.ROOT, 'tools', 'gwserve.py'),
-                               os.path.join(sim.ROOT, 'bin', 'gateway'), groot],
+                               gwdir, groot],
                               stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
         try:
             gport, sport, fport = gw.stdout.readline().split()
