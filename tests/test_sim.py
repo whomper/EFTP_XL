@@ -29,7 +29,7 @@ def build():
     asm = mac65.Assembler()
     asm.assemble(os.path.join(tmp, 'SIMTEST.M65'))
     data, _ = asm.binary()
-    prg = os.path.join(tmp, 'SIMTEST.PRG')
+    prg = os.path.join(tmp, 'SIMTEST.COM')
     with open(prg, 'wb') as f:
         f.write(data)
     sym = os.path.join(tmp, 'SIMTEST.SYM')
