@@ -42,20 +42,30 @@ design is in [docs/design](docs/design).
    share. `EFTPXL.ATR`, also in the release, is a bootable SpartaDOS 3.2
    disk with both on it (and the sources).
 2. Load it: `L` from the DOS 2.5 menu, or type `EFTPXL.PRG` at the
-   SpartaDOS prompt.
+   SpartaDOS prompt. EFTP_XL looks for `AERA.FNT` and its sites
+   (`EFTPXL.CFG`) on `D:`, the DOS's current drive and folder, not where
+   the program was loaded from: on DOS 2.5 that is always D1:, on
+   SpartaDOS the drive and folder of the prompt.
 3. Press ^K for the sites, ^N to add one: a name, the server (IP address
-   or name), port (21 unless your server uses another), user and
-   password, the folder on the server to start in, and the folder on the
-   Atari (e.g. `D1:>DOWNLOAD>`). RETURN on a site connects.
+   or name), the port (blank: 21), your user (blank: `anonymous`), the
+   password (blank: asked for each time you connect), the folder on the
+   server to start in (blank: the one the server logs you in to), the
+   folder on the Atari (e.g. `D1:>DOWNLOAD>`; blank: the one shown) and
+   how files are sent (**Files**, below). A name holds up to 15
+   characters, the server 31, the user and the password 19 each, the
+   server's folder 39 and the Atari's 23. RETURN on a site connects.
+
+**Updating.** Copy the new release's `EFTPXL.PRG` and `AERA.FNT` over
+the old ones. Keep `EFTPXL.CFG`: every release since 0.3 writes its
+sites the same way, so the new one reads them as they are.
 
 **The font.** `AERA.FNT` is the font the AERA 8-bit programs share. It
-isn't in the program: when it is on the drive (and SpartaDOS folder)
-you start EFTP_XL from, EFTP_XL reads it into the 1K just below the
-screen, as EDOS does, and uses its icons: a folder, a file, the "..."
-of a name cut short and the empty part of a progress bar. Without it
-EFTP_XL runs in the Atari's own font, with characters of that font for
-the icons: a folder is `▶`, the "..." is `→`, a file has none and the
-bar is drawn with `─`.
+isn't in the program: when it is on `D:`, EFTP_XL reads it into the
+1K just below the screen, as EDOS does, and uses its icons: a folder, a
+file, the "..." of a name cut short and the empty part of a progress
+bar. Without it EFTP_XL runs in the Atari's own font, with characters
+of that font for the icons: a folder is `▶`, the "..." is `→`, a file
+has none and the bar is drawn with `─`.
 
 The screen, after EFTP: the Atari on the left, the server on the right,
 the folder you are in above each, and the pane with the keyboard has its
@@ -82,7 +92,7 @@ file under the cursor, then the transfers.
 | RESET          | back to the main screen, disconnected   |
 | ^Q             | quit to DOS                             |
 
-The keys are EFTP's; HELP shows them:
+The keys are mostly EFTP's; HELP shows them:
 
 ![The keys](docs/screens/7-keys.png)
 
@@ -107,8 +117,8 @@ deleted rather than left half there.
 **Sending folders.** Mark a folder with SPACE (or put the cursor on it)
 and ^T sends it with everything in it, folders in folders too (8 deep
 at most). It is made on the other side, or gone into when it is there
-already; files already there are asked about, as at the top. Going to
-the Atari, a folder gets an 8.3 name as files do, which needs
+already; files already there are asked about, as single files are.
+Going to the Atari, a folder gets an 8.3 name as files do, which needs
 SpartaDOS: DOS 2.5 has no folders. The summary counts the files.
 
 ![A folder sent: MUSIC and the folder in it, 3 files](docs/screens/6-folder-sent.png)
@@ -128,8 +138,8 @@ SpartaDOS: DOS 2.5 has no folders. The summary counts the files.
 
 Notes:
 
-- `EFTPXL.CFG` is on the drive (and SpartaDOS folder) you run EFTP_XL
-  from, one line per site. A password saved there is plain text: leave it
+- `EFTPXL.CFG` is on `D:` (see [Getting started](#getting-started)),
+  one line per site. A password saved there is plain text: leave it
   blank and EFTP_XL asks for it each time you connect.
 - Usernames, passwords and paths are case-sensitive. The Atari keyboard
   starts in uppercase; press **CAPS** to switch to lowercase.
@@ -156,17 +166,26 @@ it always logs in as `anonymous` on port 21.
 
 Any standard FTP server with passive mode works; tested with pure-ftpd and
 pyftpdlib. On a Mac, pure-ftpd from Homebrew is a good choice. For a quick
-test, pyftpdlib:
+test, pyftpdlib (then the site's port is 2100):
 
 ```sh
 python3 -m venv ~/eftp-venv
 ~/eftp-venv/bin/pip install pyftpdlib
 mkdir -p ~/AtariShare
-~/eftp-venv/bin/python -m pyftpdlib -p 2121 -w -d ~/AtariShare -u ATARI -P SECRET
+~/eftp-venv/bin/python -m pyftpdlib -p 2100 -w -d ~/AtariShare -u ATARI -P SECRET
 ```
 
 FTP is unencrypted: the user, the password and the files go across in
 plain text, so only use it on your home network.
+
+EFTP_XL speaks plain FTP only, so a server that wants FTPS or SFTP is
+out of its reach for now. AERA-Gateway's FTP gateway on a Raspberry Pi
+(`eftpgate`, port 2121, with 30000-30099 for data) does that for EFTP
+on the ST, but it takes the server in the login
+(`sftp:erez@my.server.net:22` as the user), which is longer than the 19
+characters of EFTP_XL's user field. Port 2121 is also pyftpdlib's own
+default, hence 2100 above: on a Pi that runs the gateway, 2121 is
+taken.
 
 ## Building
 
@@ -241,13 +260,16 @@ this repository.
 ASM/        the program: EFTPXL.M65, the main file, and its parts
 xl/         the AERA 8-bit shared code and tools, from AERA-Atari
             (read-only here; tools/sync-xl.sh brings it up to date)
-  src/      AX*.M65: the OS's names, RESET, AERA.FNT, CIO's error texts
+  src/      AX*.M65: the OS's names, the load check, RESET, AERA.FNT,
+            CIO's error texts
+  font/     AERA.FNT, the family's font
   tools/    mac65.py (the assembler), atari_src.py (the disk), font.py,
             a8sim (the simulator), atari800/ (the checks in atari800)
   workflows/ release.yml and withdraw.yml, copied to .github/workflows
 tools/      sim.py (the program on xl's a8sim), fujinet.py (its FujiNet),
-            test_sim.py, screenshots.py, sync-xl.sh
-docs/       the pictures, the first design
+            test_sim.py, screenshots.py, testdisk.py (EFTPTEST.ATR's
+            files), sync-xl.sh
+docs/       the pictures, the first design, TESTPLAN.TXT (the test plan)
 ```
 
 The source keeps to what Mac/65 1.01 takes: labels of letters and

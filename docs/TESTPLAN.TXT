@@ -2,8 +2,9 @@ EFTP_XL TEST PLAN (EFTPTEST.ATR)
 Copyright (C) 2026 AERA | Erez Yaary
 
 Boot this disk in D1: (SpartaDOS 3.2)
-with the FujiNet on, and an FTP server
-on your network (the README says how).
+with the FujiNet on, and a plain FTP
+server on your network (the README
+says how; not the Pi's eftpgate).
 Tick each one; note what you saw when
 it isn't as written.
 
