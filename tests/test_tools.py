@@ -80,7 +80,7 @@ class TestAssembler(unittest.TestCase):
         files = {n: open(os.path.join(XL, 'src', n), encoding='utf-8').read()
                  for n in os.listdir(os.path.join(XL, 'src'))}
         files['MAIN.M65'] = (' .INCLUDE #D:AXEQU.M65\nAXPTR = $80\nAXERRS = 2\nAXLOW = $2000\n'
-                             'AXHIGH = $3000\nAXWARM = $2000\nAXFMIN = $80\nAXFCOPY = 1\n *= $2F00\nAXLOWM .BYTE EOL\n'
+                             'AXHIGH = $3000\nAXWARM = $2000\nAXFMIN = $80\n *= $2F00\nAXLOWM .BYTE EOL\n'
                              'AXROOMM .BYTE EOL\n .INCLUDE #D:AXLOAD.M65\n *= $2000\n'
                              ' .INCLUDE #D:AXRESET.M65\n .INCLUDE #D:AXFONT.M65\n'
                              ' .INCLUDE #D:AXERR.M65\n')
@@ -306,6 +306,17 @@ class TestFont(unittest.TestCase):
         with open(font.AERA, 'rb') as f:
             self.assertEqual(f.read(), font.aera_font())
         self.assertEqual(font.ICONS, tuple(font.internal(a) for a in (0x00, 0x06, 0x10, 0x7B)))
+
+
+class TestGetRelease(unittest.TestCase):
+    def test_same_as_common(self):
+        """xl/tools/getrelease.py is common/tools/getrelease.py, byte for
+        byte (in AERA-Atari, where both are)"""
+        common = os.path.join(os.path.dirname(XL), 'common', 'tools', 'getrelease.py')
+        if not os.path.exists(common):
+            self.skipTest('no common/ here')
+        with open(common, 'rb') as a, open(os.path.join(XL, 'tools', 'getrelease.py'), 'rb') as b:
+            self.assertEqual(a.read(), b.read())
 
 
 if __name__ == '__main__':

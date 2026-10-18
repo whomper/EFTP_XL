@@ -9,12 +9,10 @@
 ; (1K) to the page below the screen,
 ; (RAMTOP-8) AND $FC; later calls
 ; (after RESET) only set CHBAS. No
-; file or a short one: with AXFCOPY
-; 1 the font in use is copied to the
-; page (a program puts its own icons
-; there, 5.3), with 0 the ROM font
-; stays. No room (the page under
-; AXFMIN): the ROM font.
+; file, a short one, or no room (the
+; page under AXFMIN) keep the ROM
+; font. A short or bad file may leave
+; the page part-written.
 ; X: the IOCB to use, times 16
 ; Exit: C=0 AERA.FNT, C=1 not;
 ;       AXFPG the page in CHBAS ($E0:
@@ -70,32 +68,11 @@ AXFONT1  TYA                ; keep the status
          AND #$80           ; $80: not read
          STA AXFNOT
          BPL AXFSET         ; read: the page
-         .IF AXFCOPY
-;
-; Not read: the font in use, 4
-; pages, copied to the page
-;
-         LDA CHBAS
-         STA AXFC1+2
-         LDA AXFPG
-         STA AXFC2+2
-         LDY #0
-AXFC1    LDA $E000,Y        ; from CHBAS's page
-AXFC2    STA $E000,Y        ; to AXFPG's
-         INY
-         BNE AXFC1
-         INC AXFC1+2
-         INC AXFC2+2
-         LDA AXFC2+2
-         AND #3             ; 4 pages done
-         BNE AXFC1
-         JMP AXFSET
-         .ENDIF
 AXFONT2  LDA #$E0           ; the ROM font
          STA AXFPG
          LDA #$80
          STA AXFNOT
-         JMP AXFSET
+         BNE AXFSET         ; always
 ;
 ; AXFROM - the ROM font, before the
 ; program goes back to DOS
