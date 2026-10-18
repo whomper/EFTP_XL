@@ -178,6 +178,107 @@ def main():
         check('panes back where they were', '|/' in shots[0] and 'D1:   ' in shots[0],
               shots[0][:300])
 
+        # disk access (the 8-bit guidelines, 5.5): a file is opened
+        # once and goes to and from the disk through XBUF, MEMLO up to
+        # the program, in one PUT or GET for all it holds; below MEMLO
+        # nothing changes; with under 512 bytes there, BUF's second
+        # page; after a transfer only the other side is read again
+        aroot, ad1 = os.path.join(tmp, 'asrv'), os.path.join(tmp, 'ad1')
+        os.makedirs(aroot)
+        os.makedirs(ad1)
+        n20 = 20 * 1024
+        bin20 = BIG[:n20]
+        txt20 = b''.join(b'line %05d of a text: 32 bytes.\n' % i for i in range(n20 // 32))
+        open(os.path.join(aroot, 'big.bin'), 'wb').write(bin20)
+        open(os.path.join(aroot, 'text.txt'), 'wb').write(txt20)
+        open(os.path.join(ad1, 'UP.BIN'), 'wb').write(bin20)
+        open(os.path.join(ad1, 'UP.TXT'), 'wb').write(txt20.replace(b'\n', b'\x9b'))
+        aserver = Server(aroot)
+
+        def logged(keys, memlo=0x1D00):
+            """run, with every D: OPEN, GET and PUT in a list"""
+            s = sim.Sim(XEX, sim.parse_keys(keys), memlo, sim.FujiNet(),
+                        sim.Disks({1: ad1}))
+            dev, ev, names = s.m.cio.devices['D'], [], {}
+            o_open, o_get, o_put = dev.open, dev.get, dev.put
+
+            def d_open(spec, a1, a2):
+                st, h = o_open(spec, a1, a2)
+                names[id(h)] = spec
+                ev.append(('OPEN', spec, 0))
+                return st, h
+
+            def d_get(h, n, rec):
+                st, data = o_get(h, n, rec)
+                ev.append(('GET', names.get(id(h)), len(data)))
+                return st, data
+
+            def d_put(h, data, rec):
+                ev.append(('PUT', names.get(id(h)), len(data)))
+                return o_put(h, data, rec)
+            dev.open, dev.get, dev.put = d_open, d_get, d_put
+            low = bytes((i * 13 + 5) & 255 for i in range(256))
+            s.mem[memlo - 256:memlo] = low
+            shots = []
+            s.snapshot = lambda: shots.append(s.screen_text())
+            s.run()
+            shots.append(s.screen_text())
+            return shots, ev, bytes(s.mem[memlo - 256:memlo]) == low
+
+        def calls(ev, kind, name):
+            return [n for k, f, n in ev if k == kind and f == 'D1:' + name]
+
+        try:
+            run_site = f'^K^NTest\\n127.0.0.1\\n{aserver.port}\\n{USER}\\n{PASSWORD}' \
+                       '\\n/\\n\\n  \\n\\n\\n\\w\\s^Q'
+            logged(run_site)
+            for memlo, way in ((0x1D00, ''), (0x3F80, ', in BUF')):
+                for key, name, want in (('B', 'BIG.BIN', bin20),
+                                        ('T', 'TEXT.TXT', txt20.replace(b'\n', b'\x9b'))):
+                    p = os.path.join(ad1, name)
+                    os.remove(p) if os.path.exists(p) else None
+                    shots, ev, low = logged(f'^K\\n\\w{key}\\n\\w\\s^Q', memlo)
+                    got = open(p, 'rb').read() if os.path.exists(p) else b''
+                    puts = calls(ev, 'PUT', name)
+                    check(f'5.5: 20K {name} down{way}', got == want, f'{len(got)} bytes')
+                    check(f'5.5: {name} down: 1 OPEN, '
+                          + ('3 PUTs' if not way else 'BUF\'s 256 a PUT'),
+                          len(calls(ev, 'OPEN', name)) == 1
+                          and (len(puts) <= 3 if not way else max(puts) <= 256),
+                          f'{len(calls(ev, "OPEN", name))} OPEN, PUTs {puts}')
+                    check(f'5.5: nothing below MEMLO changed{way}', low)
+                for key, name, want in (('U', 'UP.BIN', bin20),
+                                        ('UU', 'UP.TXT', txt20.replace(b'\n', b'\r\n'))):
+                    p = os.path.join(aroot, name)
+                    os.remove(p) if os.path.exists(p) else None
+                    shots, ev, low = logged(f'^K\\n\\w\\t{key}\\n\\w\\s^Q', memlo)
+                    got = open(p, 'rb').read() if os.path.exists(p) else b''
+                    # (a8sim says 136 on a GET after the end; the
+                    # real CIO says it with the last bytes)
+                    gets = [n for n in calls(ev, 'GET', name) if n]
+                    check(f'5.5: 20K {name} up{way}', got == want, f'{len(got)} bytes')
+                    check(f'5.5: {name} up: 1 OPEN, '
+                          + ('3 GETs' if not way else 'BUF\'s 256 a GET'),
+                          len(calls(ev, 'OPEN', name)) == 1
+                          and (len(gets) <= 3 if not way else max(gets) <= 256),
+                          f'{len(calls(ev, "OPEN", name))} OPEN, GETs {gets}')
+                    check(f'5.5: the Atari not read again after {name} up{way}',
+                          len(calls(ev, 'OPEN', '*.*')) == 1, str(calls(ev, 'OPEN', '*.*')))
+
+            # the replace question: A replaces this one and all after it
+            for name in ('BIG.BIN', 'TEXT.TXT'):
+                open(os.path.join(ad1, name), 'wb').write(b'old')
+            shots, ev, low = logged('^K\\n\\wB T ^T\\w\\sA\\w\\s^Q')
+            check('replace: Y/N/All asked', 'is there. Replace? Y/N/All' in shots[0],
+                  shots[0][:120])
+            check('replace: All replaces the rest, unasked',
+                  open(os.path.join(ad1, 'BIG.BIN'), 'rb').read() == bin20
+                  and open(os.path.join(ad1, 'TEXT.TXT'), 'rb').read()
+                  == txt20.replace(b'\n', b'\x9b')
+                  and 'Replace?' not in shots[1], shots[1][:200])
+        finally:
+            aserver.close()
+
         # DOS 2.5: its listing, and no folders
         shots = run('^NX\\n\\s^Q', d1, dos='dos2')
         check('DOS 2.5 listing', 'DIGDUG.XEX' in shots[0], shots[0])

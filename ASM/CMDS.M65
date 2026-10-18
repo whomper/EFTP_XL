@@ -244,9 +244,14 @@ SENDF    LDX CONNECTD       ; LDX: A kept
 SENDF1   STA XONLY
          JSR XSEND
          BCC SENDF2         ; nothing sent
-         LDA #LOCAL
-         JSR REREAD
-         LDA #REMOTE
+         LDA #0             ; the sent side
+         STA MKANY          ; as it was, its
+         LDA ACTIVE         ; marks cleared
+         JSR PUSE           ; (MARK4)
+         JSR PEND
+         JSR MARK4
+         LDA ACTIVE         ; the other side
+         EOR #1             ; read again
          JSR REREAD
          JSR DFRAME
          JMP DPANES

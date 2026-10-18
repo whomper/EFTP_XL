@@ -390,7 +390,8 @@ SAYCIO7  JSR SBI
 SAYCIO8  JMP XERR3          ; show XERROR
 ;
 ; MAYREP - if A/Y is in pane X, ask to
-; replace it (ESC also stops it all)
+; replace it (ESC also stops it all;
+; A: this one and all after it, XALL)
 ; Exit: C=1 leave it, C=0 go on
 ;
 MAYREP   STA MRN            ; MRN = the name
@@ -403,12 +404,14 @@ MAYREP   STA MRN            ; MRN = the name
          BCC MAYREP1        ; there: ask
          CLC                ; not there: go on
          RTS
-MAYREP1  JSR MSGSTART
+MAYREP1  LDA XALL
+         BNE MAYREP3        ; All: replace
+         JSR MSGSTART
          LDA MRN
          LDY MRN+1
          JSR SBADD
          JSR SBI
-         .BYTE " is there. Replace? Y/N",0
+         .BYTE " is there. Replace? Y/N/All",0
          JSR INFOMSG
          JSR KEYGET
          CMP #KESC
@@ -416,7 +419,11 @@ MAYREP1  JSR MSGSTART
          LDA #1             ; ESC: stop
          STA XSTOP
 MAYREP2  AND #$DF           ; to capitals
-         CMP #'Y
+         CMP #'A
+         BNE MAYREP2A
+         STA XALL           ; A: all from now
+         BEQ MAYREP3        ; (Z from the CMP)
+MAYREP2A CMP #'Y
          BEQ MAYREP3        ; Y: replace
          SEC                ; any other (ESC too)
          RTS
@@ -453,7 +460,7 @@ GETF2    LDA #<FSPEC
          LDY #>FSPEC
          LDX #8             ; write
          JSR COPEN
-         BCC GETF3
+         BCC GETF2A
          STA XST            ; could not open
          JSR CCLOSE
          JSR FABORT         ; drop the data link
@@ -461,31 +468,29 @@ GETF2    LDA #<FSPEC
          LDA #EFAIL
          RTS
 ;
-; Each block: FREAD into BUF, to
-; Atari text if text, CWRITE; XN
-; counts what came, XLEN is written
+; Each block: FREAD to XAT (Atari
+; text there if text); XBUF goes to
+; disk in one PUT when another block
+; would not fit, and at the end. XN
+; counts what came
 ;
-GETF3    JSR FREAD          ; next block
+GETF2A   JSR XSTART         ; XBUF empty
+GETF3    JSR XROOM          ; full: to disk
+         BCS GETF7          ; the disk failed
+         JSR FREAD          ; next block
          BCS GETF6          ; ETIME or ECLOSED
          LDA NLEN
          ORA NLEN+1
          BEQ GETF5          ; end of file
          LDA NLEN
-         STA XLEN           ; XLEN to write,
          STA XN             ; XN to count
          LDA NLEN+1
-         STA XLEN+1
          STA XN+1
          LDA XTEXT
          BEQ GETF4
-         JSR TOATARI        ; XLEN = bytes now
-GETF4    LDA XLEN
-         ORA XLEN+1
-         BEQ GETF4A         ; none to write
-         LDA #<BUF
-         LDY #>BUF
-         JSR CWRITE
-         BCS GETF7
+         JSR TOATARI        ; XAT past the text
+         JMP GETF4A
+GETF4    JSR XSKIP          ; XAT past XN
 GETF4A   JSR XMOVED
          BEQ GETF3          ; no ESC: more
          JSR CCLOSE         ; stopped
@@ -496,7 +501,9 @@ GETF4A   JSR XMOVED
 ; failure or ESC: the half file is
 ; deleted (EFAIL)
 ;
-GETF5    JSR CCLOSE         ; all of it came
+GETF5    JSR XFLUSH         ; all of it came:
+         BCS GETF7          ; the rest to disk
+         JSR CCLOSE
          BCS GETF7A         ; close failed
          JSR FDONE          ; 226 or 250?
          BCS GETF5B
@@ -557,39 +564,59 @@ PUTF2    LDX K
          LDA #EFAIL
          RTS
 ;
-; Each block: CREAD, to CR LF if
-; text, FWRITE. The last bytes may
-; come with 136 (end of file)
+; Each GET: XPAGES pages to XBUF, in
+; one; then 512 at a time (text: 256,
+; to CR LF at BUF) to FWRITE. The
+; last bytes may come with 136 (end
+; of file)
 ;
 PUTF3    LDA #0             ; no net error yet
          STA FERR
-PUTF4    LDA XTEXT
-         BEQ PUTF5
-         LDA #<[BUF+256]    ; text: 1 page at
-         LDY #>[BUF+256]    ; BUF+256, as CR LF
-         LDX #1             ; can double it
-         BNE PUTF6          ; always
-PUTF5    LDA #<BUF          ; else 2 pages
-         LDY #>BUF
-         LDX #2
-PUTF6    JSR CREAD
+PUTF4    JSR XSTART         ; A/Y = XBUF
+         LDX XPAGES
+         JSR CREAD          ; CGOT = bytes
          STA XST            ; CIO status
-         LDA CGOT
+PUTF5    LDA CGOT
          ORA CGOT+1
-         BEQ PUTF8          ; none came
-         LDA CGOT
-         STA XLEN           ; XLEN to send,
-         STA XN             ; XN to count
+         BEQ PUTF8          ; all of them gone
+         LDX #2             ; XN = 2 pages
+         LDA XTEXT          ; (text: 1), or
+         BEQ PUTF6          ; what is left
+         DEX
+PUTF6    STX XN+1
+         LDA #0
+         STA XN
          LDA CGOT+1
-         STA XLEN+1
+         CMP XN+1
+         BCS PUTF6A         ; at least that
+         LDA CGOT
+         STA XN
+         LDA CGOT+1
          STA XN+1
-         LDA XTEXT
-         BEQ PUTF7
+PUTF6A   LDA CGOT           ; CGOT less XN
+         SEC
+         SBC XN
+         STA CGOT
+         LDA CGOT+1
+         SBC XN+1
+         STA CGOT+1
+         LDA XN
+         STA XLEN           ; XLEN to send
+         LDA XN+1
+         STA XLEN+1
+         LDA XAT
+         LDY XAT+1
+         LDX XTEXT
+         BEQ PUTF7          ; binary: from XAT
          JSR TOSERV         ; XLEN = CR LF bytes
+         LDA #<BUF
+         LDY #>BUF
 PUTF7    JSR FWRITE
          BCS PUTF10         ; net failed
+         JSR XSKIP          ; XAT past XN
          JSR XMOVED
          BNE PUTF9          ; ESC
+         BEQ PUTF5          ; always
 PUTF8    LDA XST
          CMP #128
          BCC PUTF4          ; no error: more

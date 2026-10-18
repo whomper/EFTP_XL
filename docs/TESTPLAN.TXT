@@ -63,6 +63,9 @@ ON THE DISK
 [ ] EMPTY.DAT across: 0 bytes there.
 [ ] Back down, each: replace? Y. The
     same files as before.
+[ ] Mark TEXT.TXT and BIN.DAT on the
+    server, ^T: Replace? Y/N/All, A:
+    both replaced, asked once.
 [ ] BIG.DAT down, ESC half way:
     Stopped, and no half file left.
 [ ] BIG.DAT down, BREAK half way: it

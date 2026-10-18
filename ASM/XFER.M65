@@ -20,10 +20,12 @@ XSEND    LDA ACTIVE         ; the source pane
          STA XMODE
          LDA ACTIVE
          JSR PUSE           ; SIDE, BASE
+         JSR XINIT          ; XBUF from MEMLO
          LDA #0
          STA XCOUNT
          STA XCUR
          STA XSTOP
+         STA XALL           ; ask again
          STA XOK
          STA XNF
          STA XWALK
@@ -439,25 +441,18 @@ SHOWN1   JSR ANAMEX
 ; Text files: CR LF on the server,
 ; EOL on the Atari; TAB is $7F there
 ;
-; TOATARI - the NLEN bytes in BUF to
+; TOATARI - the XN bytes at XAT to
 ; Atari text, in place: CR is
 ; dropped, the rest stay one byte,
 ; so the out pointer never passes
 ; the in one
-; Exit: XLEN = bytes now
+; Exit: XAT past the text
 ;
-TOATARI  LDA #<BUF          ; in and out at BUF
-         STA PTR            ; PTR: in
-         STA PTR2           ; PTR2: out
-         LDA #>BUF
-         STA PTR+1
-         STA PTR2+1
-         LDA NLEN           ; XCNT = bytes in
-         STA XCNT
-         LDA NLEN+1
-         STA XCNT+1
+TOATARI  JSR XIN            ; PTR: in
+         STA PTR2           ; PTR2: out, at
+         STY PTR2+1         ; XAT too
 TOAT1    JSR XNEXT          ; A = next byte
-         BCS XOUT           ; all done: XLEN
+         BCS TOAT4          ; all done
          CMP #13
          BEQ TOAT1          ; drop CR
          CMP #10
@@ -468,26 +463,22 @@ TOAT2    CMP #9
          LDA #$7F           ; TAB
 TOAT3    JSR XPUT
          JMP TOAT1
+TOAT4    LDA PTR2           ; XAT = its end
+         STA XAT
+         LDA PTR2+1
+         STA XAT+1
+         RTS
 ;
-; TOSERV - the CGOT bytes at BUF+256
-; to CR LF text at BUF (up to twice
-; as long). In starts 256 ahead and
-; out takes 2 bytes a byte at most,
-; so out never passes in
+; TOSERV - the XN bytes at XAT (256
+; at most) to CR LF text at BUF (up
+; to twice as long)
 ; Exit: XLEN = bytes
 ;
-TOSERV   LDA #<[BUF+256]    ; PTR: in
-         STA PTR
-         LDA #>[BUF+256]
-         STA PTR+1
+TOSERV   JSR XIN            ; PTR: in
          LDA #<BUF          ; PTR2: out
          STA PTR2
          LDA #>BUF
          STA PTR2+1
-         LDA CGOT           ; XCNT = bytes in
-         STA XCNT
-         LDA CGOT+1
-         STA XCNT+1
 TOSV1    JSR XNEXT          ; A = next byte
          BCS XOUT           ; all done: XLEN
          CMP #EOL
@@ -500,6 +491,20 @@ TOSV2    CMP #$7F
          LDA #9             ; TAB
 TOSV3    JSR XPUT
          JMP TOSV1
+;
+; XIN - PTR = XAT, XCNT = XN: the
+; bytes to change
+; Exit: A/Y = XAT
+;
+XIN      LDA XN
+         STA XCNT
+         LDA XN+1
+         STA XCNT+1
+         LDA XAT
+         STA PTR
+         LDY XAT+1
+         STY PTR+1
+         RTS
 ;
 ; XNEXT - next byte at PTR, XCNT of
 ; them
@@ -538,4 +543,90 @@ XOUT     LDA PTR2
          LDA PTR2+1
          SBC #>BUF
          STA XLEN+1
+         RTS
+;
+; The file's buffer, XBUF: MEMLO, as
+; it is when a transfer starts, up to
+; the program; the DOS and handlers
+; below MEMLO are never touched. A
+; file goes to and from the disk in
+; it, one PUT or GET for all it holds
+;
+; XINIT - XBUF = MEMLO, XPAGES its
+; whole pages to LOAD, XEND its end,
+; XCAP 2 (FREAD's 512); under 2
+; pages: BUF's second page, XCAP 1
+;
+XINIT    LDA #<LOAD         ; A = whole pages
+         CMP MEMLO          ; from MEMLO to
+         LDA #>LOAD         ; LOAD
+         SBC MEMLO+1
+         LDX MEMLO
+         LDY MEMLO+1
+         BCC XINIT0         ; MEMLO past LOAD
+         CMP #2
+         BCS XINIT1         ; 512 at least
+XINIT0   LDA #1             ; else BUF+256
+         LDX #<[BUF+256]
+         LDY #>[BUF+256]
+XINIT1   STA XPAGES
+         STX XBUF
+         STX XEND
+         STY XBUF+1
+         CLC                ; XEND = XBUF +
+         ADC XBUF+1         ; its pages
+         STA XEND+1
+         LDA #2             ; XCAP: 2 pages,
+         LDX XPAGES         ; or 1 in BUF
+         CPX #2
+         BCS XINIT2
+         TXA
+XINIT2   STA XCAP
+         RTS
+;
+; XROOM - XBUF to disk (XFLUSH) if
+; XCAP pages more would not fit
+; XFLUSH - the bytes in XBUF to disk
+; (none: no PUT); XAT = XBUF again
+; Exit: C=1 on error, A=status
+;
+XROOM    LDA XEND           ; A = high byte
+         CMP XAT            ; of XEND - XAT
+         LDA XEND+1
+         SBC XAT+1
+         CMP XCAP
+         BCC XFLUSH         ; full: to disk
+         CLC
+         RTS
+XFLUSH   LDA XAT            ; XLEN = XAT-XBUF
+         SEC
+         SBC XBUF
+         STA XLEN
+         LDA XAT+1
+         SBC XBUF+1
+         STA XLEN+1
+         ORA XLEN
+         BEQ XSTART         ; none
+         JSR XSTART         ; A/Y = XBUF
+         JMP CWRITE
+;
+; XSTART - XAT = XBUF, empty
+; Exit: A/Y = XBUF, C=0
+;
+XSTART   LDA XBUF
+         STA XAT
+         LDY XBUF+1
+         STY XAT+1
+         CLC
+         RTS
+;
+; XSKIP - XAT past the XN bytes there
+;
+XSKIP    LDA XAT
+         CLC
+         ADC XN
+         STA XAT
+         LDA XAT+1
+         ADC XN+1
+         STA XAT+1
          RTS

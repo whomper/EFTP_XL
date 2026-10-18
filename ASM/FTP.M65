@@ -756,7 +756,7 @@ FXFER2   JMP DOPEN
 FXFER3   RTS
 ;
 ; FREAD - what has come of the file
-; into BUF, 512 bytes at most
+; to XAT, XCAP pages at most
 ; Exit: NLEN=bytes, 0 at its end;
 ;       C=1, A=ETIME or ECLOSED
 ;
@@ -780,14 +780,14 @@ FREAD2   STA NLEN           ; closed: the end
          RTS
 FREAD3   LDA NSTAT
          LDX NSTAT+1
-         CPX #2             ; 512 at most
+         CPX XCAP           ; XCAP pages at most
          BCC FREAD4
-         LDA #0             ; XA=$0200
-         LDX #2
+         LDA #0             ; XA=XCAP*256
+         LDX XCAP
 FREAD4   STX TMP            ; high byte
          TAX
-         LDA #<BUF
-         LDY #>BUF
+         LDA XAT
+         LDY XAT+1
          JSR NSETB
          LDA TMP
          STA NLEN+1
@@ -799,13 +799,11 @@ FCLOSED1 LDA #ECLOSED
          SEC
          RTS
 ;
-; FWRITE - XLEN bytes of BUF to N2:
+; FWRITE - XLEN bytes at A/Y to N2:
 ; Exit: C=1, A=ECLOSED failed
 ;
-FWRITE   LDA #1
-         STA CONN
-         LDA #<BUF
-         LDY #>BUF
+FWRITE   LDX #1             ; LDX: A kept
+         STX CONN
          LDX XLEN
          JSR NSETB
          LDA XLEN+1

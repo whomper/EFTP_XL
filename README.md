@@ -113,8 +113,10 @@ Shift+Delete (or Ctrl+Delete).
 several with SPACE (or ^A for all) and ^T sends them, one after the
 other. The transfers area shows them (Done, Waiting, a progress bar for
 the one going), the info line the speed, and at the end "3 files, 260K
-in 0:42 (6K/s)". ESC stops; a file stopped on its way to the Atari is
-deleted rather than left half there.
+in 0:42 (6K/s)". A file that is there already asks "Replace? Y/N/All":
+A replaces it and the rest of them without asking again. ESC stops; a
+file stopped on its way to the Atari is deleted rather than left half
+there. After it, the side the files went to is read again.
 
 ![After: how many, how much, how fast](docs/screens/4-sent.png)
 
@@ -151,11 +153,16 @@ Notes:
 - On an error the info line says what went wrong: the server's own
   reply (`530 Login incorrect`), or the Atari's own error with its text
   (`NOTES.TXT: Disk full`).
-- The program takes `$4000`-`$9708` (the program and its variables),
+- The program takes `$4000`-`$97F5` (the program and its variables),
   and the font the 1K just below the screen (`$9800` with BASIC on):
   above EDOS and the MEMLO of DOS 2.5 and SpartaDOS 3, so BASIC can
   stay on. If a DOS's MEMLO is above `$4000`, or there isn't room for
   both, the program says so and goes back to DOS before loading itself.
+- A file goes to and from the disk through the memory from MEMLO up to
+  `$4000` (8.75K with DOS 2.5), read when a transfer starts, so the
+  DOS and its handlers below MEMLO stay whole: one PUT or GET for all
+  it holds (a 20K file is 3), and each file opened once. With under
+  512 bytes there, it uses 256 at a time of its own.
 - `EFTPXL.CFG` starts with a note on what it is; lines that start with
   `;` are notes, and EFTP_XL skips them. A line that starts with `@` is
   the Pi gateway (`@192.168.1.5:2121`). It holds up to 8 sites, as long
@@ -215,7 +222,7 @@ eftpgate's `--allow-local`.
 ## Building
 
 The program is 6502 assembly in Mac/65's form, in [ASM](ASM):
-`EFTPXL.M65` is the main file and includes the others. It is 15.1K (the
+`EFTPXL.M65` is the main file and includes the others. It is 15.4K (the
 font is `AERA.FNT`, read when it is there); the first version, in C with
 cc65, was 27K (it is in the git history, up to v0.2).
 
@@ -332,13 +339,13 @@ every FTP command sent.
 **The checks.** `make test` runs xl's own tests, then
 `tools/test_sim.py`: the program that way against an FTP server it
 starts, looking at the screen, at memory and at the files on both
-sides, 82 checks:
+sides, 108 checks:
 
 | | |
 |---|---|
 | Sites | a site made and saved in `EFTPXL.CFG`, the note on top, notes skipped, 1.2's file read; edited, added, deleted in order; no room; connecting |
 | Panes | both lists, sizes in bytes, the server's folder, into and out of folders on both sides |
-| Files | down and up byte for byte, binary and text (line ends changed), the sums; the replace question; ESC stops and leaves no half file |
+| Files | down and up byte for byte, binary and text (line ends changed), the sums; the replace question, and All; ESC stops and leaves no half file |
 | Folders | a server folder two folders deep down to the Atari, an Atari folder with one in it up to the server, both panes back where they were |
 | New, rename, delete | folders and files on the Atari and on the server |
 | DOS 2.5 | its listing; no folders made, none sent, and the error's text |
@@ -346,6 +353,7 @@ sides, 82 checks:
 | HELP, the font | the About lines; `AERA.FNT` read below the screen and its icons used, set again after RESET without reading it again, DOS's font back on quit; without it the ROM font and its icons; no font in the program |
 | ESC and BREAK | each cancels as "no": new folder, rename, delete, HELP, the Sites screen, a site's edit, delete and new, the replace question, the password question; each stops a transfer |
 | The test disk | `EFTPTEST.ATR` clean, with the files the test plan needs |
+| Disk access | 20K down and up, binary and text: the file opened once, 3 PUTs or GETs through the memory from MEMLO, none below it changed; with MEMLO at $3F80, 256 bytes at a time; after an upload the Atari not read again |
 | Loading | the load check refuses a DOS whose MEMLO is above $4000, says so and goes back to DOS |
 | SFTP, FTPS | through AERA-Gateway's eftpgate (its latest release, fetched by `make test`) to the SFTP and FTPS servers of its own tests: ^G's gateway and the site saved, no gateway said, the list, text down and up with the server's line ends, binary both ways |
 
