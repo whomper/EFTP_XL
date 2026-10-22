@@ -32,6 +32,7 @@ transfers below.
 - Works with DOS 2.5 and SpartaDOS 3.x; all file access goes through
   CIO, so any CIO-compatible DOS with its MEMLO at `$1E00` or below
   should work
+- Runs in 48K: any XL or XE, or a 400 or 800 with 48K
 
 The pictures are of the real program, run by `tools/sim.py` (see
 [Tests](#tests)); `tools/screenshots.py` takes them again. The first
@@ -358,7 +359,7 @@ sides, 121 checks:
 | ESC and BREAK | each cancels as "no": new folder, rename, delete, HELP, the Sites screen, a site's edit, delete and new, the replace question, the password question; each stops a transfer |
 | The test disk | `EFTPTEST.ATR` clean, with the files the test plan needs |
 | Disk access | 20K down and up, binary and text: the file opened once, 2 PUTs or GETs with BASIC off and 3 on, through the memory above the program; nothing below MEMLO and not the font changed; with MEMTOP just above the program, 256 bytes at a time; after an upload the Atari not read again; a site saved not read back |
-| Loading | the load check refuses a DOS whose MEMLO is above $1E00, says so and goes back to DOS |
+| Loading | the load check refuses a DOS whose MEMLO is above `$1E00`, says so and goes back to DOS |
 | SFTP, FTPS | through AERA-Gateway's eftpgate (its latest release, fetched by `make test`) to the SFTP and FTPS servers of its own tests: ^G's gateway and the site saved, no gateway said, the list, text down and up with the server's line ends, binary both ways |
 
 CI (`.github/workflows/ci.yml`) builds the program and the disk
