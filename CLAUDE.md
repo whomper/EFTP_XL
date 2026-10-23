@@ -15,10 +15,20 @@
   decision. Findings: the information, your assessment, what he should
   do. Messages to the hub stay complete, with the evidence.
 - **Push to `main` without asking** (Erez, 2026-10-18), once `make
-  test` passes. A release still needs Erez's yes in this session.
-  A change to the docs alone (README, docs/, CLAUDE.md) takes the
-  short path: pushed once it reads right, without `make test`; a
-  docs-only release, too, with his yes.
+  test` passes. A change to the docs alone (README, docs/, CLAUDE.md)
+  takes the short path: pushed once it reads right, without `make
+  test`.
+- **Release without asking** (Erez, 2026-10-23; XL guidelines 1.2).
+  When work on `main` is ready, release it as soon as its checks pass
+  (`make test`, and the atari800 runs the README's Tests describe):
+  don't wait for a yes, and don't collect work for a later release.
+  After it, give Erez the link in one line, with anything he has to
+  do, and send the hub the link. Roll back a bad release the same
+  way, without asking. Decisions that are Erez's still go to him
+  before the work: a design choice, or a change to what a user sees
+  that nobody asked for; the release itself is not one of them. A
+  change to the docs alone needs no release of its own: it goes out
+  with the next one.
 - **Only formal releases leave the build machine.** Erez gets vX.Y
   releases made by the Release workflow from `main`, nothing else: no
   test builds, no CI artifacts, no builds from a branch. Work lands on
