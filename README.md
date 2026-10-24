@@ -1,5 +1,7 @@
 # EFTP_XL
 
+<img src="docs/icon.png" width="96" align="right" alt="EFTP_XL icon: a 5.25-inch disk sending Wi-Fi waves to a server">
+
 File transfer for 8-bit Atari computers (400/800/XL/XE) over
 [FujiNet](https://fujinet.online), written in 6502 assembly for Mac/65,
 so it can be built on the Atari as well. Connects to any FTP server (a
@@ -307,7 +309,7 @@ tools/      sim.py (the program on xl's a8sim), fujinet.py (its FujiNet),
             test_sim.py, screenshots.py, testdisk.py (EFTPTEST.ATR's
             files), gwserve.py (the gateway the SFTP checks use),
             sync-xl.sh
-docs/       the pictures, the first design, TESTPLAN.TXT (the test plan)
+docs/       the icon, the pictures, the first design, TESTPLAN.TXT (the test plan)
 ```
 
 The source keeps to what Mac/65 1.01 takes: labels of letters and
