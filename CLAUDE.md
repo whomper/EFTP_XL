@@ -14,6 +14,24 @@
   him when he has to decide something, with a short context and the
   decision. Findings: the information, your assessment, what he should
   do. Messages to the hub stay complete, with the evidence.
+  **Who decides what** (Erez, 2026-10-31; the guidelines' "Who
+  decides what"). Erez's part, put to him before the work as a
+  decision with a short context:
+  - new programs and ideas, their core capabilities, and how they
+    work with the other programs;
+  - the user experience: the look, the layout, the way through a
+    task, the words, the icons, the defaults;
+  - phases: work stays inside the phase he approved; at its end, one
+    phase report (what it set out to do, what was done with the
+    release links, what is left, the next phase as a proposal), and
+    the next phase starts when he says so;
+  - priorities and conflicts between programs or sessions (through
+    the hub, with its options and recommendation);
+  - packages on the Pi and ports.
+
+  How it is made is the team's, without asking: code, structure,
+  shared code, tests, measurements, fixes, docs and releases inside
+  an approved phase.
 - **Push to `main` without asking** (Erez, 2026-10-18), once `make
   test` passes. A change to the docs alone (README, docs/, CLAUDE.md)
   takes the short path: pushed once it reads right, without `make
@@ -24,9 +42,8 @@
   don't wait for a yes, and don't collect work for a later release.
   After it, give Erez the link in one line, with anything he has to
   do, and send the hub the link. Roll back a bad release the same
-  way, without asking. Decisions that are Erez's still go to him
-  before the work: a design choice, or a change to what a user sees
-  that nobody asked for; the release itself is not one of them. A
+  way, without asking. Erez's part ("Who decides what", above) still
+  goes to him before the work; the release itself is not one of it. A
   change to the docs alone needs no release of its own: it goes out
   with the next one.
 - **Only formal releases leave the build machine.** Erez gets vX.Y
