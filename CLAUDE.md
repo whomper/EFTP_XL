@@ -43,7 +43,7 @@
   After it, give Erez the link in one line, with anything he has to
   do, and send the hub the link. Roll back a bad release the same
   way, without asking. Erez's part ("Who decides what", above) still
-  goes to him before the work; the release itself is not one of it. A
+  goes to him before the work; the release itself is not part of it. A
   change to the docs alone needs no release of its own: it goes out
   with the next one.
 - **Only formal releases leave the build machine.** Erez gets vX.Y
