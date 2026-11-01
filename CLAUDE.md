@@ -86,3 +86,18 @@
   author of every commit:
   `git commit --author="AERA | Erez Yaary <yaary@me.com>"`, with Claude as
   the signing committer (AERA-Atari, `standards/GITHUB-IDENTITY.md`).
+
+## Maintenance mode (Erez, 1 Nov 2026)
+
+EFTP_XL is in maintenance mode while EWeb, EPDF and EPlay go to 1.0 (AERA-Atari, ATARI-XL-GUIDELINES.md, section 10). Until Erez ends it:
+- No new features, speed rounds, clean-ups, or catching up with new or changed guidelines.
+- No sync of the shared code (`xl/`). Shared code moving is no reason to rebuild or release.
+- A release only for:
+  - a security or data-loss fault;
+  - a crash or breakage Erez reports;
+  - something outside that stops it working (a server).
+
+  Such a release takes only that fix (one change from AERA-Atari, not a sync), and its notes say why.
+- Work on `main` that isn't released stays unreleased.
+- Nothing runs in the background; the session waits for Erez or the hub.
+- Only Erez's explicit word ends this mode, for instance that every program is to take the latest shared code and release. The hub passes it on quoting him.
