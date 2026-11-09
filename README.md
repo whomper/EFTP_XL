@@ -9,12 +9,15 @@ It runs in 48K, on DOS 2.5 or SpartaDOS 3.x.
 
 ## Highlights
 
-- Log in to any FTP server with your user and password, over FujiNet;
-  SFTP and FTPS servers too, through the AERA Pi gateway
-- Files and whole folders both ways, marked ones one after the other,
-  with progress, speed and ESC to stop
+- Log in to any FTP server with your user and password, over FujiNet
+- SFTP and FTPS servers on the internet too, through AERA-Gateway
+- Two panes: the Atari (D1:-D8:, SpartaDOS folders) and the server
+- Files both ways, marked ones one after the other, with progress and speed
+- Whole folders both ways, with everything in them
+- Text files with their line ends changed, by type or per site
+- Replace? Y/N/All when a file is there already; ESC stops
 - New folder, rename and delete on both sides
-- Sites saved on the disk; RESET comes back to the main screen
+- Up to 8 sites, saved on the disk; RESET comes back to the main screen
 - 6502 assembly for Mac/65: it builds on the Atari too
 
 | | | |
@@ -49,6 +52,16 @@ Raspberry Pi. Updating from 1.4 or before: delete the old `EFTPXL.PRG`;
 The full manual, with every key, the sites file, the Pi gateway and
 memory, is [docs/MANUAL.md](docs/MANUAL.md).
 
+## AERA-Gateway
+
+SSH and TLS are beyond a 6502, so for SFTP and FTPS servers EFTP_XL goes
+through `eftpgate` from
+[AERA-Gateway](https://github.com/whomper/AERA-Gateway#readme), on a
+Raspberry Pi on your home network: the Atari speaks plain FTP to the Pi,
+and the Pi speaks SFTP or FTPS to the server. ^G in the sites sets the
+Pi's address, and a site's **Protocol** picks SFTP or FTPS. Plain FTP
+servers need no gateway.
+
 ## Building
 
 ```sh
@@ -68,19 +81,13 @@ release. More in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 ```
 ASM/        the program: EFTPXL.M65, the main file, and its parts
 xl/         the AERA 8-bit shared code and tools, from AERA-Atari
-tools/      the simulator, the tests, the screenshots, the test disk
-docs/       the manual, development notes, pictures, the test plan
 ```
+
+The rest, and the full list, in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#source).
 
 ## Tests
 
-- `make test`: xl's tests, then 121 checks of the real program on an
-  emulated 6502 against a real FTP server, and SFTP and FTPS through
-  AERA-Gateway's eftpgate
-- Before a release: SpartaDOS 3.2 and MAC/65 1.01 in the atari800
-  emulator
-- On real hardware: `EFTPTEST.ATR` and its test plan
-  ([docs/TESTPLAN.TXT](docs/TESTPLAN.TXT))
+`make test` runs every check; the atari800 runs and the real-hardware test plan are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md#tests).
 
 ## Licence
 
@@ -90,4 +97,4 @@ Copyright (C) 2026 AERA | Erez Yaary. `EFTPXL.ATR` carries SpartaDOS
 
 ---
 
-Part of **AERA** for Atari: [ECal](https://github.com/whomper/ECal) · [EContact](https://github.com/whomper/EContact) · [EMail](https://github.com/whomper/EMail) · [EFTP](https://github.com/whomper/EFTP) · [EHypView](https://github.com/whomper/EHypView) · [ClaudeST](https://github.com/whomper/ClaudeST) · [EWeb](https://github.com/whomper/EWeb) · [EUpdate](https://github.com/whomper/EUpdate) · 8-bit: [EDOS](https://github.com/whomper/EDOS) · [EFTP_XL](https://github.com/whomper/EFTP_XL) · Pi: [AERA-Gateway](https://github.com/whomper/AERA-Gateway)
+Part of **AERA** for Atari: [ECal](https://github.com/whomper/ECal) · [EContact](https://github.com/whomper/EContact) · [EMail](https://github.com/whomper/EMail) · [EFTP](https://github.com/whomper/EFTP) · [EHypView](https://github.com/whomper/EHypView) · [ClaudeST](https://github.com/whomper/ClaudeST) · [EWeb](https://github.com/whomper/EWeb) · [EUpdate](https://github.com/whomper/EUpdate) · 8-bit: [EDOS](https://github.com/whomper/EDOS) · [EFTP_XL](https://github.com/whomper/EFTP_XL) · Gateway: [AERA-Gateway](https://github.com/whomper/AERA-Gateway)
