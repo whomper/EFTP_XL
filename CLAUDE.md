@@ -38,7 +38,7 @@
   test`.
 - **Release without asking** (Erez, 2026-10-23; XL guidelines 1.2).
   When work on `main` is ready, release it as soon as its checks pass
-  (`make test`, and the atari800 runs the README's Tests describe):
+  ("No regressions", below, with the results sent to the hub first):
   don't wait for a yes, and don't collect work for a later release.
   After it, give Erez the link in one line, with anything he has to
   do, and send the hub the link. Roll back a bad release the same
@@ -46,6 +46,17 @@
   goes to him before the work; the release itself is not part of it. A
   change to the docs alone needs no release of its own: it goes out
   with the next one.
+- **No regressions** (Erez, 2026-11-17; AERA-Atari a22574e: "we need
+  to be extra careful with regression issues as there are users of
+  our software. This means testing across all configurations", "make
+  sure we don't loose performance"). A code candidate goes through:
+  `make test`, eftpgate included; the atari800 runs on every machine
+  and DOS EFTP_XL supports (XL and 800, BASIC on and off, SpartaDOS
+  3.2 and DOS 2.5), MAC/65 included (the cartridge kept where the
+  session can get it again, never in git); and the transfer timings
+  against the last release, with nothing slower. Then send the hub
+  the candidate and the results before releasing. A fault a user
+  reports becomes a test in the release that fixes it.
 - **Only formal releases leave the build machine.** Erez gets vX.Y
   releases made by the Release workflow from `main`, nothing else: no
   test builds, no CI artifacts, no builds from a branch. Work lands on
